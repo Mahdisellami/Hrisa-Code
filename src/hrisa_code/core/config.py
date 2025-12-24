@@ -25,6 +25,7 @@ class OllamaServerConfig(BaseModel):
 class ToolsConfig(BaseModel):
     """Tools configuration."""
 
+    enabled: bool = True  # Master switch for all tools
     enable_file_operations: bool = True
     enable_command_execution: bool = True
     enable_search: bool = True

@@ -46,6 +46,7 @@ class InteractiveSession:
             ollama_config=ollama_config,
             working_directory=working_directory,
             system_prompt=config.system_prompt,
+            enable_tools=config.tools.enabled,
         )
 
         # Set up prompt session with history

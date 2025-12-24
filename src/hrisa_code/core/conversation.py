@@ -20,6 +20,7 @@ class ConversationManager:
         ollama_config: OllamaConfig,
         working_directory: Path,
         system_prompt: Optional[str] = None,
+        enable_tools: bool = True,
     ):
         """Initialize the conversation manager.
 
@@ -27,12 +28,14 @@ class ConversationManager:
             ollama_config: Configuration for Ollama client
             working_directory: Working directory for file operations
             system_prompt: Optional system prompt
+            enable_tools: Whether to enable tool calling (some models don't support it)
         """
         self.ollama_client = OllamaClient(ollama_config)
         self.working_directory = working_directory
         self.system_prompt = system_prompt or self._get_default_system_prompt()
         self.console = Console()
-        self.tool_definitions = get_all_tool_definitions()
+        self.enable_tools = enable_tools
+        self.tool_definitions = get_all_tool_definitions() if enable_tools else None
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt.
@@ -129,7 +132,7 @@ Be concise but helpful. Focus on solving the user's problem efficiently."""
         response = await self.ollama_client.chat(
             message=user_message,
             system_prompt=self.system_prompt,
-            tools=self.tool_definitions,
+            tools=self.tool_definitions if self.enable_tools else None,
         )
 
         # Check if the response includes tool calls
@@ -151,7 +154,7 @@ Be concise but helpful. Focus on solving the user's problem efficiently."""
         async for chunk in self.ollama_client.chat_stream(
             message=user_message,
             system_prompt=self.system_prompt,
-            tools=self.tool_definitions,
+            tools=self.tool_definitions if self.enable_tools else None,
         ):
             self.console.print(chunk, end="")
             full_response += chunk

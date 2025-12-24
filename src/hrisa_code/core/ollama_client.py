@@ -85,12 +85,24 @@ class OllamaClient:
             "top_k": self.config.top_k,
         }
 
-        response = await self.client.chat(
-            model=self.config.model,
-            messages=messages,
-            tools=tools,
-            options=options,
-        )
+        # Try with tools first, fall back without tools if not supported
+        try:
+            response = await self.client.chat(
+                model=self.config.model,
+                messages=messages,
+                tools=tools if tools else None,
+                options=options,
+            )
+        except Exception as e:
+            # If tools not supported, try without tools
+            if "does not support tools" in str(e).lower() or "400" in str(e):
+                response = await self.client.chat(
+                    model=self.config.model,
+                    messages=messages,
+                    options=options,
+                )
+            else:
+                raise
 
         # Extract response
         assistant_message = response["message"]["content"]
@@ -134,17 +146,34 @@ class OllamaClient:
         }
 
         full_response = ""
-        async for chunk in await self.client.chat(
-            model=self.config.model,
-            messages=messages,
-            tools=tools,
-            options=options,
-            stream=True,
-        ):
-            if "message" in chunk and "content" in chunk["message"]:
-                content = chunk["message"]["content"]
-                full_response += content
-                yield content
+        try:
+            # Try with tools first
+            async for chunk in await self.client.chat(
+                model=self.config.model,
+                messages=messages,
+                tools=tools if tools else None,
+                options=options,
+                stream=True,
+            ):
+                if "message" in chunk and "content" in chunk["message"]:
+                    content = chunk["message"]["content"]
+                    full_response += content
+                    yield content
+        except Exception as e:
+            # If tools not supported, try without tools
+            if "does not support tools" in str(e).lower() or "400" in str(e):
+                async for chunk in await self.client.chat(
+                    model=self.config.model,
+                    messages=messages,
+                    options=options,
+                    stream=True,
+                ):
+                    if "message" in chunk and "content" in chunk["message"]:
+                        content = chunk["message"]["content"]
+                        full_response += content
+                        yield content
+            else:
+                raise
 
         # Add complete response to history
         self.add_message("assistant", full_response)
