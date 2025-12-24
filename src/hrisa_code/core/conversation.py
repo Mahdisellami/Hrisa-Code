@@ -204,17 +204,19 @@ Your job: Choose the right tool, use it once, respond clearly."""
                     confirmation_msg = self._get_confirmation_message(tool_name, arguments)
                     self.console.print(f"\n[yellow]{confirmation_msg}[/yellow]")
 
-                    # Get user confirmation using async prompt
-                    import asyncio
-                    from prompt_toolkit import PromptSession
-                    from prompt_toolkit.patch_stdout import patch_stdout
+                    # Get user confirmation using selection interface
+                    import questionary
 
-                    session = PromptSession()
-                    with patch_stdout():
-                        response = await session.prompt_async("Continue? (yes/no): ")
-                    response = response.strip().lower()
+                    response = await questionary.select(
+                        "What would you like to do?",
+                        choices=["Continue", "Cancel"],
+                        style=questionary.Style([
+                            ("selected", "fg:cyan bold"),
+                            ("pointer", "fg:cyan bold"),
+                        ])
+                    ).ask_async()
 
-                    if response not in ["yes", "y"]:
+                    if response != "Continue":
                         result = "❌ Operation cancelled by user"
                         self._display_tool_result(result)
                         tool_results.append({
