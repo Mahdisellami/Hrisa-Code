@@ -178,18 +178,27 @@ Be concise but helpful. Focus on solving the user's problem efficiently."""
         Args:
             user_message: The user's message
         """
-        self.console.print("[bold blue]Assistant:[/bold blue]")
+        # For tool-enabled mode, use non-streaming to handle tool calls properly
+        # Streaming + tool calling is complex because we need complete tool call data
+        if self.enable_tools and self.tool_definitions:
+            response = await self.process_message(user_message)
+            if response:
+                self.console.print("[bold blue]Assistant:[/bold blue]")
+                self.console.print(response)
+        else:
+            # No tools, can stream normally
+            self.console.print("[bold blue]Assistant:[/bold blue]")
 
-        full_response = ""
-        async for chunk in self.ollama_client.chat_stream(
-            message=user_message,
-            system_prompt=self.system_prompt,
-            tools=self.tool_definitions if self.enable_tools else None,
-        ):
-            self.console.print(chunk, end="")
-            full_response += chunk
+            full_response = ""
+            async for chunk in self.ollama_client.chat_stream(
+                message=user_message,
+                system_prompt=self.system_prompt,
+                tools=None,
+            ):
+                self.console.print(chunk, end="")
+                full_response += chunk
 
-        self.console.print()  # New line after response
+            self.console.print()  # New line after response
 
     def clear_history(self) -> None:
         """Clear the conversation history."""
