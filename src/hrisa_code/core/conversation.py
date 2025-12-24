@@ -111,13 +111,13 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         """
         if tool_name == "write_file":
             file_path = arguments.get("file_path", "")
-            return f"⚠️  File '{file_path}' already exists. Overwrite it?"
+            return f"[WARNING] File '{file_path}' already exists. Overwrite it?"
 
         if tool_name == "execute_command":
             command = arguments.get("command", "")
-            return f"⚠️  Execute potentially destructive command: '{command}'?"
+            return f"[WARNING] Execute potentially destructive command: '{command}'?"
 
-        return "⚠️  This operation may be destructive. Continue?"
+        return "[WARNING] This operation may be destructive. Continue?"
 
     def _execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
         """Execute a tool with given arguments.
@@ -155,7 +155,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             Panel(
                 f"[bold cyan]Tool:[/bold cyan] {tool_name}\n"
                 f"[bold cyan]Arguments:[/bold cyan] {json.dumps(arguments, indent=2)}",
-                title="🔧 Tool Call",
+                title="► Tool Call",
                 border_style="cyan",
             )
         )
@@ -171,7 +171,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         # Determine if result indicates success or error
         is_error = result.startswith("Error") or "failed" in result.lower()
         border_color = "red" if is_error else "green"
-        icon = "❌" if is_error else "✓"
+        status = "[ERROR]" if is_error else "[OK]"
 
         # Extract metadata based on tool type and result
         metadata_parts = []
@@ -194,7 +194,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             metadata_parts.append("Command executed")
 
         # Build title with metadata
-        title_parts = [f"{icon} Tool Result"]
+        title_parts = [f"{status} Tool Result"]
         if metadata_parts:
             title_parts.append(f"({', '.join(metadata_parts)})")
         title = " ".join(title_parts)
@@ -223,7 +223,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             The assistant's response
         """
         # Show thinking indicator
-        with self.console.status("[bold blue]🤔 Thinking...[/bold blue]"):
+        with self.console.status("[bold blue]Thinking...[/bold blue]"):
             # Get initial response from LLM
             raw_response = await self.ollama_client.chat_raw(
                 message=user_message,
@@ -260,7 +260,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                     ).ask_async()
 
                     if response != "Continue":
-                        result = "❌ Operation cancelled by user"
+                        result = "[CANCELLED] Operation cancelled by user"
                         self._display_tool_result(result, tool_name)
                         tool_results.append({
                             "tool_call_id": tool_call.get("id", ""),
@@ -276,7 +276,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 import time
                 start_time = time.time()
 
-                with self.console.status(f"[bold cyan]🔧 Executing {tool_name}...[/bold cyan]"):
+                with self.console.status(f"[bold cyan]Executing {tool_name}...[/bold cyan]"):
                     result = self._execute_tool(tool_name, arguments)
 
                 execution_time = time.time() - start_time
@@ -291,7 +291,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 })
 
             # Send tool results back to LLM for final response
-            with self.console.status("[bold green]✨ Generating response...[/bold green]"):
+            with self.console.status("[bold green]Generating response...[/bold green]"):
                 final_response = await self.ollama_client.chat_with_tools_result(
                     tool_results=tool_results,
                     system_prompt=self.system_prompt,

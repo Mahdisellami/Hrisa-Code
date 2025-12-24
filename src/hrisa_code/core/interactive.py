@@ -16,6 +16,59 @@ from hrisa_code.core.repo_context import RepoContext
 from rich.columns import Columns
 
 
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """Calculate Levenshtein distance between two strings.
+
+    Args:
+        s1: First string
+        s2: Second string
+
+    Returns:
+        Edit distance between strings
+    """
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+
+    if len(s2) == 0:
+        return len(s1)
+
+    previous_row = range(len(s2) + 1)
+    for i, c1 in enumerate(s1):
+        current_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            insertions = previous_row[j + 1] + 1
+            deletions = current_row[j] + 1
+            substitutions = previous_row[j] + (c1 != c2)
+            current_row.append(min(insertions, deletions, substitutions))
+        previous_row = current_row
+
+    return previous_row[-1]
+
+
+def is_exit_command(user_input: str) -> bool:
+    """Check if user input is an exit-like command (with typo tolerance).
+
+    Args:
+        user_input: User's input string
+
+    Returns:
+        True if input looks like an exit command
+    """
+    user_input = user_input.strip().lower()
+
+    # Exact matches for common exit synonyms
+    exit_synonyms = {"exit", "quit", "q", "bye", "leave", "close", "stop"}
+    if user_input in exit_synonyms:
+        return True
+
+    # Check for typos with edit distance <= 2
+    for synonym in exit_synonyms:
+        if len(user_input) > 1 and levenshtein_distance(user_input, synonym) <= 2:
+            return True
+
+    return False
+
+
 class InteractiveSession:
     """Manages an interactive chat session."""
 
@@ -74,7 +127,7 @@ class InteractiveSession:
     def _display_welcome(self) -> None:
         """Display welcome message with ASCII art."""
         hrisa_status = (
-            "[green]✓ HRISA.md loaded[/green]"
+            "[green]HRISA.md loaded[/green]"
             if self.repo_context.exists()
             else "[yellow]No HRISA.md (use /init to create)[/yellow]"
         )
@@ -186,6 +239,11 @@ class InteractiveSession:
 
                 if not user_input.strip():
                     continue
+
+                # Check for exit-like commands (even without "/")
+                if is_exit_command(user_input):
+                    self.console.print("[yellow]Goodbye![/yellow]")
+                    break
 
                 # Handle commands
                 if user_input.startswith("/"):

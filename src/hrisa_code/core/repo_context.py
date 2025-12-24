@@ -101,7 +101,7 @@ class RepoContext:
 
         # Save to file
         self.hrisa_path.write_text(content, encoding="utf-8")
-        self.console.print(f"[green]✓ Generated HRISA.md[/green]")
+        self.console.print(f"[green]Generated HRISA.md[/green]")
 
         return content
 
