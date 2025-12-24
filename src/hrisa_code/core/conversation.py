@@ -2,6 +2,7 @@
 
 import json
 import difflib
+import time
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from rich.console import Console
@@ -9,6 +10,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.text import Text
+from rich.spinner import Spinner
 
 from hrisa_code.core.ollama_client import OllamaClient, OllamaConfig
 from hrisa_code.tools.file_operations import AVAILABLE_TOOLS, get_all_tool_definitions
@@ -297,14 +299,21 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         Returns:
             The assistant's response
         """
-        # Show thinking indicator
-        with self.console.status("[bold blue]Thinking...[/bold blue]"):
+        # Show thinking indicator with custom spinner
+        start_time = time.time()
+        with self.console.status(
+            "[bold blue]Thinking...[/bold blue]",
+            spinner="dots"
+        ):
             # Get initial response from LLM
             raw_response = await self.ollama_client.chat_raw(
                 message=user_message,
                 system_prompt=self.system_prompt,
                 tools=self.tool_definitions if self.enable_tools else None,
             )
+        elapsed = time.time() - start_time
+        if elapsed > 2:  # Only show time if it took more than 2 seconds
+            self.console.print(f"[dim]Thought for {elapsed:.1f}s[/dim]")
 
         # Check if the response includes tool calls
         if raw_response.get("message", {}).get("tool_calls"):
@@ -360,14 +369,19 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                             # If diff fails, just continue with the write
                             pass
 
-                # Execute the tool with timing
-                import time
-                start_time = time.time()
+                # Execute the tool with timing and custom spinner
+                tool_start = time.time()
 
-                with self.console.status(f"[bold cyan]Executing {tool_name}...[/bold cyan]"):
+                # Choose spinner based on tool type
+                spinner_style = "line" if tool_name == "execute_command" else "arc"
+
+                with self.console.status(
+                    f"[bold cyan]Executing {tool_name}...[/bold cyan]",
+                    spinner=spinner_style
+                ):
                     result = self._execute_tool(tool_name, arguments)
 
-                execution_time = time.time() - start_time
+                execution_time = time.time() - tool_start
 
                 # Display result to user with metadata
                 file_path = arguments.get("file_path", "") if tool_name == "read_file" else ""
@@ -380,11 +394,18 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 })
 
             # Send tool results back to LLM for final response
-            with self.console.status("[bold green]Generating response...[/bold green]"):
+            response_start = time.time()
+            with self.console.status(
+                "[bold green]Generating response...[/bold green]",
+                spinner="dots2"
+            ):
                 final_response = await self.ollama_client.chat_with_tools_result(
                     tool_results=tool_results,
                     system_prompt=self.system_prompt,
                 )
+            response_time = time.time() - response_start
+            if response_time > 2:
+                self.console.print(f"[dim]Generated response in {response_time:.1f}s[/dim]")
 
             return final_response
         else:
