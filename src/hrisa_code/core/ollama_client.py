@@ -235,19 +235,21 @@ class OllamaClient:
 
         return response
 
-    async def chat_with_tools_result(
+    async def chat_with_tools_result_raw(
         self,
         tool_results: List[Dict[str, Any]],
         system_prompt: Optional[str] = None,
-    ) -> str:
-        """Continue conversation with tool results.
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Continue conversation with tool results, returning raw response.
 
         Args:
             tool_results: Results from tool execution
             system_prompt: Optional system prompt
+            tools: Optional list of tools for potential follow-up calls
 
         Returns:
-            Assistant's final response
+            Full raw response dict from Ollama
         """
         # Prepare messages including tool results
         messages = []
@@ -273,14 +275,32 @@ class OllamaClient:
             model=self.config.model,
             messages=messages,
             options=options,
+            tools=tools if tools else None,  # Include tools for potential follow-up calls
         )
 
-        # Extract and save response
+        # Save the assistant message to history
         assistant_message = response.get("message", {}).get("content", "")
         if assistant_message:
             self.add_message("assistant", assistant_message)
 
-        return assistant_message
+        return response
+
+    async def chat_with_tools_result(
+        self,
+        tool_results: List[Dict[str, Any]],
+        system_prompt: Optional[str] = None,
+    ) -> str:
+        """Continue conversation with tool results.
+
+        Args:
+            tool_results: Results from tool execution
+            system_prompt: Optional system prompt
+
+        Returns:
+            Assistant's final response
+        """
+        response = await self.chat_with_tools_result_raw(tool_results, system_prompt, tools=None)
+        return response.get("message", {}).get("content", "")
 
     async def list_models(self) -> List[str]:
         """List available models.

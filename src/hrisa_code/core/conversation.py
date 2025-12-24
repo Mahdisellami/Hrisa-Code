@@ -399,37 +399,43 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             )
         )
 
-    async def process_message(self, user_message: str) -> str:
-        """Process a user message and handle any tool calls.
+    async def process_message(self, user_message: str, max_tool_rounds: int = 20) -> str:
+        """Process a user message and handle any tool calls (Claude Code style).
+
+        This implements Claude Code-style behavior where the LLM can make multiple
+        rounds of tool calls within a single conversation turn, allowing autonomous
+        multi-step task completion.
 
         Args:
             user_message: The user's message
+            max_tool_rounds: Maximum tool calling rounds (default: 20)
 
         Returns:
             The assistant's response
         """
-        # Show thinking indicator with custom spinner
+        # Reset tool tracking
+        self.last_tool_results = []
+        self.last_tools_had_errors = False
+
+        # Get initial response from LLM
         start_time = time.time()
-        with self.console.status(
-            "[bold blue]Thinking...[/bold blue]",
-            spinner="dots"
-        ):
-            # Get initial response from LLM
+        with self.console.status("[bold blue]Thinking...[/bold blue]", spinner="dots"):
             raw_response = await self.ollama_client.chat_raw(
                 message=user_message,
                 system_prompt=self.system_prompt,
                 tools=self.tool_definitions if self.enable_tools else None,
             )
         elapsed = time.time() - start_time
-        if elapsed > 0.5:  # Show time for operations > 0.5 seconds
+        if elapsed > 0.5:
             self.console.print(f"[dim]Thought for {elapsed:.1f}s[/dim]")
 
-        # Reset tool tracking
-        self.last_tool_results = []
-        self.last_tools_had_errors = False
+        # Multi-turn tool calling loop (Claude Code style)
+        tool_round = 0
+        while tool_round < max_tool_rounds and raw_response.get("message", {}).get("tool_calls"):
+            tool_round += 1
 
-        # Check if the response includes tool calls
-        if raw_response.get("message", {}).get("tool_calls"):
+            if tool_round > 1:
+                self.console.print(f"[dim]→ Tool round {tool_round}[/dim]")
             tool_calls = raw_response["message"]["tool_calls"]
 
             # Execute each tool call
@@ -516,24 +522,31 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 if tool_result_data["had_error"]:
                     self.last_tools_had_errors = True
 
-            # Send tool results back to LLM for final response
+            # Send tool results back to LLM and check for more tool calls
             response_start = time.time()
             with self.console.status(
                 "[bold green]Generating response...[/bold green]",
                 spinner="dots2"
             ):
-                final_response = await self.ollama_client.chat_with_tools_result(
+                raw_response = await self.ollama_client.chat_with_tools_result_raw(
                     tool_results=tool_results,
                     system_prompt=self.system_prompt,
+                    tools=self.tool_definitions,  # Keep tools available for follow-up
                 )
             response_time = time.time() - response_start
-            if response_time > 0.5:  # Show time for operations > 0.5 seconds
+            if response_time > 0.5:
                 self.console.print(f"[dim]Generated response in {response_time:.1f}s[/dim]")
 
-            return final_response
-        else:
-            # No tool calls, return direct response
-            return raw_response.get("message", {}).get("content", "")
+            # Loop continues if raw_response has more tool_calls
+
+        # Exited loop - either no more tool calls or hit max rounds
+        if tool_round >= max_tool_rounds:
+            self.console.print(
+                f"[yellow]Reached max tool rounds ({max_tool_rounds})[/yellow]"
+            )
+
+        # Return final text response
+        return raw_response.get("message", {}).get("content", "")
 
     async def process_message_stream(self, user_message: str) -> None:
         """Process a user message and stream the response.
