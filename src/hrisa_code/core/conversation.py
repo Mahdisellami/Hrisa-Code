@@ -171,13 +171,14 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             )
         )
 
-    def _display_tool_result(self, result: str, tool_name: str = "", execution_time: float = 0.0) -> None:
+    def _display_tool_result(self, result: str, tool_name: str = "", execution_time: float = 0.0, file_path: str = "") -> None:
         """Display a tool result to the user with enhanced formatting.
 
         Args:
             result: Tool execution result
             tool_name: Name of the tool that was executed
             execution_time: Time taken to execute the tool in seconds
+            file_path: Optional file path for syntax highlighting
         """
         # Determine if result indicates success or error
         is_error = result.startswith("Error") or "failed" in result.lower()
@@ -216,9 +217,28 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         else:
             display_result = result
 
+        # Apply syntax highlighting for code files
+        content_to_display = display_result
+        if tool_name == "read_file" and not is_error and file_path:
+            # Detect language from file extension
+            file_ext = Path(file_path).suffix.lstrip('.')
+            if file_ext:  # If we have an extension, try syntax highlighting
+                try:
+                    syntax = Syntax(
+                        display_result,
+                        file_ext,
+                        theme="monokai",
+                        line_numbers=True,
+                        word_wrap=False,
+                    )
+                    content_to_display = syntax
+                except Exception:
+                    # If syntax highlighting fails, fall back to plain text
+                    pass
+
         self.console.print(
             Panel(
-                display_result,
+                content_to_display,
                 title=title,
                 border_style=border_color,
             )
@@ -293,7 +313,8 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 execution_time = time.time() - start_time
 
                 # Display result to user with metadata
-                self._display_tool_result(result, tool_name, execution_time)
+                file_path = arguments.get("file_path", "") if tool_name == "read_file" else ""
+                self._display_tool_result(result, tool_name, execution_time, file_path)
 
                 tool_results.append({
                     "tool_call_id": tool_call.get("id", ""),
