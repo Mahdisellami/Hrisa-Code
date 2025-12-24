@@ -25,6 +25,7 @@ class ConversationManager:
         working_directory: Path,
         system_prompt: Optional[str] = None,
         enable_tools: bool = True,
+        task_manager=None,
     ):
         """Initialize the conversation manager.
 
@@ -33,6 +34,7 @@ class ConversationManager:
             working_directory: Working directory for file operations
             system_prompt: Optional system prompt
             enable_tools: Whether to enable tool calling (some models don't support it)
+            task_manager: Optional TaskManager for background execution
         """
         self.ollama_client = OllamaClient(ollama_config)
         self.working_directory = working_directory
@@ -40,6 +42,7 @@ class ConversationManager:
         self.console = Console()
         self.enable_tools = enable_tools
         self.tool_definitions = get_all_tool_definitions() if enable_tools else None
+        self.task_manager = task_manager
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt.
@@ -62,18 +65,22 @@ Available tools:
 - write_file(file_path, content): Write content to files
 - list_directory(directory_path, recursive?): List ALL files/dirs in a directory (NO file_pattern parameter!)
 - search_files(pattern, directory, file_pattern?): Search for text INSIDE files, optionally filter by file_pattern like "*.py"
-- execute_command(command): Execute shell commands (working_directory is automatically set - DO NOT provide it)
+- execute_command(command, background?): Execute shell commands (working_directory is automatically set - DO NOT provide it)
+  - Set background=true for long-running operations (tests, builds, dev servers) to run asynchronously
+  - Returns task ID immediately when background=true - tell user to check status with /task <id>
 
 CRITICAL TOOL USAGE RULES:
 1. To list files by pattern (*.py, *.js, etc.): Use execute_command with "ls *.py" or "find . -name '*.py'"
 2. list_directory does NOT support file_pattern - it lists EVERYTHING in a directory
 3. search_files is for searching TEXT INSIDE files, not for listing files by name
+4. Use background=true for long-running commands to avoid blocking
 
 EXAMPLES:
 ❌ WRONG: list_directory(directory_path=".", file_pattern="*.py")  # file_pattern doesn't exist!
 ❌ WRONG: execute_command(command="ls *.py", working_directory="/home/user/current_directory")  # NO placeholder paths!
 ✓ RIGHT: execute_command(command="ls *.py")  # working_directory is auto-set
 ✓ RIGHT: execute_command(command="find . -name '*.py'")
+✓ RIGHT: execute_command(command="pytest tests/", background=true)  # Long-running test in background
 
 Guidelines:
 1. Use tools efficiently - avoid redundant tool calls
@@ -82,6 +89,11 @@ Guidelines:
 4. Be concise and direct in your responses
 5. When a tool fails, DON'T make up information or hallucinate - try a different approach or ask the user
 6. Focus on solving the user's problem with real tool results, not invented content
+7. Use background=true for commands that take >5 seconds:
+   - Test suites: pytest, npm test, cargo test
+   - Build commands: npm run build, cargo build, make
+   - Dev servers: npm start, python -m http.server
+   - Long operations: Large file processing, database migrations
 
 The system automatically handles:
 - Confirmations for destructive operations (don't ask yourself)
@@ -147,11 +159,41 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         if tool_name not in AVAILABLE_TOOLS:
             return f"Error: Unknown tool '{tool_name}'"
 
+        # Handle background execution for execute_command
+        if tool_name == "execute_command" and arguments.get("background", False):
+            if not self.task_manager:
+                return "Error: Background execution not available (TaskManager not initialized)"
+
+            # Extract command and working directory
+            command = arguments.get("command", "")
+            working_dir = arguments.get("working_directory", str(self.working_directory))
+
+            # Create background task
+            try:
+                # Change to working directory for the command
+                full_command = f"cd {working_dir} && {command}"
+                task = self.task_manager.create_task(full_command)
+
+                return (
+                    f"[BACKGROUND TASK] Command started in background\n"
+                    f"Task ID: {task.task_id}\n"
+                    f"PID: {task.pid}\n"
+                    f"Command: {command}\n\n"
+                    f"Use /task {task.task_id} to view output\n"
+                    f"Use /tasks to list all background tasks"
+                )
+            except Exception as e:
+                return f"Error starting background task: {str(e)}"
+
         tool_class = AVAILABLE_TOOLS[tool_name]
 
         # Add working directory context for relevant tools
         if tool_name in ["execute_command"] and "working_directory" not in arguments:
             arguments["working_directory"] = str(self.working_directory)
+
+        # Remove background flag before passing to tool (it's handled above)
+        if "background" in arguments:
+            arguments = {k: v for k, v in arguments.items() if k != "background"}
 
         try:
             result = tool_class.execute(**arguments)

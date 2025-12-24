@@ -97,19 +97,20 @@ class InteractiveSession:
             top_k=config.model.top_k,
         )
 
+        # Set up task manager for background tasks
+        self.task_manager = TaskManager(working_directory)
+
         # Create conversation manager (needed for RepoContext)
         self.conversation = ConversationManager(
             ollama_config=ollama_config,
             working_directory=working_directory,
             system_prompt=config.system_prompt,
             enable_tools=config.tools.enabled,
+            task_manager=self.task_manager,
         )
 
         # Set up repo context with ollama client
         self.repo_context = RepoContext(working_directory, self.conversation.ollama_client)
-
-        # Set up task manager for background tasks
-        self.task_manager = TaskManager(working_directory)
 
         # Load HRISA.md if it exists and augment system prompt
         hrisa_content = self.repo_context.load()

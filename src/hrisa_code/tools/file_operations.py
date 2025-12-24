@@ -199,7 +199,7 @@ class ExecuteCommandTool:
             "type": "function",
             "function": {
                 "name": "execute_command",
-                "description": "Execute a shell command. Use for pattern-based file listing (ls *.py, find), running build tools, git operations, etc. Prefer this over list_directory when filtering files by extension/pattern.",
+                "description": "Execute a shell command. Use for pattern-based file listing (ls *.py, find), running build tools, git operations, etc. Prefer this over list_directory when filtering files by extension/pattern. For long-running commands (tests, builds, servers), set background=true to run asynchronously.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -210,6 +210,10 @@ class ExecuteCommandTool:
                         "working_directory": {
                             "type": "string",
                             "description": "Working directory for the command",
+                        },
+                        "background": {
+                            "type": "boolean",
+                            "description": "Run command in background for long-running operations (tests, builds, servers). Returns task ID immediately.",
                         },
                     },
                     "required": ["command"],
