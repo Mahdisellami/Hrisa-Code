@@ -1,151 +1,123 @@
-## HRISA.md - Project Guide for AI Assistants
+# HRISA.md - Project Guide for AI Assistants
 
 ## 1. Project Overview
 **IMPORTANT**: If README.md exists in Key Configuration Files above, use it HEAVILY:
+Hrisa Code is a CLI coding assistant powered by local LLMs via Ollama. It helps developers with code completion, debugging, and more.
 
-Hrisa Code is a CLI coding assistant powered by local LLMs via Ollama. It provides an interactive way to write code and get suggestions on the fly.
-
-### Tech Stack
-
-* Python 3.10+
-* Typer for command-line interface
-* OllamaClient for interacting with Ollama API
-* Rich for terminal rendering
-* Markdown for documentation
-* Pytest for testing
-* Black, Ruff, MyPy for code quality and type checking
-* Pyyaml for configuration management
+- **Features:**
+	+ Code completion
+	+ Debugging
+	+ Code formatting
+	+ Type checking
 
 ## 2. Project Structure
-```markdown
-.
-├── src/
-│   ├── hrisa_code/
-│   │   ├── __init__.py
-│   │   ├── cli.py
-│   │   └── ...
-│   ├── tests/
-│   │   ├── test_cli.py
-│   │   └── ...
-│   └── utils/
-│       ├── constants.py
-│       └── ...
-├── Makefile
-├── README.md
-└── requirements.txt
+
+```
+# src/hrisa_code/cli.py - CLI entry point with Typer commands
+src/
+├── hrisa_code
+│   ├── __init__.py
+│   ├── cli.py
+│   └── ...
+└── ...
+
+# tests/ - Testing files
+tests/
+
+# Makefile - Build and test scripts
+Makefile
+
+# README.md - Project description and instructions
+README.md
 ```
 
 ## 3. Key Components
 
-### A. CLI (`src/hrisa_code/cli.py`)
-Main entry point for the Hrisa Code application.
+### A. Ollama Client (`src/hrisa_code/ollama_client.py`)
 
-### B. OllamaClient (`src/hrisa_code/core/ollama_client.py`)
-Handles interactions with the Ollama API.
+- Responsible for interacting with the local LLM (Large Language Model) via Ollama.
+- Provides API to send requests and receive responses.
 
-### C. InteractiveSession (`src/hrisa_code/core/interactive_session.py`)
-Manages the interactive session between user and Ollama.
+### B. Interactive Session (`src/hrisa_code/interactive.py`)
+
+- Handles user input and output, providing an interactive experience.
+- Integrates with Ollama Client to fetch results from the LLM.
 
 ## 4. Development Practices
 
 ### Code Style
-* Formatting: Black (configured in Makefile)
-* Linting: Ruff (configured in Makefile)
-* Type Checking: MyPy (configured in Makefile)
+- **Formatting:** Black (version 23.0.0) is used for code formatting.
+- **Linting:** Ruff (version 0.1.0) is used for linting.
+- **Type Checking:** Mypy (version 1.7.0) is used for type checking.
 
 ### Testing
-* Framework: Pytest (configured in Makefile)
-* Run: `make test` or `pytest`
+- **Framework:** Pytest (version 7.4.0) is used for testing.
+- Run: `make test` to run tests
 
 ## 5. Common Tasks
 
-### Adding a New Feature
-1. Create a new file in the `src/hrisa_code/features/` directory.
-2. Implement the feature logic and tests accordingly.
+### Adding a New [Feature Type]
+To add a new feature, follow these steps:
 
-### A. Code Quality (`Makefile`)
-```bash
-# Format code with Black
-make format
-
-# Lint code with Ruff
-make lint
-
-# Type check code with MyPy
-make type-check
-```
+1. Create a new file in the `src/hrisa_code/` directory with a descriptive name (e.g., `new_feature.py`).
+2. Import the necessary modules and define your feature's logic.
+3. Integrate your feature with the existing codebase using dependency injection or other design patterns.
 
 ## 6. Important Files
-* `src/hrisa_code/cli.py`: Main CLI entry point.
-* `src/hrisa_code/core/ollama_client.py`: Handles Ollama API interactions.
-* `Makefile`: Configuration file for Make commands.
+
+### A. `src/hrisa_code/cli.py`
+- Main entry point for the CLI application, handling user input and output.
+
+### B. `Makefile`
+- Build and test scripts used to automate development tasks.
 
 ## 7. Quick Commands
-
-### A. Setup (`Makefile`)
 ```bash
-# Set up venv and install dependencies
-make setup
+# Setup
+make setup - Set up venv and install dependencies
 
-# Set up with uv (faster)
-make setup-uv
-```
-
-### B. Development (`Makefile`)
-```bash
-# Run tests
-make test
-
-# Format code
-make format
-
-# Lint code
-make lint
-
-# Type check code
-make type-check
+# Development
+make test - Run tests
+make format - Format code with black
+make lint - Lint code with ruff
+...
 ```
 
 ## 8. Dependencies
 
-### A. Core Dependencies
+### Core Dependencies
+- `typer` (version 0.3.4) - CLI framework for building applications.
+- `rich` (version 10.12.0) - Rich text and formatting library.
 
-* `python` - Python 3.10+
-* `typer` - Typer for command-line interface
-* `ollama-client` - OllamaClient for interacting with Ollama API
-* `rich` - Rich for terminal rendering
-* `markdown` - Markdown for documentation
-
-### B. Dev Dependencies
-
-* `pytest` - Pytest for testing
-* `black` - Black for code formatting
-* `ruff` - Ruff for code linting
-* `mypy` - MyPy for type checking
-* `pyyaml` - PyYAML for configuration management
+### Dev Dependencies
+- `pytest` (version 7.4.0) - Testing framework for Python.
+- `black` (version 23.0.0) - Code formatting tool.
+- `ruff` (version 0.1.0) - Linting tool.
+- `mypy` (version 1.7.0) - Type checking tool.
 
 ## 9. Code Patterns
+
+### A. Asynchronous Programming (`src/hrisa_code/interactive.py`)
 ```python
-# Pattern: Async functions
-async def get_code_suggestions(self):
-    # Code here...
+async def fetch_results(self):
+    # Fetch results from Ollama Client asynchronously
+    pass
 ```
 
+### B. Dependency Injection (`src/hrisa_code/cli.py`)
 ```python
-# Pattern: Type hints and docstrings
-def greet(name: str) -> None:
-    """Print a personalized greeting message."""
-    print(f"Hello, {name}!")
+def __init__(self, ollama_client: OllamaClient):
+    self.ollama_client = ollama_client
+    pass
 ```
 
 ## 10. Notes for AI Assistants
 
-* File Operations: The application handles file operations in the `src/hrisa_code/utils/constants.py` file.
-* Testing: Always run tests after making changes to ensure code quality and functionality.
-* Architecture: The application follows a modular architecture with separate components for CLI, OllamaClient, and InteractiveSession.
+- **File Operations:** The project uses file operations to interact with the local LLM.
+- **Testing:** Always run tests after making changes to ensure code quality and stability.
+- **Architecture:** The project follows a modular architecture, separating concerns into distinct components.
 
 ## 11. Version Information
-
-* Current Version: 0.1.0
-* Python: 3.10+
-* Status: Development
+- **Current Version:** 0.1.0
+- **Python:** 3.10+
+- **Status:** Development

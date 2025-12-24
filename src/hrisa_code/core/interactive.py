@@ -13,6 +13,7 @@ from hrisa_code.core.conversation import ConversationManager
 from hrisa_code.core.ollama_client import OllamaConfig
 from hrisa_code.core.config import Config
 from hrisa_code.core.repo_context import RepoContext
+from hrisa_code.core.task_manager import TaskManager
 from rich.columns import Columns
 
 
@@ -107,6 +108,9 @@ class InteractiveSession:
         # Set up repo context with ollama client
         self.repo_context = RepoContext(working_directory, self.conversation.ollama_client)
 
+        # Set up task manager for background tasks
+        self.task_manager = TaskManager(working_directory)
+
         # Load HRISA.md if it exists and augment system prompt
         hrisa_content = self.repo_context.load()
         if hrisa_content:
@@ -182,13 +186,16 @@ class InteractiveSession:
             self.console.print(
                 Panel(
                     "[bold]Available Commands:[/bold]\n\n"
-                    "[yellow]/help[/yellow]     - Show this help message\n"
-                    "[yellow]/init[/yellow]     - Initialize or update HRISA.md (repo context)\n"
-                    "[yellow]/clear[/yellow]    - Clear conversation history\n"
-                    "[yellow]/save[/yellow]     - Save conversation to file\n"
-                    "[yellow]/load[/yellow]     - Load conversation from file\n"
-                    "[yellow]/config[/yellow]   - Show current configuration\n"
-                    "[yellow]/exit[/yellow]     - Exit the session",
+                    "[yellow]/help[/yellow]      - Show this help message\n"
+                    "[yellow]/init[/yellow]      - Initialize or update HRISA.md (repo context)\n"
+                    "[yellow]/clear[/yellow]     - Clear conversation history\n"
+                    "[yellow]/save[/yellow]      - Save conversation to file\n"
+                    "[yellow]/load[/yellow]      - Load conversation from file\n"
+                    "[yellow]/config[/yellow]    - Show current configuration\n"
+                    "[yellow]/tasks[/yellow]     - List background tasks\n"
+                    "[yellow]/task <id>[/yellow] - Show task output\n"
+                    "[yellow]/task kill <id>[/yellow] - Kill a task\n"
+                    "[yellow]/exit[/yellow]      - Exit the session",
                     title="Help",
                 )
             )
@@ -218,6 +225,28 @@ class InteractiveSession:
                     title="Configuration",
                 )
             )
+
+        elif command_lower == "/tasks":
+            # List all background tasks
+            self.task_manager.display_tasks()
+
+        elif command_lower.startswith("/task "):
+            # Handle task-specific commands
+            parts = command_lower.split()
+            if len(parts) == 2:
+                # /task <id> - show task output
+                task_id = parts[1]
+                self.task_manager.display_task_output(task_id)
+            elif len(parts) == 3 and parts[1] == "kill":
+                # /task kill <id> - kill task
+                task_id = parts[2]
+                if self.task_manager.kill_task(task_id):
+                    self.console.print(f"[green]Task '{task_id}' killed[/green]")
+                else:
+                    self.console.print(f"[red]Failed to kill task '{task_id}'[/red]")
+            else:
+                self.console.print("[red]Invalid /task command[/red]")
+                self.console.print("Usage: [yellow]/task <id>[/yellow] or [yellow]/task kill <id>[/yellow]")
 
         else:
             self.console.print(f"[red]Unknown command: {command_lower}[/red]")
