@@ -58,7 +58,7 @@ Available tools:
 - write_file(file_path, content): Write content to files
 - list_directory(directory_path, recursive?): List ALL files/dirs in a directory (NO file_pattern parameter!)
 - search_files(pattern, directory, file_pattern?): Search for text INSIDE files, optionally filter by file_pattern like "*.py"
-- execute_command(command, working_directory?): Execute shell commands
+- execute_command(command): Execute shell commands (working_directory is automatically set - DO NOT provide it)
 
 CRITICAL TOOL USAGE RULES:
 1. To list files by pattern (*.py, *.js, etc.): Use execute_command with "ls *.py" or "find . -name '*.py'"
@@ -67,7 +67,9 @@ CRITICAL TOOL USAGE RULES:
 
 EXAMPLES:
 ❌ WRONG: list_directory(directory_path=".", file_pattern="*.py")  # file_pattern doesn't exist!
-✓ RIGHT: execute_command(command="ls *.py") or execute_command(command="find . -name '*.py'")
+❌ WRONG: execute_command(command="ls *.py", working_directory="/home/user/current_directory")  # NO placeholder paths!
+✓ RIGHT: execute_command(command="ls *.py")  # working_directory is auto-set
+✓ RIGHT: execute_command(command="find . -name '*.py'")
 
 Guidelines:
 1. Use tools efficiently - avoid redundant tool calls
