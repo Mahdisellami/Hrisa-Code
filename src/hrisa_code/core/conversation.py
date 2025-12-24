@@ -1,12 +1,14 @@
 """Conversation manager for handling chat sessions with tool execution."""
 
 import json
+import difflib
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.syntax import Syntax
+from rich.text import Text
 
 from hrisa_code.core.ollama_client import OllamaClient, OllamaConfig
 from hrisa_code.tools.file_operations import AVAILABLE_TOOLS, get_all_tool_definitions
@@ -155,6 +157,48 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         except Exception as e:
             return f"Error executing tool '{tool_name}': {str(e)}"
 
+    def _display_diff(self, file_path: str, old_content: str, new_content: str) -> None:
+        """Display a git-style diff for file changes.
+
+        Args:
+            file_path: Path to the file being changed
+            old_content: Original file content
+            new_content: New file content
+        """
+        old_lines = old_content.splitlines(keepends=True) if old_content else []
+        new_lines = new_content.splitlines(keepends=True)
+
+        # Generate unified diff
+        diff_lines = list(difflib.unified_diff(
+            old_lines,
+            new_lines,
+            fromfile=f"a/{file_path}",
+            tofile=f"b/{file_path}",
+            lineterm=''
+        ))
+
+        # Format diff with colors
+        diff_text = Text()
+        for line in diff_lines:
+            if line.startswith('---') or line.startswith('+++'):
+                diff_text.append(line + '\n', style="bold white")
+            elif line.startswith('@@'):
+                diff_text.append(line + '\n', style="cyan")
+            elif line.startswith('-'):
+                diff_text.append(line + '\n', style="red")
+            elif line.startswith('+'):
+                diff_text.append(line + '\n', style="green")
+            else:
+                diff_text.append(line + '\n', style="dim white")
+
+        self.console.print(
+            Panel(
+                diff_text,
+                title="► File Changes",
+                border_style="yellow",
+            )
+        )
+
     def _display_tool_call(self, tool_name: str, arguments: Dict[str, Any]) -> None:
         """Display a tool call to the user.
 
@@ -302,6 +346,19 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
                 # Display tool call to user
                 self._display_tool_call(tool_name, arguments)
+
+                # Show diff for write_file operations
+                if tool_name == "write_file":
+                    file_path_arg = arguments.get("file_path", "")
+                    new_content = arguments.get("content", "")
+                    if file_path_arg:
+                        try:
+                            path = Path(file_path_arg)
+                            old_content = path.read_text() if path.exists() else ""
+                            self._display_diff(file_path_arg, old_content, new_content)
+                        except Exception:
+                            # If diff fails, just continue with the write
+                            pass
 
                 # Execute the tool with timing
                 import time
