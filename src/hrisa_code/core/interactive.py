@@ -13,6 +13,7 @@ from hrisa_code.core.conversation import ConversationManager
 from hrisa_code.core.ollama_client import OllamaConfig
 from hrisa_code.core.config import Config
 from hrisa_code.core.repo_context import RepoContext
+from rich.columns import Columns
 
 
 class InteractiveSession:
@@ -78,18 +79,16 @@ class InteractiveSession:
             else "[yellow]No HRISA.md (use /init to create)[/yellow]"
         )
 
-        # ASCII art (simplified - pepper art TBD)
+        # ASCII art - simple and clean
         ascii_art = """
-   ╔═══════════════════════════════════════╗
-   ║  [bold red]██╗  ██╗██████╗ ██╗███████╗ █████╗[/bold red]  ║
-   ║  [bold red]██║  ██║██╔══██╗██║██╔════╝██╔══██╗[/bold red] ║
-   ║  [bold red]███████║██████╔╝██║███████╗███████║[/bold red] ║
-   ║  [bold red]██╔══██║██╔══██╗██║╚════██║██╔══██║[/bold red] ║
-   ║  [bold red]██║  ██║██║  ██║██║███████║██║  ██║[/bold red] ║
-   ║  [bold red]╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝[/bold red] ║
-   ║                                       ║
-   ║     [dim]Local AI Coding Assistant[/dim]       ║
-   ╚═══════════════════════════════════════╝
+  [bold red]██╗  ██╗██████╗ ██╗███████╗ █████╗[/bold red]
+  [bold red]██║  ██║██╔══██╗██║██╔════╝██╔══██╗[/bold red]
+  [bold red]███████║██████╔╝██║███████╗███████║[/bold red]
+  [bold red]██╔══██║██╔══██╗██║╚════██║██╔══██║[/bold red]
+  [bold red]██║  ██║██║  ██║██║███████║██║  ██║[/bold red]
+  [bold red]╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝[/bold red]
+
+     [dim]Local AI Coding Assistant[/dim]
 """
 
         info_text = (
@@ -104,8 +103,12 @@ class InteractiveSession:
             f"  [yellow]/exit[/yellow]    - Exit (or Ctrl+D)\n"
         )
 
-        self.console.print(ascii_art)
-        self.console.print(Panel.fit(info_text, border_style="red", padding=(0, 2)))
+        # Create columns layout - ASCII art on left, info panel on right
+        info_panel = Panel.fit(info_text, border_style="red", padding=(0, 2))
+
+        self.console.print()
+        self.console.print(Columns([ascii_art, info_panel], equal=False, expand=False))
+        self.console.print()
 
     async def _handle_command(self, command: str) -> bool:
         """Handle special commands.

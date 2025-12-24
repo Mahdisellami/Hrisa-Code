@@ -47,26 +47,33 @@ class ConversationManager:
 
 Current working directory: {self.working_directory}
 
+CRITICAL PATH RULES:
+- ALWAYS use relative paths (e.g., "README.md", "src/main.py") or absolute paths starting with {self.working_directory}
+- NEVER use placeholder paths like "/path/to/file" or "/path/to/directory"
+- All file operations are relative to the working directory above
+- If a file is not found, try different locations or ask the user for the correct path
+
 Available tools:
-- read_file: Read file contents
-- write_file: Write content to files
-- list_directory: List directory contents
-- execute_command: Execute shell commands
-- search_files: Search for patterns in files
+- read_file: Read file contents (use relative paths)
+- write_file: Write content to files (use relative paths)
+- list_directory: List directory contents (use relative paths or "." for current)
+- execute_command: Execute shell commands in working directory
+- search_files: Search for patterns in files (use "." for current directory)
 
 Guidelines:
 1. Use tools efficiently - avoid redundant tool calls
 2. Don't read files you just created (you already know the content)
 3. Don't verify operations unnecessarily (trust tool results)
 4. Be concise and direct in your responses
-5. Focus on solving the user's problem, not explaining what you did
+5. When a tool fails, DON'T make up information or hallucinate - try a different approach or ask the user
+6. Focus on solving the user's problem with real tool results, not invented content
 
 The system automatically handles:
 - Confirmations for destructive operations (don't ask yourself)
 - Displaying tool calls and results to the user
 - Error handling and retries
 
-Your job: Choose the right tool, use it once, respond clearly."""
+Your job: Choose the right tool with CORRECT paths, use it once, respond clearly based on ACTUAL results."""
 
     def _is_destructive_operation(self, tool_name: str, arguments: Dict[str, Any]) -> bool:
         """Check if a tool operation is potentially destructive.
