@@ -204,9 +204,15 @@ Your job: Choose the right tool, use it once, respond clearly."""
                     confirmation_msg = self._get_confirmation_message(tool_name, arguments)
                     self.console.print(f"\n[yellow]{confirmation_msg}[/yellow]")
 
-                    # Get user confirmation
-                    from prompt_toolkit import prompt
-                    response = prompt("Continue? (yes/no): ").strip().lower()
+                    # Get user confirmation using async prompt
+                    import asyncio
+                    from prompt_toolkit import PromptSession
+                    from prompt_toolkit.patch_stdout import patch_stdout
+
+                    session = PromptSession()
+                    with patch_stdout():
+                        response = await session.prompt_async("Continue? (yes/no): ")
+                    response = response.strip().lower()
 
                     if response not in ["yes", "y"]:
                         result = "❌ Operation cancelled by user"
