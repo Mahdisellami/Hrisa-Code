@@ -54,11 +54,11 @@ CRITICAL PATH RULES:
 - If a file is not found, try different locations or ask the user for the correct path
 
 Available tools:
-- read_file: Read file contents (use relative paths)
-- write_file: Write content to files (use relative paths)
-- list_directory: List directory contents (use relative paths or "." for current)
-- execute_command: Execute shell commands in working directory
-- search_files: Search for patterns in files (use "." for current directory)
+- read_file(file_path, start_line?, end_line?): Read file contents
+- write_file(file_path, content): Write content to files
+- list_directory(directory_path, recursive?): List ALL files/dirs in a directory (no filtering)
+- search_files(pattern, directory, file_pattern?): Search for text INSIDE files, optionally filter by file_pattern like "*.py"
+- execute_command(command, working_directory?): Execute shell commands (use this for listing files by pattern like "ls *.py" or "find . -name '*.py'")
 
 Guidelines:
 1. Use tools efficiently - avoid redundant tool calls
