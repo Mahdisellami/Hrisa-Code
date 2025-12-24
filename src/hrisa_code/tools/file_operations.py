@@ -24,7 +24,7 @@ class ReadFileTool:
             "type": "function",
             "function": {
                 "name": "read_file",
-                "description": "Read the contents of a file",
+                "description": "Read the contents of a file. Use when you need to view file contents. For finding files by name, use execute_command with find/ls instead.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -88,7 +88,7 @@ class WriteFileTool:
             "type": "function",
             "function": {
                 "name": "write_file",
-                "description": "Write content to a file",
+                "description": "Write content to a file. Use when creating new files or overwriting existing ones. The system will prompt for confirmation if file exists.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -139,7 +139,7 @@ class ListDirectoryTool:
             "type": "function",
             "function": {
                 "name": "list_directory",
-                "description": "List contents of a directory",
+                "description": "List ALL files and directories in a directory. Does NOT support filtering by pattern or extension. Use execute_command with 'ls *.py' or 'find' for pattern-based listing.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -199,7 +199,7 @@ class ExecuteCommandTool:
             "type": "function",
             "function": {
                 "name": "execute_command",
-                "description": "Execute a shell command",
+                "description": "Execute a shell command. Use for pattern-based file listing (ls *.py, find), running build tools, git operations, etc. Prefer this over list_directory when filtering files by extension/pattern.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -264,7 +264,7 @@ class SearchFilesTool:
             "type": "function",
             "function": {
                 "name": "search_files",
-                "description": "Search for a pattern in files",
+                "description": "Search for text patterns INSIDE files (grep-like). Use when looking for code/text content within files. Optionally filter by file_pattern. For listing files by name, use execute_command instead.",
                 "parameters": {
                     "type": "object",
                     "properties": {
