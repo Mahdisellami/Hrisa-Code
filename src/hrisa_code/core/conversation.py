@@ -153,20 +153,56 @@ Your job: Choose the right tool, use it once, respond clearly."""
             )
         )
 
-    def _display_tool_result(self, result: str) -> None:
-        """Display a tool result to the user.
+    def _display_tool_result(self, result: str, tool_name: str = "", execution_time: float = 0.0) -> None:
+        """Display a tool result to the user with enhanced formatting.
 
         Args:
             result: Tool execution result
+            tool_name: Name of the tool that was executed
+            execution_time: Time taken to execute the tool in seconds
         """
-        # Truncate very long results
-        display_result = result if len(result) < 1000 else result[:1000] + "\n... (truncated)"
+        # Determine if result indicates success or error
+        is_error = result.startswith("Error") or "failed" in result.lower()
+        border_color = "red" if is_error else "green"
+        icon = "❌" if is_error else "✓"
+
+        # Extract metadata based on tool type and result
+        metadata_parts = []
+
+        # Add execution time if available
+        if execution_time > 0:
+            metadata_parts.append(f"{execution_time:.2f}s")
+
+        # Analyze result for metadata
+        if tool_name == "read_file" and not is_error:
+            lines = result.count('\n')
+            chars = len(result)
+            metadata_parts.extend([f"{chars} chars", f"{lines} lines"])
+        elif tool_name == "write_file" and not is_error:
+            metadata_parts.append("File written")
+        elif tool_name == "list_directory" and not is_error:
+            items = result.count('\n')
+            metadata_parts.append(f"{items} items")
+        elif tool_name == "execute_command" and not is_error:
+            metadata_parts.append("Command executed")
+
+        # Build title with metadata
+        title_parts = [f"{icon} Tool Result"]
+        if metadata_parts:
+            title_parts.append(f"({', '.join(metadata_parts)})")
+        title = " ".join(title_parts)
+
+        # Truncate very long results but show more than before
+        if len(result) > 2000:
+            display_result = result[:2000] + f"\n\n... (truncated, {len(result) - 2000} more chars)"
+        else:
+            display_result = result
 
         self.console.print(
             Panel(
                 display_result,
-                title="📋 Tool Result",
-                border_style="green",
+                title=title,
+                border_style=border_color,
             )
         )
 
@@ -218,7 +254,7 @@ Your job: Choose the right tool, use it once, respond clearly."""
 
                     if response != "Continue":
                         result = "❌ Operation cancelled by user"
-                        self._display_tool_result(result)
+                        self._display_tool_result(result, tool_name)
                         tool_results.append({
                             "tool_call_id": tool_call.get("id", ""),
                             "role": "tool",
@@ -229,12 +265,17 @@ Your job: Choose the right tool, use it once, respond clearly."""
                 # Display tool call to user
                 self._display_tool_call(tool_name, arguments)
 
-                # Execute the tool with status indicator
+                # Execute the tool with timing
+                import time
+                start_time = time.time()
+
                 with self.console.status(f"[bold cyan]🔧 Executing {tool_name}...[/bold cyan]"):
                     result = self._execute_tool(tool_name, arguments)
 
-                # Display result to user
-                self._display_tool_result(result)
+                execution_time = time.time() - start_time
+
+                # Display result to user with metadata
+                self._display_tool_result(result, tool_name, execution_time)
 
                 tool_results.append({
                     "tool_call_id": tool_call.get("id", ""),

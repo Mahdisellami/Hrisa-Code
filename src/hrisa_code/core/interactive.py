@@ -71,29 +71,41 @@ class InteractiveSession:
         )
 
     def _display_welcome(self) -> None:
-        """Display welcome message."""
+        """Display welcome message with ASCII art."""
         hrisa_status = (
             "[green]✓ HRISA.md loaded[/green]"
             if self.repo_context.exists()
             else "[yellow]No HRISA.md (use /init to create)[/yellow]"
         )
 
-        self.console.print(
-            Panel.fit(
-                f"[bold blue]Hrisa Code[/bold blue] - Local AI Coding Assistant\n\n"
-                f"Model: [green]{self.config.model.name}[/green]\n"
-                f"Working Directory: [cyan]{self.working_directory}[/cyan]\n"
-                f"Context: {hrisa_status}\n\n"
-                f"Commands:\n"
-                f"  [yellow]/help[/yellow]    - Show help\n"
-                f"  [yellow]/init[/yellow]    - Initialize/update HRISA.md\n"
-                f"  [yellow]/clear[/yellow]   - Clear conversation history\n"
-                f"  [yellow]/save[/yellow]    - Save conversation\n"
-                f"  [yellow]/exit[/yellow]    - Exit (or Ctrl+D)\n",
-                title="Welcome",
-                border_style="blue",
-            )
+        # ASCII art (simplified - pepper art TBD)
+        ascii_art = """
+   ╔═══════════════════════════════════════╗
+   ║  [bold red]██╗  ██╗██████╗ ██╗███████╗ █████╗[/bold red]  ║
+   ║  [bold red]██║  ██║██╔══██╗██║██╔════╝██╔══██╗[/bold red] ║
+   ║  [bold red]███████║██████╔╝██║███████╗███████║[/bold red] ║
+   ║  [bold red]██╔══██║██╔══██╗██║╚════██║██╔══██║[/bold red] ║
+   ║  [bold red]██║  ██║██║  ██║██║███████║██║  ██║[/bold red] ║
+   ║  [bold red]╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝[/bold red] ║
+   ║                                       ║
+   ║     [dim]Local AI Coding Assistant[/dim]       ║
+   ╚═══════════════════════════════════════╝
+"""
+
+        info_text = (
+            f"\n[bold]Configuration[/bold]\n"
+            f"  Model: [green]{self.config.model.name}[/green]\n"
+            f"  Directory: [cyan]{self.working_directory.name}/[/cyan]\n"
+            f"  Context: {hrisa_status}\n\n"
+            f"[bold]Quick Commands[/bold]\n"
+            f"  [yellow]/help[/yellow]    - Show all commands\n"
+            f"  [yellow]/init[/yellow]    - Initialize repo context\n"
+            f"  [yellow]/clear[/yellow]   - Clear history\n"
+            f"  [yellow]/exit[/yellow]    - Exit (or Ctrl+D)\n"
         )
+
+        self.console.print(ascii_art)
+        self.console.print(Panel.fit(info_text, border_style="red", padding=(0, 2)))
 
     async def _handle_command(self, command: str) -> bool:
         """Handle special commands.
