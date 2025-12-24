@@ -312,7 +312,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 tools=self.tool_definitions if self.enable_tools else None,
             )
         elapsed = time.time() - start_time
-        if elapsed > 2:  # Only show time if it took more than 2 seconds
+        if elapsed > 0.5:  # Show time for operations > 0.5 seconds
             self.console.print(f"[dim]Thought for {elapsed:.1f}s[/dim]")
 
         # Check if the response includes tool calls
@@ -404,7 +404,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                     system_prompt=self.system_prompt,
                 )
             response_time = time.time() - response_start
-            if response_time > 2:
+            if response_time > 0.5:  # Show time for operations > 0.5 seconds
                 self.console.print(f"[dim]Generated response in {response_time:.1f}s[/dim]")
 
             return final_response
