@@ -56,9 +56,18 @@ CRITICAL PATH RULES:
 Available tools:
 - read_file(file_path, start_line?, end_line?): Read file contents
 - write_file(file_path, content): Write content to files
-- list_directory(directory_path, recursive?): List ALL files/dirs in a directory (no filtering)
+- list_directory(directory_path, recursive?): List ALL files/dirs in a directory (NO file_pattern parameter!)
 - search_files(pattern, directory, file_pattern?): Search for text INSIDE files, optionally filter by file_pattern like "*.py"
-- execute_command(command, working_directory?): Execute shell commands (use this for listing files by pattern like "ls *.py" or "find . -name '*.py'")
+- execute_command(command, working_directory?): Execute shell commands
+
+CRITICAL TOOL USAGE RULES:
+1. To list files by pattern (*.py, *.js, etc.): Use execute_command with "ls *.py" or "find . -name '*.py'"
+2. list_directory does NOT support file_pattern - it lists EVERYTHING in a directory
+3. search_files is for searching TEXT INSIDE files, not for listing files by name
+
+EXAMPLES:
+❌ WRONG: list_directory(directory_path=".", file_pattern="*.py")  # file_pattern doesn't exist!
+✓ RIGHT: execute_command(command="ls *.py") or execute_command(command="find . -name '*.py'")
 
 Guidelines:
 1. Use tools efficiently - avoid redundant tool calls
