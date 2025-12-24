@@ -139,14 +139,37 @@ def init(
         "-g",
         help="Initialize global configuration instead of project-specific",
     ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Ollama model to use for HRISA.md generation",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force overwrite without confirmation",
+    ),
+    comprehensive: bool = typer.Option(
+        False,
+        "--comprehensive",
+        help="Generate comprehensive HRISA.md using multi-step orchestration",
+    ),
+    skip_hrisa: bool = typer.Option(
+        False,
+        "--skip-hrisa",
+        help="Skip HRISA.md generation (only create config)",
+    ),
 ) -> None:
-    """Initialize Hrisa Code configuration."""
+    """Initialize Hrisa Code configuration and generate HRISA.md documentation."""
     if global_config:
         config_path = Config.get_default_config_path()
     else:
         config_path = Config.get_project_config_path(path)
 
-    if config_path.exists():
+    # Check if config exists
+    if config_path.exists() and not force:
         console.print(f"[yellow]Configuration already exists at {config_path}[/yellow]")
         overwrite = typer.confirm("Overwrite?")
         if not overwrite:
@@ -154,14 +177,112 @@ def init(
 
     # Create default configuration
     config = Config()
+
+    # Override model if specified
+    if model:
+        config.model.name = model
+
     config.save(config_path)
 
     console.print(f"[green]Configuration initialized at {config_path}[/green]")
+    console.print()
+
+    # Generate HRISA.md if not skipped
+    if not skip_hrisa:
+        hrisa_path = path / "HRISA.md"
+
+        # Check if HRISA.md exists
+        if hrisa_path.exists() and not force:
+            console.print(f"[yellow]HRISA.md already exists at {hrisa_path}[/yellow]")
+            overwrite_hrisa = typer.confirm("Overwrite HRISA.md?")
+            if not overwrite_hrisa:
+                console.print("\n[bold]Next steps:[/bold]")
+                console.print("1. Edit the configuration file to customize settings")
+                console.print(f"2. Make sure Ollama is running: [cyan]ollama serve[/cyan]")
+                console.print(f"3. Pull a model: [cyan]ollama pull {config.model.name}[/cyan]")
+                console.print(f"4. Start chatting: [cyan]hrisa chat[/cyan]")
+                return
+
+        try:
+            # Generate HRISA.md
+            from hrisa_code.core.conversation import ConversationManager
+            from hrisa_code.core.hrisa_orchestrator import HrisaOrchestrator
+
+            if comprehensive:
+                console.print("[bold cyan]Generating comprehensive HRISA.md...[/bold cyan]")
+                console.print("[dim]This will use multi-step orchestration for thorough analysis.[/dim]\n")
+
+                # Create conversation manager for orchestration
+                conversation = ConversationManager(
+                    ollama_config=config.model,
+                    system_prompt="You are an expert software architect and documentation specialist.",
+                    enable_tools=True,
+                    working_directory=path,
+                )
+
+                # Create and run orchestrator
+                orchestrator = HrisaOrchestrator(
+                    conversation=conversation,
+                    project_path=path,
+                    console=console,
+                )
+
+                hrisa_content = asyncio.run(orchestrator.generate_comprehensive_hrisa())
+            else:
+                console.print("[bold cyan]Generating HRISA.md...[/bold cyan]")
+                console.print("[dim]Tip: Use --comprehensive for thorough multi-step analysis.[/dim]\n")
+
+                # Simple single-prompt generation
+                conversation = ConversationManager(
+                    ollama_config=config.model,
+                    system_prompt="You are an expert software architect and documentation specialist.",
+                    enable_tools=True,
+                    working_directory=path,
+                )
+
+                prompt = f"""Generate a comprehensive HRISA.md file for this project at {path}.
+
+HRISA.md is a repository context document that helps AI assistants understand the project structure, architecture, and development practices.
+
+Your task:
+1. Explore the codebase using available tools (read files, search, etc.)
+2. Understand the project structure, components, and features
+3. Generate a well-structured HRISA.md with these sections:
+   - Project Overview
+   - Tech Stack
+   - Project Structure
+   - Key Components
+   - Development Practices
+   - Common Tasks
+   - Important Files
+   - Code Patterns
+   - Notes for AI Assistants
+   - Version Information
+
+Be thorough and use tools to explore the codebase before writing the documentation.
+Generate the complete HRISA.md content now:"""
+
+                hrisa_content = asyncio.run(conversation.process_message(prompt))
+
+            # Write HRISA.md
+            if hrisa_content:
+                hrisa_path.write_text(hrisa_content)
+                console.print(f"[green]HRISA.md created at {hrisa_path}[/green]")
+            else:
+                console.print("[yellow]Warning: HRISA.md generation produced no content[/yellow]")
+
+        except Exception as e:
+            console.print(f"[red]Error generating HRISA.md: {str(e)}[/red]")
+            console.print("[yellow]Configuration was created successfully, but HRISA.md generation failed.[/yellow]")
+            console.print("\n[yellow]Make sure Ollama is running:[/yellow]")
+            console.print("  ollama serve")
+
     console.print("\n[bold]Next steps:[/bold]")
-    console.print("1. Edit the configuration file to customize settings")
-    console.print(f"2. Make sure Ollama is running: [cyan]ollama serve[/cyan]")
-    console.print(f"3. Pull a model: [cyan]ollama pull {config.model.name}[/cyan]")
-    console.print(f"4. Start chatting: [cyan]hrisa chat[/cyan]")
+    console.print("1. Review the generated HRISA.md file")
+    console.print("2. Edit the configuration file to customize settings")
+    console.print(f"3. Make sure Ollama is running: [cyan]ollama serve[/cyan]")
+    console.print(f"4. Pull a model: [cyan]ollama pull {config.model.name}[/cyan]")
+    console.print(f"5. Start chatting: [cyan]hrisa chat[/cyan]")
 
 
 if __name__ == "__main__":
