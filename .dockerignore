@@ -1,0 +1,63 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# Documentation (we copy what we need)
+docs/
+
+# Examples (optional, keep if you want them in image)
+# examples/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Project specific
+workspace/
+.hrisa/
+*.log
+config.local.yaml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Misc
+*.md
+LICENSE
+CONTRIBUTING.md

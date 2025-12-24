@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # Ollama service for running local LLMs
+  ollama:
+    image: ollama/ollama:latest
+    container_name: hrisa-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      # Persist Ollama models (they're large!)
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    # For GPU support (NVIDIA), uncomment below:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - hrisa-network
+
+  # Hrisa Code CLI application
+  hrisa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hrisa-code
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      # Mount your workspace (the code you want to work on)
+      - ./workspace:/workspace
+      # Persist configuration
+      - hrisa_config:/home/hrisa/.config/hrisa-code
+      # Persist conversation history
+      - hrisa_history:/home/hrisa/.hrisa
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    stdin_open: true
+    tty: true
+    networks:
+      - hrisa-network
+    # Override to run interactive chat
+    command: hrisa chat --model codellama
+    profiles:
+      - cli
+
+  # Helper service to pull models
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: hrisa-ollama-pull
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    networks:
+      - hrisa-network
+    entrypoint: /bin/sh
+    command: -c "ollama pull codellama && ollama pull deepseek-coder:6.7b"
+    profiles:
+      - setup
+
+volumes:
+  ollama_data:
+    driver: local
+  hrisa_config:
+    driver: local
+  hrisa_history:
+    driver: local
+
+networks:
+  hrisa-network:
+    driver: bridge
