@@ -14,6 +14,7 @@ from hrisa_code.core.ollama_client import OllamaConfig
 from hrisa_code.core.config import Config
 from hrisa_code.core.repo_context import RepoContext
 from hrisa_code.core.task_manager import TaskManager
+from hrisa_code.core.agent import AgentLoop
 from rich.columns import Columns
 
 
@@ -112,6 +113,14 @@ class InteractiveSession:
         # Set up repo context with ollama client
         self.repo_context = RepoContext(working_directory, self.conversation.ollama_client)
 
+        # Set up agent for autonomous task execution
+        self.agent = AgentLoop(
+            conversation_manager=self.conversation,
+            max_iterations=10,
+            enable_reflection=True,
+        )
+        self.agent_mode_enabled = False
+
         # Load HRISA.md if it exists and augment system prompt
         hrisa_content = self.repo_context.load()
         if hrisa_content:
@@ -149,13 +158,16 @@ class InteractiveSession:
      [dim]Local AI Coding Assistant[/dim]
 """
 
+        agent_status = "[green]enabled[/green]" if self.agent_mode_enabled else "[dim]disabled[/dim]"
         info_text = (
             f"\n[bold]Configuration[/bold]\n"
             f"  Model: [green]{self.config.model.name}[/green]\n"
             f"  Directory: [cyan]{self.working_directory.name}/[/cyan]\n"
-            f"  Context: {hrisa_status}\n\n"
+            f"  Context: {hrisa_status}\n"
+            f"  Agent: {agent_status}\n\n"
             f"[bold]Quick Commands[/bold]\n"
             f"  [yellow]/help[/yellow]    - Show all commands\n"
+            f"  [yellow]/agent[/yellow]   - Toggle agent mode\n"
             f"  [yellow]/init[/yellow]    - Initialize repo context\n"
             f"  [yellow]/clear[/yellow]   - Clear history\n"
             f"  [yellow]/exit[/yellow]    - Exit (or Ctrl+D)\n"
@@ -184,11 +196,14 @@ class InteractiveSession:
             return False
 
         elif command_lower == "/help":
+            agent_status = "[green]enabled[/green]" if self.agent_mode_enabled else "[dim]disabled[/dim]"
             self.console.print(
                 Panel(
                     "[bold]Available Commands:[/bold]\n\n"
                     "[yellow]/help[/yellow]      - Show this help message\n"
                     "[yellow]/init[/yellow]      - Initialize or update HRISA.md (repo context)\n"
+                    "[yellow]/agent[/yellow]     - Toggle agent mode (autonomous multi-step execution)\n"
+                    f"                Current: {agent_status}\n"
                     "[yellow]/clear[/yellow]     - Clear conversation history\n"
                     "[yellow]/save[/yellow]      - Save conversation to file\n"
                     "[yellow]/load[/yellow]      - Load conversation from file\n"
@@ -206,6 +221,30 @@ class InteractiveSession:
             force = "--force" in command_lower or "-f" in command_lower
             self.console.print("\n[bold blue]Initializing repository context...[/bold blue]\n")
             await self.repo_context.inspect_and_generate(force=force)
+
+        elif command_lower == "/agent":
+            # Toggle agent mode
+            self.agent_mode_enabled = not self.agent_mode_enabled
+            status = "[green]enabled[/green]" if self.agent_mode_enabled else "[dim]disabled[/dim]"
+            self.console.print(
+                Panel(
+                    f"[bold]Agent Mode:[/bold] {status}\n\n"
+                    + (
+                        "[green]Agent mode is now active![/green]\n\n"
+                        "Your next message will be executed with autonomous multi-step reasoning.\n"
+                        "The agent will:\n"
+                        "  • Break down complex tasks automatically\n"
+                        "  • Explore the codebase proactively\n"
+                        "  • Execute multiple steps until completion\n"
+                        "  • Self-reflect and adapt\n\n"
+                        "[dim]Use /agent again to disable[/dim]"
+                        if self.agent_mode_enabled
+                        else "[yellow]Agent mode disabled[/yellow]\n\nBack to standard interactive mode."
+                    ),
+                    title="Agent Mode",
+                    border_style="cyan" if self.agent_mode_enabled else "yellow",
+                )
+            )
 
         elif command_lower == "/clear":
             self.conversation.clear_history()
@@ -283,7 +322,14 @@ class InteractiveSession:
 
                 # Process message
                 self.console.print()
-                await self.conversation.process_message_stream(user_input)
+
+                # Use agent mode if enabled
+                if self.agent_mode_enabled:
+                    await self.agent.execute_task(user_input)
+                    # Disable agent mode after execution (one-shot)
+                    self.agent_mode_enabled = False
+                else:
+                    await self.conversation.process_message_stream(user_input)
 
             except (EOFError, KeyboardInterrupt):
                 self.console.print("\n[yellow]Goodbye![/yellow]")
