@@ -78,18 +78,19 @@ class InteractiveSession:
             else "[yellow]No HRISA.md (use /init to create)[/yellow]"
         )
 
-        # ASCII art (simplified - pepper art TBD)
+        # ASCII art with pepper logo
         ascii_art = """
-   ╔═══════════════════════════════════════╗
-   ║  [bold red]██╗  ██╗██████╗ ██╗███████╗ █████╗[/bold red]  ║
-   ║  [bold red]██║  ██║██╔══██╗██║██╔════╝██╔══██╗[/bold red] ║
-   ║  [bold red]███████║██████╔╝██║███████╗███████║[/bold red] ║
-   ║  [bold red]██╔══██║██╔══██╗██║╚════██║██╔══██║[/bold red] ║
-   ║  [bold red]██║  ██║██║  ██║██║███████║██║  ██║[/bold red] ║
-   ║  [bold red]╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝[/bold red] ║
-   ║                                       ║
-   ║     [dim]Local AI Coding Assistant[/dim]       ║
-   ╚═══════════════════════════════════════╝
+            [bold red]..[/bold red]                 ╔═══════════════════════════════════════╗
+           [bold red]..[/bold red]                  ║  [bold red]██╗  ██╗██████╗ ██╗███████╗ █████╗[/bold red]  ║
+           [bold red].:[/bold red]                  ║  [bold red]██║  ██║██╔══██╗██║██╔════╝██╔══██╗[/bold red] ║
+          [bold red]+####:[/bold red]               ║  [bold red]███████║██████╔╝██║███████╗███████║[/bold red] ║
+          [bold red]#*###*[/bold red]               ║  [bold red]██╔══██║██╔══██╗██║╚════██║██╔══██║[/bold red] ║
+          [bold red]:*####[/bold red]               ║  [bold red]██║  ██║██║  ██║██║███████║██║  ██║[/bold red] ║
+           [bold red]:*####[/bold red]              ║  [bold red]╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚══════╝╚═╝  ╚═╝[/bold red] ║
+            [bold red]:*####[/bold red]             ║                                       ║
+              [bold red]=*###+[/bold red]           ║     [dim]Local AI Coding Assistant[/dim]       ║
+                 [bold red]:###:[/bold red]         ╚═══════════════════════════════════════╝
+                    [bold red]--[/bold red]
 """
 
         info_text = (
