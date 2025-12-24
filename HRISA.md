@@ -1,123 +1,126 @@
 # HRISA.md - Project Guide for AI Assistants
 
 ## 1. Project Overview
-**IMPORTANT**: If README.md exists in Key Configuration Files above, use it HEAVILY:
-Hrisa Code is a CLI coding assistant powered by local LLMs via Ollama. It helps developers with code completion, debugging, and more.
+Hrisa Code is a CLI coding assistant powered by local LLMs via Ollama. It provides an interactive interface to assist with coding tasks using AI models. The key features of Hrisa Code include:
+- Interactive chat interface for coding assistance.
+- Support for various local LLM models.
+- Integration with the Ollama platform for model management.
 
-- **Features:**
-	+ Code completion
-	+ Debugging
-	+ Code formatting
-	+ Type checking
+### Tech Stack
+- **Python**: 3.10+
+- **Typer**: Command-line interface framework.
+- **Rich**: Rich text and beautiful formatting in the terminal.
+- **Pytest**: Framework for writing simple and scalable test cases.
+- **Black**: Uncompromising Python code formatter.
+- **Ruff**: An extremely fast Python linter.
+- **Mypy**: Optional static type checker for Python.
 
 ## 2. Project Structure
-
 ```
-# src/hrisa_code/cli.py - CLI entry point with Typer commands
-src/
-├── hrisa_code
-│   ├── __init__.py
-│   ├── cli.py
-│   └── ...
-└── ...
-
-# tests/ - Testing files
-tests/
-
-# Makefile - Build and test scripts
-Makefile
-
-# README.md - Project description and instructions
-README.md
+├── src/
+│   ├── hrisa_code/
+│   │   ├── __init__.py         # Package initialization with version info
+│   │   ├── cli.py              # CLI entry point with Typer commands
+│   │   └── core/               # Core components of the application
+│   │       ├── config.py       # Configuration management
+│   │       ├── interactive.py  # Interactive session handling
+│   │       └── ollama_client.py # Ollama client for model interaction
+├── tests/
+│   ├── test_*.py               # Test files following the pytest naming convention
+├── scripts/
+│   ├── setup-venv.sh           # Script to set up a virtual environment and install dependencies
+│   └── setup-uv.sh             # Script to set up using uv (faster)
+├── Makefile                    # Contains build, test, and development commands
+├── pyproject.toml              # Configuration file for project dependencies and tools
+└── README.md                   # Project description and usage instructions
 ```
 
 ## 3. Key Components
+### 1. CLI (`src/hrisa_code/cli.py`)
+- The main entry point of the application.
+- Uses Typer to handle command-line arguments and options.
 
-### A. Ollama Client (`src/hrisa_code/ollama_client.py`)
+### 2. Interactive Session (`src/hrisa_code/core/interactive.py`)
+- Manages interactive sessions with the AI models.
+- Handles user input and model responses in real-time.
 
-- Responsible for interacting with the local LLM (Large Language Model) via Ollama.
-- Provides API to send requests and receive responses.
-
-### B. Interactive Session (`src/hrisa_code/interactive.py`)
-
-- Handles user input and output, providing an interactive experience.
-- Integrates with Ollama Client to fetch results from the LLM.
+### 3. Ollama Client (`src/hrisa_code/core/ollama_client.py`)
+- Provides a client interface to interact with the Ollama platform.
+- Includes methods for listing available models, pulling models, and sending requests to models.
 
 ## 4. Development Practices
-
 ### Code Style
-- **Formatting:** Black (version 23.0.0) is used for code formatting.
-- **Linting:** Ruff (version 0.1.0) is used for linting.
-- **Type Checking:** Mypy (version 1.7.0) is used for type checking.
+- **Formatting**: Black is used to ensure consistent code formatting.
+- **Linting**: Ruff is used for linting Python code.
+- **Type Checking**: Mypy performs static type checking on the codebase.
 
 ### Testing
-- **Framework:** Pytest (version 7.4.0) is used for testing.
-- Run: `make test` to run tests
+- **Framework**: Pytest is used as the testing framework.
+- **Run**: `pytest` or check Makefile for test command (`make test`).
 
 ## 5. Common Tasks
+### Adding a New Feature (e.g., Command)
+1. Define the new command in `src/hrisa_code/cli.py`.
+2. Implement the functionality in a separate module if necessary, e.g., `src/hrisa_code/core/new_feature.py`.
+3. Write tests for the new feature in `tests/test_new_feature.py`.
 
-### Adding a New [Feature Type]
-To add a new feature, follow these steps:
-
-1. Create a new file in the `src/hrisa_code/` directory with a descriptive name (e.g., `new_feature.py`).
-2. Import the necessary modules and define your feature's logic.
-3. Integrate your feature with the existing codebase using dependency injection or other design patterns.
+**Example: Adding a New Command**
+```python
+# src/hrisa_code/cli.py
+@app.command()
+def new_command():
+    """New command description."""
+    console.print("Executing new command!")
+```
 
 ## 6. Important Files
-
-### A. `src/hrisa_code/cli.py`
-- Main entry point for the CLI application, handling user input and output.
-
-### B. `Makefile`
-- Build and test scripts used to automate development tasks.
+- `src/hrisa_code/__init__.py` - Package initialization with version info.
+- `src/hrisa_code/cli.py` - CLI entry point with Typer commands.
+- `tests/test_*.py` - Test files following the pytest naming convention.
+- `Makefile` - Contains build, test, and development commands.
+- `README.md` - Project description and usage instructions.
 
 ## 7. Quick Commands
 ```bash
 # Setup
-make setup - Set up venv and install dependencies
+make setup
 
 # Development
-make test - Run tests
-make format - Format code with black
-make lint - Lint code with ruff
-...
+make test
+make format
+make lint
+make type-check
 ```
 
 ## 8. Dependencies
-
 ### Core Dependencies
-- `typer` (version 0.3.4) - CLI framework for building applications.
-- `rich` (version 10.12.0) - Rich text and formatting library.
+- **Pydantic**: Data validation and settings management using Python type annotations.
+- **Questionary**: Interactive console prompts for user input.
+- **Prompt Toolkit**: Building powerful interactive command line applications in Python.
 
 ### Dev Dependencies
-- `pytest` (version 7.4.0) - Testing framework for Python.
-- `black` (version 23.0.0) - Code formatting tool.
-- `ruff` (version 0.1.0) - Linting tool.
-- `mypy` (version 1.7.0) - Type checking tool.
+- **Black**: Code formatter.
+- **Ruff**: Linter.
+- **Mypy**: Static type checker.
+- **Pytest**: Testing framework.
 
 ## 9. Code Patterns
-
-### A. Asynchronous Programming (`src/hrisa_code/interactive.py`)
 ```python
-async def fetch_results(self):
-    # Fetch results from Ollama Client asynchronously
-    pass
-```
-
-### B. Dependency Injection (`src/hrisa_code/cli.py`)
-```python
-def __init__(self, ollama_client: OllamaClient):
-    self.ollama_client = ollama_client
-    pass
+# Pattern: Typer CLI Command Definition
+@app.command()
+def chat(
+    model: Optional[str] = typer.Option(None, help="Specify the model to use"),
+):
+    """Start an interactive chat session with the specified model."""
+    console.print(f"Starting chat with model: {model or 'default'}")
 ```
 
 ## 10. Notes for AI Assistants
-
-- **File Operations:** The project uses file operations to interact with the local LLM.
-- **Testing:** Always run tests after making changes to ensure code quality and stability.
-- **Architecture:** The project follows a modular architecture, separating concerns into distinct components.
+- **File Operations**: Use `pathlib.Path` for file operations.
+- **Testing**: Always run tests after changes (`make test`).
+- **Architecture**: The application is modular, using Typer for CLI and separating concerns between core components.
 
 ## 11. Version Information
-- **Current Version:** 0.1.0
-- **Python:** 3.10+
-- **Status:** Development
+- Current Version: 0.1.0
+- Python: 3.10+
+- Status: Early development (Alpha)
