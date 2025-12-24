@@ -160,19 +160,21 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             return f"Error: Unknown tool '{tool_name}'"
 
         # Handle background execution for execute_command
-        if tool_name == "execute_command" and arguments.get("background", False):
+        # Parse background parameter properly (handle both boolean and string values)
+        background = arguments.get("background", False)
+        if isinstance(background, str):
+            background = background.lower() in ("true", "1", "yes")
+
+        if tool_name == "execute_command" and background:
             if not self.task_manager:
                 return "Error: Background execution not available (TaskManager not initialized)"
 
-            # Extract command and working directory
+            # Extract command - always use actual working directory, ignore any provided one
             command = arguments.get("command", "")
-            working_dir = arguments.get("working_directory", str(self.working_directory))
 
-            # Create background task
+            # Create background task (TaskManager already uses self.working_directory)
             try:
-                # Change to working directory for the command
-                full_command = f"cd {working_dir} && {command}"
-                task = self.task_manager.create_task(full_command)
+                task = self.task_manager.create_task(command)
 
                 return (
                     f"[BACKGROUND TASK] Command started in background\n"
