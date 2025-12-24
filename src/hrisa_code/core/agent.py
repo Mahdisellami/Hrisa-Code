@@ -225,8 +225,56 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
 
                 final_response = response
 
-                # Check if task is complete
-                if self._is_task_complete(response):
+                # Check if tools had errors - add error recovery
+                if self.conversation.last_tools_had_errors:
+                    self.error_count += 1
+
+                    # Build error summary
+                    error_details = []
+                    for tool_result in self.conversation.last_tool_results:
+                        if tool_result["had_error"]:
+                            error_details.append(
+                                f"Tool: {tool_result['tool_name']}\n"
+                                f"Arguments: {tool_result['arguments']}\n"
+                                f"Error: {tool_result['content']}"
+                            )
+
+                    error_summary = "\n\n".join(error_details)
+
+                    # Show error recovery prompt
+                    self.console.print(
+                        Panel(
+                            "[yellow]⚠ Tool Errors Detected[/yellow]\n\n"
+                            f"{error_summary}\n\n"
+                            "[bold]The agent will try a different approach...[/bold]",
+                            title="► Error Recovery",
+                            border_style="yellow",
+                        )
+                    )
+
+                    # If too many errors, give up
+                    if self.error_count >= 3:
+                        self.console.print(
+                            Panel(
+                                "[red]Too many tool failures (3+ errors)[/red]\n\n"
+                                "The agent cannot complete this task with the current model.\n\n"
+                                "[dim]Try with a better model (e.g., qwen2.5-coder:32b)[/dim]",
+                                title="► Aborted",
+                                border_style="red",
+                            )
+                        )
+                        break
+
+                    # Add explicit error recovery to next iteration
+                    # Don't allow completion marker if tools failed
+                    if self._is_task_complete(response):
+                        self.console.print(
+                            "[yellow]Note: Agent claimed completion but tools failed. Continuing...[/yellow]"
+                        )
+                        continue
+
+                # Check if task is complete (only if no tool errors)
+                elif self._is_task_complete(response):
                     self.task_complete = True
                     self.console.print(
                         Panel(

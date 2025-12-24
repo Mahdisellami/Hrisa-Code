@@ -44,6 +44,10 @@ class ConversationManager:
         self.tool_definitions = get_all_tool_definitions() if enable_tools else None
         self.task_manager = task_manager
 
+        # Track last tool execution results for error recovery
+        self.last_tool_results: list[dict] = []
+        self.last_tools_had_errors: bool = False
+
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt.
 
@@ -146,6 +150,62 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
         return "[WARNING] This operation may be destructive. Continue?"
 
+    def _validate_path_arguments(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[str]:
+        """Validate that path arguments are not placeholders.
+
+        Args:
+            tool_name: Name of the tool
+            arguments: Tool arguments
+
+        Returns:
+            Error message if validation fails, None otherwise
+        """
+        # Placeholder patterns to reject
+        placeholder_patterns = [
+            "/path/to/",
+            "/path/",
+            "path/to/",
+            "/home/user/",
+            "/usr/local/",
+            "<path>",
+            "${path}",
+        ]
+
+        # Check file_path argument
+        if "file_path" in arguments:
+            file_path = str(arguments["file_path"])
+            for pattern in placeholder_patterns:
+                if pattern in file_path:
+                    return (
+                        f"Error: Placeholder path detected: '{file_path}'\n"
+                        f"Use relative paths (e.g., 'src/main.py') or search for the file first.\n"
+                        f"Working directory: {self.working_directory}"
+                    )
+
+        # Check directory argument
+        if "directory" in arguments:
+            directory = str(arguments["directory"])
+            for pattern in placeholder_patterns:
+                if pattern in directory:
+                    return (
+                        f"Error: Placeholder directory detected: '{directory}'\n"
+                        f"Use relative paths (e.g., '.', 'src/') or actual paths.\n"
+                        f"Working directory: {self.working_directory}"
+                    )
+
+        # Check working_directory argument
+        if "working_directory" in arguments:
+            working_dir = str(arguments["working_directory"])
+            for pattern in placeholder_patterns:
+                if pattern in working_dir:
+                    return (
+                        f"Error: Placeholder working_directory detected: '{working_dir}'\n"
+                        f"Do NOT provide working_directory - it's set automatically.\n"
+                        f"Current working directory: {self.working_directory}"
+                    )
+
+        return None
+
     def _execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
         """Execute a tool with given arguments.
 
@@ -158,6 +218,11 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         """
         if tool_name not in AVAILABLE_TOOLS:
             return f"Error: Unknown tool '{tool_name}'"
+
+        # Validate path arguments
+        validation_error = self._validate_path_arguments(tool_name, arguments)
+        if validation_error:
+            return validation_error
 
         # Handle background execution for execute_command
         # Parse background parameter properly (handle both boolean and string values)
@@ -359,6 +424,10 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         if elapsed > 0.5:  # Show time for operations > 0.5 seconds
             self.console.print(f"[dim]Thought for {elapsed:.1f}s[/dim]")
 
+        # Reset tool tracking
+        self.last_tool_results = []
+        self.last_tools_had_errors = False
+
         # Check if the response includes tool calls
         if raw_response.get("message", {}).get("tool_calls"):
             tool_calls = raw_response["message"]["tool_calls"]
@@ -431,11 +500,21 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 file_path = arguments.get("file_path", "") if tool_name == "read_file" else ""
                 self._display_tool_result(result, tool_name, execution_time, file_path)
 
-                tool_results.append({
+                # Track tool result for error recovery
+                tool_result_data = {
                     "tool_call_id": tool_call.get("id", ""),
                     "role": "tool",
                     "content": result,
-                })
+                    "tool_name": tool_name,
+                    "arguments": arguments,
+                    "had_error": result.startswith("Error") or "failed" in result.lower(),
+                }
+                tool_results.append(tool_result_data)
+                self.last_tool_results.append(tool_result_data)
+
+                # Track if any tool had errors
+                if tool_result_data["had_error"]:
+                    self.last_tools_had_errors = True
 
             # Send tool results back to LLM for final response
             response_start = time.time()
