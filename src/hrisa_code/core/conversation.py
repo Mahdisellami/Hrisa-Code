@@ -59,7 +59,54 @@ When using tools:
 3. Provide clear explanations of what you're doing
 4. If a command might be dangerous, ask for confirmation first
 
-Be concise but helpful. Focus on solving the user's problem efficiently."""
+Be concise but helpful. Focus on solving the user's problem efficiently.
+
+IMPORTANT: Do not ask for confirmation in your responses - the system will handle
+confirmations for destructive operations automatically."""
+
+    def _is_destructive_operation(self, tool_name: str, arguments: Dict[str, Any]) -> bool:
+        """Check if a tool operation is potentially destructive.
+
+        Args:
+            tool_name: Name of the tool
+            arguments: Tool arguments
+
+        Returns:
+            True if operation is destructive
+        """
+        # Write operations
+        if tool_name == "write_file":
+            file_path = Path(arguments.get("file_path", ""))
+            # Destructive if file already exists
+            return file_path.exists()
+
+        # Command execution with dangerous patterns
+        if tool_name == "execute_command":
+            command = arguments.get("command", "").lower()
+            dangerous_patterns = ["rm ", "del ", "delete", "rmdir", "format", "mkfs"]
+            return any(pattern in command for pattern in dangerous_patterns)
+
+        return False
+
+    def _get_confirmation_message(self, tool_name: str, arguments: Dict[str, Any]) -> str:
+        """Get a confirmation message for a destructive operation.
+
+        Args:
+            tool_name: Name of the tool
+            arguments: Tool arguments
+
+        Returns:
+            Confirmation message
+        """
+        if tool_name == "write_file":
+            file_path = arguments.get("file_path", "")
+            return f"⚠️  File '{file_path}' already exists. Overwrite it?"
+
+        if tool_name == "execute_command":
+            command = arguments.get("command", "")
+            return f"⚠️  Execute potentially destructive command: '{command}'?"
+
+        return "⚠️  This operation may be destructive. Continue?"
 
     def _execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
         """Execute a tool with given arguments.
@@ -128,12 +175,14 @@ Be concise but helpful. Focus on solving the user's problem efficiently."""
         Returns:
             The assistant's response
         """
-        # Get initial response from LLM
-        raw_response = await self.ollama_client.chat_raw(
-            message=user_message,
-            system_prompt=self.system_prompt,
-            tools=self.tool_definitions if self.enable_tools else None,
-        )
+        # Show thinking indicator
+        with self.console.status("[bold blue]🤔 Thinking...[/bold blue]"):
+            # Get initial response from LLM
+            raw_response = await self.ollama_client.chat_raw(
+                message=user_message,
+                system_prompt=self.system_prompt,
+                tools=self.tool_definitions if self.enable_tools else None,
+            )
 
         # Check if the response includes tool calls
         if raw_response.get("message", {}).get("tool_calls"):
@@ -146,11 +195,31 @@ Be concise but helpful. Focus on solving the user's problem efficiently."""
                 tool_name = function.get("name")
                 arguments = function.get("arguments", {})
 
+                # Check if operation needs confirmation
+                if self._is_destructive_operation(tool_name, arguments):
+                    confirmation_msg = self._get_confirmation_message(tool_name, arguments)
+                    self.console.print(f"\n[yellow]{confirmation_msg}[/yellow]")
+
+                    # Get user confirmation
+                    from prompt_toolkit import prompt
+                    response = prompt("Continue? (yes/no): ").strip().lower()
+
+                    if response not in ["yes", "y"]:
+                        result = "❌ Operation cancelled by user"
+                        self._display_tool_result(result)
+                        tool_results.append({
+                            "tool_call_id": tool_call.get("id", ""),
+                            "role": "tool",
+                            "content": result,
+                        })
+                        continue
+
                 # Display tool call to user
                 self._display_tool_call(tool_name, arguments)
 
-                # Execute the tool
-                result = self._execute_tool(tool_name, arguments)
+                # Execute the tool with status indicator
+                with self.console.status(f"[bold cyan]🔧 Executing {tool_name}...[/bold cyan]"):
+                    result = self._execute_tool(tool_name, arguments)
 
                 # Display result to user
                 self._display_tool_result(result)
@@ -162,10 +231,11 @@ Be concise but helpful. Focus on solving the user's problem efficiently."""
                 })
 
             # Send tool results back to LLM for final response
-            final_response = await self.ollama_client.chat_with_tools_result(
-                tool_results=tool_results,
-                system_prompt=self.system_prompt,
-            )
+            with self.console.status("[bold green]✨ Generating response...[/bold green]"):
+                final_response = await self.ollama_client.chat_with_tools_result(
+                    tool_results=tool_results,
+                    system_prompt=self.system_prompt,
+                )
 
             return final_response
         else:
