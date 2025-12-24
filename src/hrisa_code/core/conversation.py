@@ -129,18 +129,48 @@ Be concise but helpful. Focus on solving the user's problem efficiently."""
             The assistant's response
         """
         # Get initial response from LLM
-        response = await self.ollama_client.chat(
+        raw_response = await self.ollama_client.chat_raw(
             message=user_message,
             system_prompt=self.system_prompt,
             tools=self.tool_definitions if self.enable_tools else None,
         )
 
         # Check if the response includes tool calls
-        # Note: This is a simplified implementation
-        # In practice, you'd need to parse the response for tool calls
-        # and handle them appropriately based on Ollama's format
+        if raw_response.get("message", {}).get("tool_calls"):
+            tool_calls = raw_response["message"]["tool_calls"]
 
-        return response
+            # Execute each tool call
+            tool_results = []
+            for tool_call in tool_calls:
+                function = tool_call.get("function", {})
+                tool_name = function.get("name")
+                arguments = function.get("arguments", {})
+
+                # Display tool call to user
+                self._display_tool_call(tool_name, arguments)
+
+                # Execute the tool
+                result = self._execute_tool(tool_name, arguments)
+
+                # Display result to user
+                self._display_tool_result(result)
+
+                tool_results.append({
+                    "tool_call_id": tool_call.get("id", ""),
+                    "role": "tool",
+                    "content": result,
+                })
+
+            # Send tool results back to LLM for final response
+            final_response = await self.ollama_client.chat_with_tools_result(
+                tool_results=tool_results,
+                system_prompt=self.system_prompt,
+            )
+
+            return final_response
+        else:
+            # No tool calls, return direct response
+            return raw_response.get("message", {}).get("content", "")
 
     async def process_message_stream(self, user_message: str) -> None:
         """Process a user message and stream the response.

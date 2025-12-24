@@ -105,8 +105,9 @@ class OllamaClient:
                 raise
 
         # Extract response
-        assistant_message = response["message"]["content"]
-        self.add_message("assistant", assistant_message)
+        assistant_message = response.get("message", {}).get("content", "")
+        if assistant_message:
+            self.add_message("assistant", assistant_message)
 
         return assistant_message
 
@@ -177,6 +178,109 @@ class OllamaClient:
 
         # Add complete response to history
         self.add_message("assistant", full_response)
+
+    async def chat_raw(
+        self,
+        message: str,
+        system_prompt: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Send a chat message and get the raw response (including tool calls).
+
+        Args:
+            message: User message
+            system_prompt: Optional system prompt
+            tools: Optional list of tools for function calling
+
+        Returns:
+            Raw response from Ollama
+        """
+        # Add user message to history
+        self.add_message("user", message)
+
+        # Prepare messages for Ollama
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+
+        # Add conversation history
+        for msg in self.conversation_history:
+            messages.append({"role": msg.role, "content": msg.content})
+
+        # Make the request
+        options = {
+            "temperature": self.config.temperature,
+            "top_p": self.config.top_p,
+            "top_k": self.config.top_k,
+        }
+
+        # Try with tools first, fall back without tools if not supported
+        try:
+            response = await self.client.chat(
+                model=self.config.model,
+                messages=messages,
+                tools=tools if tools else None,
+                options=options,
+            )
+        except Exception as e:
+            # If tools not supported, try without tools
+            if "does not support tools" in str(e).lower() or "400" in str(e):
+                response = await self.client.chat(
+                    model=self.config.model,
+                    messages=messages,
+                    options=options,
+                )
+            else:
+                raise
+
+        return response
+
+    async def chat_with_tools_result(
+        self,
+        tool_results: List[Dict[str, Any]],
+        system_prompt: Optional[str] = None,
+    ) -> str:
+        """Continue conversation with tool results.
+
+        Args:
+            tool_results: Results from tool execution
+            system_prompt: Optional system prompt
+
+        Returns:
+            Assistant's final response
+        """
+        # Prepare messages including tool results
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+
+        # Add conversation history
+        for msg in self.conversation_history:
+            messages.append({"role": msg.role, "content": msg.content})
+
+        # Add tool results
+        for result in tool_results:
+            messages.append(result)
+
+        # Make the request
+        options = {
+            "temperature": self.config.temperature,
+            "top_p": self.config.top_p,
+            "top_k": self.config.top_k,
+        }
+
+        response = await self.client.chat(
+            model=self.config.model,
+            messages=messages,
+            options=options,
+        )
+
+        # Extract and save response
+        assistant_message = response.get("message", {}).get("content", "")
+        if assistant_message:
+            self.add_message("assistant", assistant_message)
+
+        return assistant_message
 
     async def list_models(self) -> List[str]:
         """List available models.
