@@ -269,7 +269,7 @@ class SearchFilesTool:
             "type": "function",
             "function": {
                 "name": "search_files",
-                "description": "Search for regex patterns INSIDE files (grep-like). Supports regular expressions by default. Use when looking for code/text patterns within files. For listing files by name, use execute_command instead.",
+                "description": "Search for regex patterns INSIDE files (grep-like). Supports regular expressions by default. IMPORTANT: Searches line-by-line, so patterns CANNOT match across multiple lines. Use when looking for code/text patterns within files. For listing files by name, use execute_command instead.\n\nLIMITATION: Each line is searched independently. Patterns expecting to match across lines will fail.\n\nGOOD patterns (single-line):\n- '@app\\.command' - finds decorators\n- 'def \\w+\\(' - finds function definitions\n- 'class \\w+:' - finds class definitions\n- 'import .* from' - finds imports\n\nBAD patterns (multi-line, won't work):\n- '@app\\.command\\(.*?def \\w+' - spans decorator and function (different lines)\n- 'if.*:\\n.*return' - expects newline in pattern\n\nWORKAROUND: Use separate simple patterns instead of one multi-line pattern.",
                 "parameters": {
                     "type": "object",
                     "properties": {
