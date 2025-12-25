@@ -294,18 +294,96 @@ Before building the full meta-orchestrator, we'll create templates for common ta
 
 ## 2. Enhanced Tool System
 
-### 2.1 Tool Call Optimization
+### 2.1 Write Operations with User Approval ⚠️ **HIGH PRIORITY**
+**Philosophy**: Read operations are safe and automatic. Write operations need user confirmation.
+
+**Required Git Write Tools** (with approval):
+- **git_commit**: Create commits with message
+  - Requires: User approval for commit message and file list
+  - Shows: Diff preview before commit
+- **git_push**: Push commits to remote
+  - Requires: Explicit user confirmation (critical operation)
+  - Shows: What will be pushed (branch, commits)
+- **git_pull**: Pull changes from remote
+  - Requires: User confirmation if local changes exist
+  - Shows: What will be fetched
+- **git_stash**: Stash working changes
+  - Requires: User approval for stash message
+  - Shows: What will be stashed
+
+**File Write Tools Enhancement** (add approval layer):
+- **write_file**: Needs approval if file exists
+  - Shows: Diff of changes (if file exists)
+  - Allows: Approve, Reject, Edit
+- **delete_file**: Always needs approval
+  - Shows: File contents before deletion
+  - Requires: Explicit confirmation
+- **move_file/rename_file**: Needs approval
+  - Shows: Source and destination
+  - Checks: Destination doesn't exist
+
+**Implementation Pattern**:
+```python
+class ApprovalManager:
+    """Manages user approval for write operations."""
+
+    async def request_approval(
+        self,
+        operation: WriteOperation,
+        preview: str,
+        risk_level: RiskLevel
+    ) -> ApprovalResult:
+        """
+        Request user approval with rich preview.
+
+        Args:
+            operation: What will be done
+            preview: Diff/content preview
+            risk_level: LOW, MEDIUM, HIGH, CRITICAL
+
+        Returns:
+            APPROVED, REJECTED, MODIFIED (user edited)
+        """
+        # Show rich preview with syntax highlighting
+        console.print(f"[bold yellow]Approval Required: {operation}[/]")
+        console.print(Panel(preview, title="Preview"))
+
+        # Different prompts based on risk
+        if risk_level == RiskLevel.CRITICAL:
+            response = Confirm.ask(
+                "⚠️  CRITICAL: This cannot be undone. Type 'yes' to confirm",
+                default=False
+            )
+        else:
+            response = Confirm.ask("Approve this operation?", default=True)
+
+        return ApprovalResult.from_response(response)
+```
+
+**Configuration**:
+```yaml
+# .hrisa/config.yaml
+tools:
+  approval_mode: interactive  # interactive, auto_approve, auto_reject
+  risk_levels:
+    git_push: critical
+    git_commit: medium
+    delete_file: high
+    write_file: low  # if file exists: medium
+```
+
+### 2.2 Tool Call Optimization
 - Detect redundant tool calls
 - Cache tool results within a session
 - Batch similar operations
 - Smart tool selection
 
-### 2.2 Tool Streaming
+### 2.3 Tool Streaming
 - Stream large file reads
 - Progressive command output
 - Real-time feedback
 
-### 2.3 Tool Composition
+### 2.4 Tool Composition
 - Combine multiple tools into workflows
 - Create custom tool chains
 - Reusable tool patterns
@@ -366,17 +444,85 @@ hrisa init --comprehensive --multi-model
 
 ---
 
-## 5. Advanced Agent Capabilities
+## 5. Agentic Robustness & Guardrails
 
-### 5.1 Loop Detection & Breaking
-- Detect repetitive patterns
-- Break unproductive loops
-- Suggest alternative approaches
+### 5.1 Loop Detection & Prevention ⚠️ **HIGH PRIORITY**
+**Problem Identified**: During testing, qwen2.5-coder:32b called `git_status` 9 times in a row with identical parameters, reaching the 20-round limit without completing the task.
 
-### 5.2 Reflective Learning
+**Required Improvements:**
+- **Detect identical tool calls**: Track tool call history within a conversation turn
+- **Pattern recognition**: Identify when same tool is called 3+ times with same/similar parameters
+- **Automatic intervention**: After 3 identical calls, inject system message: "You've called this tool multiple times with the same result. Try a different approach or provide a final answer."
+- **Loop breaking**: Suggest alternative tools or prompt for completion
+- **Configurable thresholds**: Allow users to set max repeated calls per tool
+
+**Implementation:**
+```python
+class LoopDetector:
+    def __init__(self, max_identical_calls: int = 3):
+        self.tool_history = []
+        self.max_identical = max_identical_calls
+
+    def check_loop(self, tool_call: dict) -> LoopStatus:
+        """Detect if we're in an unproductive loop."""
+        recent_calls = self.tool_history[-5:]  # Last 5 calls
+        identical_count = sum(1 for call in recent_calls
+                             if call['name'] == tool_call['name']
+                             and call['arguments'] == tool_call['arguments'])
+
+        if identical_count >= self.max_identical:
+            return LoopStatus.DETECTED
+        return LoopStatus.OK
+```
+
+### 5.2 Result Verification & Goal Detection ⚠️ **HIGH PRIORITY**
+**Problem**: Models don't verify if tool results actually answer the user's question, leading to repeated calls.
+
+**Required Improvements:**
+- **Result analysis**: After each tool call, LLM evaluates: "Does this result answer the user's question?"
+- **Goal state tracking**: Maintain what information is still needed
+- **Completion detection**: Recognize when task is complete
+- **Progress validation**: Verify each step moves closer to goal
+
+**Implementation:**
+```python
+class GoalTracker:
+    async def check_progress(
+        self,
+        user_question: str,
+        tool_results: List[ToolResult],
+        current_answer: str
+    ) -> GoalStatus:
+        """
+        Evaluate if we have enough information to answer.
+        Returns: COMPLETE, IN_PROGRESS, or STUCK
+        """
+        prompt = f"""
+        User asked: {user_question}
+        Tool results obtained: {tool_results}
+        Current answer: {current_answer}
+
+        Do we have enough information to fully answer the question?
+        If yes, return COMPLETE. If making progress, return IN_PROGRESS.
+        If stuck (repeated attempts, no new info), return STUCK.
+        """
+        # Use lightweight model for this check
+```
+
+### 5.3 Intelligent Tool Selection
+**Current Issue**: Models sometimes try to use `execute_command` with tool-specific parameters (like passing `cached` or `directory` to git commands via execute_command instead of using dedicated git tools)
+
+**Required Improvements:**
+- **Tool capability awareness**: LLM understands which parameters each tool accepts
+- **Tool suggestion**: System suggests appropriate tools based on task
+- **Parameter validation**: Validate parameters before execution
+- **Fallback strategies**: If preferred tool unavailable, suggest alternatives
+
+### 5.4 Reflective Learning
 - Learn from successful patterns
 - Avoid failed approaches
 - Build pattern library
+- Remember what worked in previous sessions
 
 ---
 
@@ -387,36 +533,69 @@ hrisa init --comprehensive --multi-model
 - Agent communication protocols
 - Coordinated execution
 
-### 6.2 Human-in-the-Loop
-- Request clarification when uncertain
-- Confirm destructive operations
-- Allow manual intervention
+### 6.2 Human-in-the-Loop ⚠️ **HIGH PRIORITY**
+**Current Need**: Essential for write operations and complex decisions.
+
+**Implementation Areas:**
+- **Write Operation Approval**: User must confirm all writes (files, git commits, pushes)
+- **Clarification Requests**: LLM asks when uncertain about intent
+- **Destructive Operation Prevention**: Double confirmation for deletes, force pushes
+- **Manual Intervention**: Allow user to pause, modify, or abort at any step
+- **Diff Preview**: Show what will change before applying
+- **Undo Support**: Track operations for potential rollback
+
+**Example Workflow:**
+```
+User: "Commit these changes"
+Assistant: *uses git_status, git_diff*
+Assistant: "I found 5 modified files. Here's the diff:"
+[Shows diff preview]
+Assistant: "Suggested commit message: 'Add git integration tools'"
+User Prompt: "Approve commit? [Yes/No/Edit message]"
+User: "Yes"
+Assistant: *executes git_commit*
+```
 
 ---
 
 ## Timeline
 
-### Q1: Foundation (Current)
+### Q1 2025: Foundation ✅ (Complete)
 - ✅ Basic tool calling
 - ✅ Multi-turn workflows
 - ✅ HRISA.md orchestration
 - ✅ Text-based tool parsing
+- ✅ Git read operations (status, diff, log, branch)
 
-### Q2: Generalization
+### Q2 2025: Robustness & Safety ⚠️ (HIGH PRIORITY - Current Focus)
+**Critical Issues Identified in Testing:**
+- ⚠️ **Loop Detection & Prevention**: Models get stuck in repetitive tool calls (20+ identical calls observed)
+- ⚠️ **Goal Detection**: Models don't recognize when task is complete
+- ⚠️ **Write Operations with Approval**: Need user confirmation for git commits, pushes, file writes/deletes
 - 🔄 Abstract orchestration patterns
-- ✅ Multi-model orchestration (Phase 1.5)
+- ⏳ Result verification system
+- ⏳ Intelligent tool selection guidance
+
+**Implementation Priority:**
+1. Loop detector (max 3 identical calls)
+2. Goal tracker (completion detection)
+3. Approval manager (write operation confirmation)
+4. Git write tools (commit, push, pull, stash) with approval
+5. File write/delete tools with approval
+
+### Q3 2025: Intelligence & Generalization
+- ✅ Multi-model orchestration
 - ⏳ Complexity detection
 - ⏳ Basic plan generation
-
-### Q3: Intelligence
 - ⏳ Adaptive execution
 - ⏳ Dynamic planning
 - ⏳ Error recovery
 
-### Q4: Optimization
+### Q4 2025: Optimization & Scale
 - ⏳ Performance tuning
-- ⏳ Tool optimization
+- ⏳ Tool optimization (caching, deduplication)
 - ⏳ Context management
+- ⏳ Parallel step execution
 
 ---
 
