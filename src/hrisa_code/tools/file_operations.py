@@ -1,6 +1,7 @@
 """File operation tools for the coding assistant."""
 
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -268,13 +269,13 @@ class SearchFilesTool:
             "type": "function",
             "function": {
                 "name": "search_files",
-                "description": "Search for text patterns INSIDE files (grep-like). Use when looking for code/text content within files. Optionally filter by file_pattern. For listing files by name, use execute_command instead.",
+                "description": "Search for regex patterns INSIDE files (grep-like). Supports regular expressions by default. Use when looking for code/text patterns within files. For listing files by name, use execute_command instead.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "pattern": {
                             "type": "string",
-                            "description": "Pattern to search for",
+                            "description": "Regex pattern to search for. Examples: '@app\\.command', 'def\\s+\\w+\\(', 'class\\s+ModelCatalog', 'import|from'. For literal strings, set use_regex=false.",
                         },
                         "directory": {
                             "type": "string",
@@ -282,7 +283,11 @@ class SearchFilesTool:
                         },
                         "file_pattern": {
                             "type": "string",
-                            "description": "File pattern to match (e.g., '*.py')",
+                            "description": "File pattern to match. Use '**/*.py' for recursive search (recommended), '*.py' for current directory only. Default: '**/*' (all files recursively).",
+                        },
+                        "use_regex": {
+                            "type": "boolean",
+                            "description": "Use regex matching (default: true). Set to false for literal string search.",
                         },
                     },
                     "required": ["pattern", "directory"],
@@ -292,14 +297,18 @@ class SearchFilesTool:
 
     @staticmethod
     def execute(
-        pattern: str, directory: str, file_pattern: Optional[str] = None
+        pattern: str,
+        directory: str,
+        file_pattern: Optional[str] = None,
+        use_regex: bool = True,
     ) -> str:
         """Search for a pattern in files.
 
         Args:
-            pattern: Pattern to search for
+            pattern: Pattern to search for (regex if use_regex=True, literal otherwise)
             directory: Directory to search in
-            file_pattern: Optional file pattern filter
+            file_pattern: Optional file pattern filter (e.g., '**/*.py')
+            use_regex: Whether to use regex matching (default: True)
 
         Returns:
             Search results
@@ -309,23 +318,48 @@ class SearchFilesTool:
             if not path.exists():
                 return f"Error: Directory not found: {directory}"
 
+            # Compile regex pattern if enabled
+            regex_compiled = None
+            if use_regex:
+                try:
+                    regex_compiled = re.compile(pattern)
+                except re.error as e:
+                    return f"Error: Invalid regex pattern '{pattern}': {e}"
+
             results = []
-            glob_pattern = file_pattern if file_pattern else "**/*"
+
+            # Make file_pattern recursive by default
+            if file_pattern:
+                # If pattern doesn't start with **, make it recursive
+                if not file_pattern.startswith("**"):
+                    glob_pattern = f"**/{file_pattern}"
+                else:
+                    glob_pattern = file_pattern
+            else:
+                glob_pattern = "**/*"
 
             for file_path in path.glob(glob_pattern):
                 if file_path.is_file():
                     try:
                         with open(file_path, "r", encoding="utf-8") as f:
                             for line_num, line in enumerate(f, 1):
-                                if pattern in line:
-                                    results.append(
-                                        f"{file_path}:{line_num}: {line.strip()}"
-                                    )
+                                # Use regex or literal matching
+                                if use_regex:
+                                    if regex_compiled.search(line):
+                                        results.append(
+                                            f"{file_path}:{line_num}: {line.strip()}"
+                                        )
+                                else:
+                                    if pattern in line:
+                                        results.append(
+                                            f"{file_path}:{line_num}: {line.strip()}"
+                                        )
                     except (UnicodeDecodeError, PermissionError):
                         continue
 
             if not results:
-                return f"No matches found for pattern: {pattern}"
+                match_type = "regex" if use_regex else "literal"
+                return f"No matches found for {match_type} pattern: {pattern}"
 
             return "\n".join(results[:100])  # Limit to 100 results
         except Exception as e:
