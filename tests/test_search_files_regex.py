@@ -192,6 +192,36 @@ class TestSearchFilesRegex:
         assert "cli.py" in result
         assert "@app.command()" in result
 
+    def test_working_directory_alias(self):
+        """Test that working_directory parameter works as alias for directory."""
+        result = SearchFilesTool.execute(
+            pattern=r"@app\.command",
+            working_directory="src"  # Using alias instead of directory
+        )
+        assert "cli.py" in result
+        assert "@app.command()" in result
+        assert "No matches found" not in result
+
+    def test_directory_takes_precedence_over_working_directory(self):
+        """Test that directory parameter takes precedence when both are provided."""
+        result = SearchFilesTool.execute(
+            pattern=r"@app\.command",
+            directory="src",  # Valid directory
+            working_directory="/nonexistent"  # Would fail if used
+        )
+        # Should use directory parameter and succeed
+        assert "cli.py" in result
+        assert "Error" not in result
+
+    def test_neither_directory_parameter_fails_gracefully(self):
+        """Test that omitting both directory parameters returns clear error."""
+        result = SearchFilesTool.execute(
+            pattern=r"@app\.command"
+            # Neither directory nor working_directory provided
+        )
+        assert "Error" in result
+        assert "directory" in result.lower() or "working_directory" in result.lower()
+
 
 class TestSearchFilesToolDefinition:
     """Test the tool definition includes regex documentation."""

@@ -289,8 +289,12 @@ class SearchFilesTool:
                             "type": "boolean",
                             "description": "Use regex matching (default: true). Set to false for literal string search.",
                         },
+                        "working_directory": {
+                            "type": "string",
+                            "description": "Alias for 'directory' parameter. Either 'directory' or 'working_directory' can be used.",
+                        },
                     },
-                    "required": ["pattern", "directory"],
+                    "required": ["pattern"],
                 },
             },
         }
@@ -298,9 +302,10 @@ class SearchFilesTool:
     @staticmethod
     def execute(
         pattern: str,
-        directory: str,
+        directory: Optional[str] = None,
         file_pattern: Optional[str] = None,
         use_regex: bool = True,
+        working_directory: Optional[str] = None,  # Alias for compatibility
     ) -> str:
         """Search for a pattern in files.
 
@@ -309,14 +314,20 @@ class SearchFilesTool:
             directory: Directory to search in
             file_pattern: Optional file pattern filter (e.g., '**/*.py')
             use_regex: Whether to use regex matching (default: True)
+            working_directory: Alias for directory (for model compatibility)
 
         Returns:
             Search results
         """
         try:
-            path = Path(directory)
+            # Support both parameter names for compatibility
+            dir_path = directory or working_directory
+            if not dir_path:
+                return "Error: Either 'directory' or 'working_directory' parameter is required"
+
+            path = Path(dir_path)
             if not path.exists():
-                return f"Error: Directory not found: {directory}"
+                return f"Error: Directory not found: {dir_path}"
 
             # Compile regex pattern if enabled
             regex_compiled = None
