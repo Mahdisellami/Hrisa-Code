@@ -35,7 +35,32 @@ Hrisa Code now has a comprehensive regression test suite covering all features i
 
 ---
 
-### 2. **COMPREHENSIVE_REGRESSION_TESTS.md** - Full Manual Suite
+### 2. **test_search_files_regex.py** - Search Files Unit Tests
+**Purpose**: Automated tests for search_files tool regex functionality
+**Runtime**: ~0.2 seconds
+**Coverage**: 22 tests covering regex, literal matching, and edge cases
+
+```bash
+python3 -m pytest tests/test_search_files_regex.py -v
+```
+
+**Use when**:
+- After modifying file_operations.py
+- Testing search_files tool changes
+- Verifying regex pattern support
+
+**Tests**:
+- Regex pattern matching (simple, OR operator, character classes)
+- Literal string matching (use_regex=False)
+- Invalid regex error handling
+- Recursive file patterns (**/*.py)
+- Auto-recursive conversion (*.py → **/*.py)
+- Result limiting and edge cases
+- Tool definition validation
+
+---
+
+### 3. **COMPREHENSIVE_REGRESSION_TESTS.md** - Full Manual Suite
 **Purpose**: Thorough testing of ALL features with output quality verification
 **Runtime**: 2-4 hours (manual execution)
 **Coverage**: 61 tests across 15 categories
@@ -233,12 +258,13 @@ If your feature produces user-facing output, add quality verification:
 ### Directory Structure
 ```
 tests/
-├── smoke_test.sh
-├── COMPREHENSIVE_REGRESSION_TESTS.md
-├── TEST_SUITE_GUIDE.md (this file)
-└── test-results/
-    ├── 2025-12-25-baseline.md
-    ├── 2026-01-15-after-feature-x.md
+├── smoke_test.sh                         # Automated smoke tests (10 tests)
+├── test_search_files_regex.py           # Search files unit tests (22 tests)
+├── COMPREHENSIVE_REGRESSION_TESTS.md    # Manual regression suite (61 tests)
+├── TEST_SUITE_GUIDE.md                  # This file
+└── test-results/                        # Test results and investigations
+    ├── 2025-12-25-search-investigation.md    # Search pattern failure analysis
+    ├── 2025-12-25-regex-fix-summary.md       # Regex fix validation
     └── ...
 ```
 
@@ -313,6 +339,11 @@ tests/
 ./tests/smoke_test.sh
 ```
 
+### "Did I break the search_files tool?"
+```bash
+python3 -m pytest tests/test_search_files_regex.py -v
+```
+
 ### "Is this feature working correctly?"
 Find relevant test in `COMPREHENSIVE_REGRESSION_TESTS.md`, run it
 
@@ -320,7 +351,7 @@ Find relevant test in `COMPREHENSIVE_REGRESSION_TESTS.md`, run it
 Run tests from Category 14
 
 ### "Is the system production-ready?"
-Run full comprehensive suite + quality verification
+Run full comprehensive suite + quality verification + all unit tests
 
 ### "How do I add tests for my new feature?"
 Follow "Adding New Tests" section above
@@ -330,15 +361,17 @@ Follow "Adding New Tests" section above
 ## Automation Roadmap
 
 ### Phase 1 (Current)
-- ✅ Smoke test script (automated)
-- ✅ Comprehensive manual test suite
+- ✅ Smoke test script (10 automated tests)
+- ✅ Search files unit tests (22 automated tests)
+- ✅ Comprehensive manual test suite (61 tests)
 - ✅ Output quality verification framework
+- ✅ Test result tracking system (test-results/ directory)
 
 ### Phase 2 (Future)
 - [ ] Automate more functional tests
-- [ ] Create test result tracking system
 - [ ] Add performance benchmarking
 - [ ] Generate test reports automatically
+- [ ] Add more unit tests for core modules
 
 ### Phase 3 (Future)
 - [ ] CI/CD integration
@@ -352,11 +385,13 @@ Follow "Adding New Tests" section above
 
 You now have:
 
-1. **Quick tests** for rapid verification (`smoke_test.sh`)
-2. **Comprehensive tests** for thorough validation (61 tests)
-3. **Quality tests** to ensure output excellence (Category 14)
-4. **Living documentation** that evolves with the codebase
-5. **Clear process** for adding new tests
+1. **Quick tests** for rapid verification (`smoke_test.sh` - 10 tests)
+2. **Unit tests** for tool validation (`test_search_files_regex.py` - 22 tests)
+3. **Comprehensive tests** for thorough validation (61 manual tests)
+4. **Quality tests** to ensure output excellence (Category 14)
+5. **Test results tracking** for analysis and debugging (`test-results/`)
+6. **Living documentation** that evolves with the codebase
+7. **Clear process** for adding new tests
 
 **The test suite grows with your project!**
 
