@@ -173,7 +173,8 @@ Use available tools to read relevant code sections.""",
         # Display the findings
         if response:
             self.console.print(f"[bold blue]Findings:[/bold blue]")
-            self.console.print(response)
+            # Use markup=False to prevent Rich from parsing LLM output as markup
+            self.console.print(response, markup=False)
             self.console.print()
 
         # Store the discovery

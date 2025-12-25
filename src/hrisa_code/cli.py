@@ -282,7 +282,9 @@ Generate the complete HRISA.md content now:"""
                 console.print("[yellow]Warning: HRISA.md generation produced no content[/yellow]")
 
         except Exception as e:
-            console.print(f"[red]Error generating HRISA.md: {str(e)}[/red]")
+            # Use markup=False to prevent Rich from parsing error messages as markup
+            console.print(f"[red]Error generating HRISA.md:[/red]", markup=True)
+            console.print(str(e), markup=False)
             console.print("[yellow]Configuration was created successfully, but HRISA.md generation failed.[/yellow]")
             console.print("\n[yellow]Make sure Ollama is running:[/yellow]")
             console.print("  ollama serve")
