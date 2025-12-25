@@ -318,3 +318,22 @@ class OllamaClient:
             model_name: Name of the model to pull
         """
         await self.client.pull(model_name)
+
+    def switch_model(self, model_name: str) -> None:
+        """Switch to a different model.
+
+        This changes the model used for future chat calls while preserving
+        the conversation history.
+
+        Args:
+            model_name: Name of the model to switch to
+        """
+        self.config.model = model_name
+
+    def get_current_model(self) -> str:
+        """Get the currently active model name.
+
+        Returns:
+            Current model name
+        """
+        return self.config.model

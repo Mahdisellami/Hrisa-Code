@@ -156,6 +156,11 @@ def init(
         "--comprehensive",
         help="Generate comprehensive HRISA.md using multi-step orchestration",
     ),
+    multi_model: bool = typer.Option(
+        False,
+        "--multi-model",
+        help="Use multiple models for different orchestration steps (requires --comprehensive)",
+    ),
     skip_hrisa: bool = typer.Option(
         False,
         "--skip-hrisa",
@@ -220,7 +225,11 @@ def init(
 
             if comprehensive:
                 console.print("[bold cyan]Generating comprehensive HRISA.md...[/bold cyan]")
-                console.print("[dim]This will use multi-step orchestration for thorough analysis.[/dim]\n")
+                if multi_model:
+                    console.print("[dim]This will use multi-model orchestration with specialized models for each step.[/dim]\n")
+                else:
+                    console.print("[dim]This will use multi-step orchestration for thorough analysis.[/dim]")
+                    console.print("[dim]Tip: Use --multi-model to use different models for different steps.[/dim]\n")
 
                 # Create conversation manager for orchestration
                 conversation = ConversationManager(
@@ -230,11 +239,34 @@ def init(
                     working_directory=path,
                 )
 
+                # Set up model router if multi-model is enabled
+                model_router = None
+                if multi_model:
+                    from hrisa_code.core.model_router import ModelRouter, ModelSelectionStrategy
+                    from hrisa_code.core.ollama_client import OllamaClient
+
+                    # Create Ollama client to query available models
+                    temp_client = OllamaClient(ollama_config)
+                    available_models = asyncio.run(temp_client.list_models())
+
+                    # Create model router with available models
+                    strategy = ModelSelectionStrategy(
+                        prefer_quality=True,
+                        available_models=set(available_models),
+                        default_model=config.model.name
+                    )
+                    model_router = ModelRouter(strategy=strategy)
+
+                    console.print(f"[dim]→ Found {len(available_models)} available models[/dim]")
+                    console.print()
+
                 # Create and run orchestrator
                 orchestrator = HrisaOrchestrator(
                     conversation=conversation,
                     project_path=path,
                     console=console,
+                    model_router=model_router,
+                    enable_multi_model=multi_model,
                 )
 
                 hrisa_content = asyncio.run(orchestrator.generate_comprehensive_hrisa())

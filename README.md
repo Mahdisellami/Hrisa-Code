@@ -10,6 +10,7 @@ A CLI coding assistant powered by local LLMs via Ollama. Inspired by Claude Code
 - **Agent Mode**: Autonomous agent for complex multi-step tasks with reflection and error recovery
 - **Text-Based Tool Parsing**: Compatible with models like qwen2.5-coder:32b that output tool calls as text
 - **HRISA.md Generation**: Automated comprehensive repository documentation with multi-step orchestration
+- **Multi-Model Orchestration**: Use specialized models for different tasks (coding, analysis, synthesis)
 - **Background Tasks**: Execute long-running commands asynchronously with process management
 - **File Operations**: Read, write, and search files in your project
 - **Command Execution**: Run shell commands with assistant guidance
@@ -239,6 +240,72 @@ ollama pull codellama
 ollama pull deepseek-coder
 ```
 
+## Multi-Model Orchestration
+
+Hrisa Code supports using different specialized models for different tasks, maximizing output quality by selecting the best model for each step.
+
+### How It Works
+
+When generating comprehensive HRISA.md documentation with `--multi-model`, the orchestrator automatically selects the best available model for each phase:
+
+- **Architecture Discovery**: Uses models with strong reasoning for understanding project structure
+- **Component Analysis**: Uses deep coding models for analyzing code internals
+- **Feature Identification**: Uses models good at pattern generation for search queries
+- **Workflow Tracing**: Uses reasoning models for tracing execution flows
+- **Documentation Synthesis**: Uses models with strong writing capabilities for final documentation
+
+### Recommended Models for Multi-Model Orchestration
+
+For best results, pull these specialized models:
+
+```bash
+# Large general-purpose model (reasoning, patterns)
+ollama pull qwen2.5:72b
+
+# Specialized coding model (deep code understanding)
+ollama pull deepseek-coder-v2:236b
+
+# Reasoning model (workflow tracing)
+ollama pull deepseek-r1:70b
+
+# Documentation model (excellent prose)
+ollama pull llama3.1:70b
+```
+
+**Note**: These are large models (70B-236B parameters). Download times may be significant on slower connections.
+
+### Usage
+
+```bash
+# Standard comprehensive generation (single model)
+hrisa init --comprehensive
+
+# Multi-model orchestration (uses specialized models per step)
+hrisa init --comprehensive --multi-model
+
+# With specific starting model
+hrisa init --comprehensive --multi-model --model qwen2.5:72b
+```
+
+### Benefits
+
+✅ **Better Quality**: Each step uses a model optimized for that specific task
+✅ **Intelligent Fallback**: Automatically uses available models if preferred ones aren't present
+✅ **Transparent**: Shows which model is selected for each step and why
+✅ **Future-Ready**: Easy to add new models and capabilities as they become available
+
+### Model Catalog
+
+The system includes a built-in catalog of model capabilities:
+
+- **Code Analysis**: deepseek-coder-v2:236b, qwen2.5:72b
+- **Pattern Generation**: qwen2.5:72b, codestral:22b
+- **Reasoning**: deepseek-r1:70b, llama3.1:70b
+- **Documentation Writing**: llama3.1:70b, llama3.1:405b
+- **File Operations**: qwen2.5-coder:7b (fast), qwen2.5-coder:32b
+
+See [FUTURE.md](FUTURE.md) for implementation details and roadmap.
+
 ## Development
 
 ### Setup Development Environment
@@ -309,6 +376,7 @@ Hrisa-Code/
 - [x] Background task execution
 - [x] HRISA.md generation with orchestration
 - [x] Text-based tool call parsing
+- [x] Multi-model orchestration system
 
 ### In Progress 🔄
 - [ ] Full MCP (Model Context Protocol) integration

@@ -12,6 +12,7 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 
 from hrisa_code.core.conversation import ConversationManager
+from hrisa_code.core.model_router import ModelRouter, ModelSelectionStrategy
 
 
 class HrisaOrchestrator:
@@ -30,6 +31,8 @@ class HrisaOrchestrator:
         conversation: ConversationManager,
         project_path: Path,
         console: Optional[Console] = None,
+        model_router: Optional[ModelRouter] = None,
+        enable_multi_model: bool = False,
     ):
         """Initialize the orchestrator.
 
@@ -37,10 +40,14 @@ class HrisaOrchestrator:
             conversation: ConversationManager for LLM interactions
             project_path: Path to the project root
             console: Rich console for output (creates new if None)
+            model_router: Optional ModelRouter for multi-model orchestration
+            enable_multi_model: Whether to use multi-model orchestration
         """
         self.conversation = conversation
         self.project_path = project_path
         self.console = console or Console()
+        self.model_router = model_router
+        self.enable_multi_model = enable_multi_model
 
         # Storage for discoveries
         self.discoveries: Dict[str, Any] = {
@@ -152,6 +159,30 @@ Use available tools to read relevant code sections.""",
         Returns:
             The LLM's response for this step
         """
+        # Select appropriate model for this step if multi-model is enabled
+        if self.enable_multi_model and self.model_router:
+            selected_model = self.model_router.select_model_for_orchestration_step(step_name)
+            current_model = self.conversation.get_current_model()
+
+            if selected_model != current_model:
+                # Get model info for display
+                model_info = self.model_router.get_model_info(selected_model)
+                reason = model_info.strengths if model_info else "selected for this task"
+
+                # Show model selection
+                self.console.print()
+                self.console.print(
+                    Panel(
+                        f"[bold yellow]Selected Model: {selected_model}[/bold yellow]\n\n"
+                        f"[dim]Reason: {reason}[/dim]",
+                        title="► Model Selection",
+                        border_style="yellow",
+                    )
+                )
+
+                # Switch model
+                self.conversation.switch_model(selected_model, verbose=False)
+
         # Show progress
         self.console.print()
         self.console.print(
@@ -188,6 +219,30 @@ Use available tools to read relevant code sections.""",
         Returns:
             The generated HRISA.md content
         """
+        # Select appropriate model for synthesis if multi-model is enabled
+        if self.enable_multi_model and self.model_router:
+            selected_model = self.model_router.select_model_for_orchestration_step("synthesis")
+            current_model = self.conversation.get_current_model()
+
+            if selected_model != current_model:
+                # Get model info for display
+                model_info = self.model_router.get_model_info(selected_model)
+                reason = model_info.strengths if model_info else "selected for this task"
+
+                # Show model selection
+                self.console.print()
+                self.console.print(
+                    Panel(
+                        f"[bold yellow]Selected Model: {selected_model}[/bold yellow]\n\n"
+                        f"[dim]Reason: {reason}[/dim]",
+                        title="► Model Selection",
+                        border_style="yellow",
+                    )
+                )
+
+                # Switch model
+                self.conversation.switch_model(selected_model, verbose=False)
+
         self.console.print()
         self.console.print(
             Panel(

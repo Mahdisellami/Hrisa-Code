@@ -679,3 +679,26 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         ]
 
         self.console.print(f"[green]Conversation loaded from {file_path}[/green]")
+
+    def switch_model(self, model_name: str, verbose: bool = True) -> None:
+        """Switch to a different model while preserving conversation history.
+
+        Args:
+            model_name: Name of the model to switch to
+            verbose: Whether to print a message about the switch
+        """
+        old_model = self.ollama_client.get_current_model()
+        self.ollama_client.switch_model(model_name)
+
+        if verbose:
+            self.console.print(
+                f"[dim]→ Switched model: {old_model} → {model_name}[/dim]"
+            )
+
+    def get_current_model(self) -> str:
+        """Get the currently active model name.
+
+        Returns:
+            Current model name
+        """
+        return self.ollama_client.get_current_model()
