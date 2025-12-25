@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
+# Import git tools
+from hrisa_code.tools.git_operations import GIT_TOOLS
+
 
 class FileOperation(BaseModel):
     """Base class for file operations."""
@@ -384,6 +387,7 @@ AVAILABLE_TOOLS = {
     "list_directory": ListDirectoryTool,
     "execute_command": ExecuteCommandTool,
     "search_files": SearchFilesTool,
+    **GIT_TOOLS,  # Add git tools
 }
 
 
