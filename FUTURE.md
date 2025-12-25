@@ -234,12 +234,44 @@ plan.steps[4].description = "Enhance existing logging calls"
 4. **Reusability**: Single system handles diverse workflows
 5. **Scalability**: Easily extend to new task types
 
+### Workflow Templates
+
+Before building the full meta-orchestrator, we'll create templates for common tasks:
+
+#### 1. HRISA.md Generation (✅ Implemented)
+- **Audience**: AI assistants
+- **Steps**: Architecture → Components → Features → Workflows → Synthesis
+- **Focus**: Technical internals, comprehensive
+
+#### 2. README Generation (Planned)
+- **Audience**: Human developers/users
+- **Steps**: Project Discovery → Feature Highlights → Installation → Usage Examples → Synthesis
+- **Focus**: User-friendly, getting started
+- **Output**: README.md with:
+  - Clear value proposition
+  - Feature highlights with benefits
+  - Installation instructions
+  - Usage examples
+  - Troubleshooting
+  - Contributing guidelines
+
+#### 3. API Documentation (Planned)
+- **Audience**: API consumers
+- **Steps**: Endpoint Discovery → Schema Analysis → Example Generation → Synthesis
+- **Focus**: API reference, authentication, endpoints
+
+#### 4. CONTRIBUTING.md (Planned)
+- **Audience**: Contributors
+- **Steps**: Workflow Discovery → Setup Analysis → Standards Review → Synthesis
+- **Focus**: How to contribute, dev setup, guidelines
+
 ### Implementation Phases
 
 **Phase 1: Abstraction** (Near-term)
 - Extract common orchestration logic from HRISA orchestrator
 - Make steps configurable
 - Create orchestration templates for common tasks
+- **Implement README workflow template**
 
 **Phase 2: Dynamic Planning** (Mid-term)
 - Implement complexity detector
