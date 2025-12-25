@@ -48,6 +48,54 @@ class ConversationManager:
         self.last_tool_results: list[dict] = []
         self.last_tools_had_errors: bool = False
 
+    def _extract_tool_calls_from_text(self, text: str) -> List[Dict[str, Any]]:
+        """Extract tool calls from text response (for models that output JSON as text).
+
+        Some models like qwen2.5-coder:32b output tool calls as JSON text instead of
+        using Ollama's structured tool calling API. This function extracts those calls.
+
+        Args:
+            text: Response text that may contain JSON tool calls
+
+        Returns:
+            List of tool calls in Ollama's expected format
+        """
+        import re
+
+        tool_calls = []
+
+        # Pattern to match JSON objects with "name" and "arguments" keys
+        # This handles the format: {"name": "tool_name", "arguments": {...}}
+        # Using a more flexible pattern to handle nested braces in arguments
+        pattern = r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{[^}]*(?:\{[^}]*\}[^}]*)*\})\s*\}'
+
+        matches = re.finditer(pattern, text, re.DOTALL)
+
+        for match in matches:
+            try:
+                # Extract the full JSON string
+                json_str = match.group(0)
+                parsed = json.loads(json_str)
+
+                # Validate it has the expected structure
+                if "name" in parsed and "arguments" in parsed:
+                    # Verify the tool exists in our tool definitions
+                    if parsed["name"] in AVAILABLE_TOOLS:
+                        # Convert to Ollama's tool call format
+                        tool_calls.append({
+                            "function": {
+                                "name": parsed["name"],
+                                "arguments": parsed["arguments"]
+                            }
+                        })
+                        self.console.print(f"[dim]→ Detected text-based tool call: {parsed['name']}[/dim]")
+            except (json.JSONDecodeError, KeyError) as e:
+                # Skip malformed JSON
+                self.console.print(f"[dim]→ Skipped malformed tool call: {e}[/dim]")
+                continue
+
+        return tool_calls
+
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt.
 
@@ -431,7 +479,26 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
         # Multi-turn tool calling loop (Claude Code style)
         tool_round = 0
-        while tool_round < max_tool_rounds and raw_response.get("message", {}).get("tool_calls"):
+        while tool_round < max_tool_rounds:
+            # Check for structured tool calls (normal Ollama API format)
+            has_structured_tool_calls = bool(raw_response.get("message", {}).get("tool_calls"))
+
+            # If no structured tool calls, check for text-based tool calls
+            # (for models like qwen2.5-coder:32b that output JSON as text)
+            if not has_structured_tool_calls and self.enable_tools:
+                content = raw_response.get("message", {}).get("content", "")
+                if content:
+                    extracted_tool_calls = self._extract_tool_calls_from_text(content)
+                    if extracted_tool_calls:
+                        # Inject extracted tool calls into raw_response
+                        if "message" not in raw_response:
+                            raw_response["message"] = {}
+                        raw_response["message"]["tool_calls"] = extracted_tool_calls
+                        has_structured_tool_calls = True
+
+            # Exit loop if no tool calls found
+            if not has_structured_tool_calls:
+                break
             tool_round += 1
 
             if tool_round > 1:
