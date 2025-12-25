@@ -15,6 +15,7 @@ This document provides context and guidelines for AI coding assistants (like Cla
 - **Background task execution** with process management
 - **HRISA.md generation** with multi-step orchestration
 - File operations (read, write, search)
+- Git integration (status, diff, log, branch)
 - Command execution
 - Conversation management
 - Docker support
@@ -43,7 +44,8 @@ src/hrisa_code/          # Main package
 │   ├── hrisa_orchestrator.py # Multi-step orchestration for HRISA.md
 │   └── repo_context.py # Repository context management
 ├── tools/              # Extensible tool system
-│   └── file_operations.py # File/command tools with function calling
+│   ├── file_operations.py # File/command tools with function calling
+│   └── git_operations.py  # Git integration tools (status, diff, log, branch)
 └── mcp/                # MCP integration (future)
 ```
 
@@ -102,10 +104,11 @@ src/hrisa_code/          # Main package
 - Three-level fallback: project → user → defaults
 - Configures models, tools, and server settings
 
-### 8. Tools (`tools/file_operations.py`)
+### 8. Tools (`tools/file_operations.py` and `tools/git_operations.py`)
 - Tool definition via get_definition()
 - Tool execution via execute()
-- Available tools: read_file, write_file, list_directory, execute_command, search_files
+- **File operation tools**: read_file, write_file, list_directory, execute_command, search_files
+- **Git operation tools**: git_status, git_diff, git_log, git_branch
 
 ## Development Practices
 
@@ -143,7 +146,7 @@ def mycommand(arg: str = typer.Argument(...)) -> None:
 
 ### Adding a New Tool
 
-1. Create tool class in `tools/file_operations.py`:
+1. Create tool class in appropriate module (e.g., `tools/file_operations.py` or `tools/git_operations.py`):
 ```python
 class MyTool:
     @staticmethod
@@ -155,9 +158,10 @@ class MyTool:
         # Implementation
 ```
 
-2. Register in `AVAILABLE_TOOLS` dict
-3. Add tests
-4. Update docs
+2. Register in appropriate `TOOLS` dict
+3. Import and merge into `AVAILABLE_TOOLS` in `file_operations.py`
+4. Add tests in `tests/test_*.py`
+5. Update docs (README.md, CLAUDE.md)
 
 ### Modifying Configuration
 
@@ -172,7 +176,8 @@ class MyTool:
 - `src/hrisa_code/cli.py` - CLI commands
 - `src/hrisa_code/core/ollama_client.py` - LLM client
 - `src/hrisa_code/core/conversation.py` - Main logic
-- `src/hrisa_code/tools/file_operations.py` - Tools
+- `src/hrisa_code/tools/file_operations.py` - File operation tools
+- `src/hrisa_code/tools/git_operations.py` - Git integration tools
 
 ### Configuration
 - `pyproject.toml` - Project metadata and dependencies
@@ -236,8 +241,8 @@ class MyTool:
 ### Immediate Priorities
 1. Full MCP (Model Context Protocol) integration
 2. Enhanced tool calling with streaming
-3. Git integration (commit, diff, status)
-4. Code analysis tools (linting, type checking)
+3. Code analysis tools (linting, type checking)
+4. Additional git operations (commit, push, pull, stash)
 
 ### Major Future Work: Meta-Orchestration System
 

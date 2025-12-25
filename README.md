@@ -13,6 +13,7 @@ A CLI coding assistant powered by local LLMs via Ollama. Inspired by Claude Code
 - **Multi-Model Orchestration**: Use specialized models for different tasks (coding, analysis, synthesis)
 - **Background Tasks**: Execute long-running commands asynchronously with process management
 - **File Operations**: Read, write, and search files in your project
+- **Git Integration**: Check status, view diffs, browse history, and manage branches
 - **Command Execution**: Run shell commands with assistant guidance
 - **Flexible Configuration**: Project-specific or global configuration files
 - **Rich Terminal UI**: Beautiful output with syntax highlighting and structured displays
@@ -224,6 +225,35 @@ src/hrisa_code/
 - **InteractiveSession**: Manages the user interface and command handling
 - **Tools**: Extensible system for file operations, command execution, and more
 
+## Available Tools
+
+Hrisa Code includes a comprehensive set of tools that the AI assistant can use:
+
+### File Operations
+- **read_file**: Read file contents with optional line range
+- **write_file**: Create or overwrite files
+- **list_directory**: List directory contents recursively
+- **search_files**: Search for regex patterns in files (line-by-line)
+- **execute_command**: Run shell commands with timeout support
+
+### Git Operations
+- **git_status**: Check repository state (modified, staged, untracked files)
+- **git_diff**: View differences (unstaged, staged, or specific files)
+- **git_log**: Browse commit history with flexible formatting
+- **git_branch**: List and inspect branches (local and remote)
+
+The assistant can use these tools automatically during conversation to help with coding tasks. For example:
+
+```
+You: "What files have changed in the repository?"
+Assistant: *uses git_status and git_diff tools*
+```
+
+```
+You: "Show me the last 5 commits that modified auth.py"
+Assistant: *uses git_log with file_path parameter*
+```
+
 ## Recommended Models
 
 For coding tasks, these models work well:
@@ -377,11 +407,11 @@ Hrisa-Code/
 - [x] HRISA.md generation with orchestration
 - [x] Text-based tool call parsing
 - [x] Multi-model orchestration system
+- [x] Git integration tools (status, diff, log, branch)
 
 ### In Progress 🔄
 - [ ] Full MCP (Model Context Protocol) integration
 - [ ] Enhanced tool calling with streaming
-- [ ] Git integration tools
 - [ ] Code analysis tools
 
 ### Future Work 🚀
