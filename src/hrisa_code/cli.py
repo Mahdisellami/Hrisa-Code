@@ -206,7 +206,17 @@ def init(
         try:
             # Generate HRISA.md
             from hrisa_code.core.conversation import ConversationManager
+            from hrisa_code.core.ollama_client import OllamaConfig
             from hrisa_code.core.hrisa_orchestrator import HrisaOrchestrator
+
+            # Create OllamaConfig from Config
+            ollama_config = OllamaConfig(
+                model=config.model.name,
+                host=config.ollama.host,
+                temperature=config.model.temperature,
+                top_p=config.model.top_p,
+                top_k=config.model.top_k,
+            )
 
             if comprehensive:
                 console.print("[bold cyan]Generating comprehensive HRISA.md...[/bold cyan]")
@@ -214,7 +224,7 @@ def init(
 
                 # Create conversation manager for orchestration
                 conversation = ConversationManager(
-                    ollama_config=config.model,
+                    ollama_config=ollama_config,
                     system_prompt="You are an expert software architect and documentation specialist.",
                     enable_tools=True,
                     working_directory=path,
@@ -234,7 +244,7 @@ def init(
 
                 # Simple single-prompt generation
                 conversation = ConversationManager(
-                    ollama_config=config.model,
+                    ollama_config=ollama_config,
                     system_prompt="You are an expert software architect and documentation specialist.",
                     enable_tools=True,
                     working_directory=path,
