@@ -9,6 +9,11 @@ This document provides context and guidelines for AI coding assistants (like Cla
 ### Key Features
 - Interactive CLI chat interface
 - Local LLM integration via Ollama
+- **Multi-turn tool calling** (Claude Code style)
+- **Text-based tool call parsing** (qwen2.5-coder:32b compatibility)
+- **Agent mode** for autonomous multi-step tasks
+- **Background task execution** with process management
+- **HRISA.md generation** with multi-step orchestration
 - File operations (read, write, search)
 - Command execution
 - Conversation management
@@ -30,9 +35,13 @@ src/hrisa_code/          # Main package
 ├── cli.py              # CLI entry point with Typer commands
 ├── core/               # Core functionality
 │   ├── config.py       # YAML-based configuration with fallback chain
-│   ├── conversation.py # Conversation orchestration & tool execution
+│   ├── conversation.py # Conversation orchestration & multi-turn tool calling
 │   ├── interactive.py  # Interactive session with prompt-toolkit
-│   └── ollama_client.py # Async Ollama API client
+│   ├── ollama_client.py # Async Ollama API client
+│   ├── agent.py        # Autonomous agent loop for multi-step tasks
+│   ├── task_manager.py # Background task execution & process management
+│   ├── hrisa_orchestrator.py # Multi-step orchestration for HRISA.md
+│   └── repo_context.py # Repository context management
 ├── tools/              # Extensible tool system
 │   └── file_operations.py # File/command tools with function calling
 └── mcp/                # MCP integration (future)
@@ -62,17 +71,38 @@ src/hrisa_code/          # Main package
 
 ### 3. Conversation Manager (`core/conversation.py`)
 - Orchestrates LLM + tools
-- Executes tool calls
-- Manages context
+- **Multi-turn tool calling** (Claude Code style)
+- **Text-based tool call parsing** (extracts JSON from LLM text output)
+- Executes tool calls with error recovery
+- Path validation to prevent placeholder paths
 - Save/load conversations
 
-### 4. Configuration (`core/config.py`)
+### 4. Agent Loop (`core/agent.py`)
+- Autonomous multi-step task execution
+- Reflection and planning
+- Error recovery with retry logic
+- Completion detection ([TASK_COMPLETE] markers)
+- Progress tracking and reporting
+
+### 5. Task Manager (`core/task_manager.py`)
+- Background command execution
+- Process management (create, monitor, kill)
+- Task status tracking
+- Output capture and retrieval
+
+### 6. HRISA Orchestrator (`core/hrisa_orchestrator.py`)
+- Multi-step repository analysis
+- 5-phase orchestration: Architecture → Components → Features → Workflows → Synthesis
+- Guided LLM exploration
+- Comprehensive documentation generation
+
+### 7. Configuration (`core/config.py`)
 - Pydantic models for validation
 - YAML-based configuration
 - Three-level fallback: project → user → defaults
 - Configures models, tools, and server settings
 
-### 5. Tools (`tools/file_operations.py`)
+### 8. Tools (`tools/file_operations.py`)
 - Tool definition via get_definition()
 - Tool execution via execute()
 - Available tools: read_file, write_file, list_directory, execute_command, search_files
@@ -195,17 +225,52 @@ class MyTool:
 2. **Tool Streaming**: Tools work but not with streaming responses
 3. **Context Management**: Basic conversation history only
 4. **Multi-file Operations**: Single file at a time currently
+5. **Model Compatibility**: Some models (e.g., qwen2.5-coder:32b) output tool calls as text instead of structured API - handled via text-based parsing
+6. **Loop Detection**: Agent/conversation loops not yet optimized
+7. **Performance**: Execution time not yet optimized (functionality-first phase)
 
 ## Future Enhancements
 
-Priority features for future development:
+**See [FUTURE.md](FUTURE.md) for comprehensive future roadmap!**
+
+### Immediate Priorities
 1. Full MCP (Model Context Protocol) integration
 2. Enhanced tool calling with streaming
 3. Git integration (commit, diff, status)
 4. Code analysis tools (linting, type checking)
-5. Project context awareness
-6. Multi-file editing
-7. Plugin system
+
+### Major Future Work: Meta-Orchestration System
+
+We're developing a **general-purpose meta-orchestrator** that can handle ANY complex workflow autonomously:
+
+1. **Complexity Detection Module**: Automatically determines if a task needs orchestration
+2. **Dynamic Planning Module**: LLM generates task-specific execution plans
+3. **Adaptive Execution Engine**: Executes plans with intelligence and adaptation
+
+**Key Innovation**: Instead of hard-coding workflows (like we do for HRISA.md), the system will:
+- Analyze any task to determine complexity
+- Generate a custom step-by-step plan
+- Execute adaptively based on discoveries
+- Handle errors and pivot strategies
+- Work for diverse task types (not just documentation)
+
+**Example Use Cases**:
+```
+Task: "Add comprehensive logging"
+→ System generates: Discover existing → Design strategy → Implement → Test
+
+Task: "Implement authentication"
+→ System generates: Research patterns → Design flow → Implement → Verify
+
+Task: "Refactor error handling"
+→ System generates: Audit current → Plan refactor → Execute → Test
+```
+
+**Development Philosophy**:
+- **Current Phase**: Functionality first - make it work!
+- **Future Phase**: Optimize performance, minimize tool calls, adaptive workflows
+
+For detailed architecture and implementation plans, see **[FUTURE.md](FUTURE.md)**.
 
 ## When Making Changes
 

@@ -6,6 +6,11 @@ A CLI coding assistant powered by local LLMs via Ollama. Inspired by Claude Code
 
 - **Local LLM Integration**: Uses Ollama to run models like CodeLlama, DeepSeek Coder, Mistral, and more
 - **Interactive Chat**: Natural conversation interface for coding assistance
+- **Multi-Turn Tool Calling**: Claude Code-style autonomous multi-step task completion
+- **Agent Mode**: Autonomous agent for complex multi-step tasks with reflection and error recovery
+- **Text-Based Tool Parsing**: Compatible with models like qwen2.5-coder:32b that output tool calls as text
+- **HRISA.md Generation**: Automated comprehensive repository documentation with multi-step orchestration
+- **Background Tasks**: Execute long-running commands asynchronously with process management
 - **File Operations**: Read, write, and search files in your project
 - **Command Execution**: Run shell commands with assistant guidance
 - **Flexible Configuration**: Project-specific or global configuration files
@@ -293,18 +298,34 @@ Hrisa-Code/
 
 ## Roadmap
 
+### Completed ✅
 - [x] Basic CLI interface
 - [x] Ollama integration
 - [x] File operation tools
 - [x] Interactive chat session
 - [x] Configuration system
+- [x] Multi-turn tool calling (Claude Code style)
+- [x] Agent mode with autonomous task execution
+- [x] Background task execution
+- [x] HRISA.md generation with orchestration
+- [x] Text-based tool call parsing
+
+### In Progress 🔄
 - [ ] Full MCP (Model Context Protocol) integration
 - [ ] Enhanced tool calling with streaming
 - [ ] Git integration tools
 - [ ] Code analysis tools
+
+### Future Work 🚀
+- [ ] **Meta-Orchestration System** - General-purpose workflow orchestration
+  - [ ] Complexity detection module
+  - [ ] Dynamic planning module
+  - [ ] Adaptive execution engine
 - [ ] Project context awareness
 - [ ] Multi-file editing capabilities
 - [ ] Plugin system for custom tools
+
+**See [FUTURE.md](FUTURE.md) for detailed architecture and implementation plans!**
 
 ## Comparison with Claude Code
 
