@@ -595,15 +595,15 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             return f"Error executing tool '{tool_name}': {str(e)}"
 
     def _display_diff(self, file_path: str, old_content: str, new_content: str) -> None:
-        """Display a git-style diff for file changes.
+        """Display a git-style diff for file changes with enhanced styling.
 
         Args:
             file_path: Path to the file being changed
             old_content: Original file content
             new_content: New file content
         """
-        old_lines = old_content.splitlines(keepends=True) if old_content else []
-        new_lines = new_content.splitlines(keepends=True)
+        old_lines = old_content.splitlines(keepends=False) if old_content else []
+        new_lines = new_content.splitlines(keepends=False)
 
         # Generate unified diff
         diff_lines = list(difflib.unified_diff(
@@ -614,25 +614,52 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             lineterm=''
         ))
 
-        # Format diff with colors
+        if not diff_lines:
+            # No changes
+            return
+
+        # Format diff with enhanced colors (Claude Code style)
         diff_text = Text()
+        line_count = 0
+        max_lines = 50
+
         for line in diff_lines:
+            if line_count >= max_lines:
+                diff_text.append(f"\n... ({len(diff_lines) - max_lines} more lines)\n", style="yellow dim")
+                break
+
             if line.startswith('---') or line.startswith('+++'):
-                diff_text.append(line + '\n', style="bold white")
+                # File headers in bold
+                diff_text.append(line + '\n', style="bold cyan")
             elif line.startswith('@@'):
-                diff_text.append(line + '\n', style="cyan")
+                # Hunk headers in cyan with background
+                diff_text.append(line + '\n', style="bold cyan on #1a1a1a")
             elif line.startswith('-'):
-                diff_text.append(line + '\n', style="red")
+                # Removed lines: red text
+                diff_text.append(line + '\n', style="bold red")
             elif line.startswith('+'):
-                diff_text.append(line + '\n', style="green")
+                # Added lines: green text
+                diff_text.append(line + '\n', style="bold green")
             else:
-                diff_text.append(line + '\n', style="dim white")
+                # Context lines in dim white
+                diff_text.append(line + '\n', style="dim")
+
+            line_count += 1
+
+        # Calculate stats
+        additions = sum(1 for line in diff_lines if line.startswith('+') and not line.startswith('+++'))
+        deletions = sum(1 for line in diff_lines if line.startswith('-') and not line.startswith('---'))
+
+        title = f"► File Changes: {file_path}"
+        if additions > 0 or deletions > 0:
+            title += f" (+{additions} -{deletions})"
 
         self.console.print(
             Panel(
                 diff_text,
-                title="► File Changes",
+                title=title,
                 border_style="yellow",
+                padding=(0, 1)
             )
         )
 
@@ -724,6 +751,21 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 border_style=border_color,
             )
         )
+
+    async def process_message(self, user_message: str, max_tool_rounds: int = 20) -> str:
+        """Process a user message and handle any tool calls (Claude Code style).
+
+        This implements Claude Code-style behavior where the LLM can make multiple
+        rounds of tool calls within a single conversation turn, allowing autonomous
+        multi-step task completion.
+
+        Args:
+            user_message: The user's message
+            max_tool_rounds: Maximum tool calling rounds (default: 20)
+
+        Returns:
+            The assistant's response
+        """
 
     async def process_message(self, user_message: str, max_tool_rounds: int = 20) -> str:
         """Process a user message and handle any tool calls (Claude Code style).

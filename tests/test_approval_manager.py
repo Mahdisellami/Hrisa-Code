@@ -312,8 +312,9 @@ class TestApprovalManager:
 
         diff = manager._generate_diff(old_content, new_content, "test.txt")
 
-        # Should be truncated
-        assert "truncated" in diff.lower()
+        # diff is now a Text object, convert to string to check
+        diff_str = str(diff)
+        assert "more lines" in diff_str.lower()
 
 
 class TestHelperFunctions:

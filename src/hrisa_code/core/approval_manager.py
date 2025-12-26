@@ -8,6 +8,7 @@ import difflib
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
+from rich.text import Text
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style as PTStyle
 import questionary
@@ -128,17 +129,7 @@ class ApprovalManager:
         for key, value in request.details.items():
             content_lines.append(f"[cyan]{key}:[/cyan] {value}")
 
-        # Show diff for file overwrites
-        if request.old_content is not None and request.new_content is not None:
-            content_lines.append("\n[yellow]Changes:[/yellow]")
-            diff = self._generate_diff(
-                request.old_content,
-                request.new_content,
-                request.file_path or "file"
-            )
-            content_lines.append(diff)
-
-        # Display panel
+        # Display panel with basic info
         self.console.print()
         self.console.print(
             Panel(
@@ -149,8 +140,25 @@ class ApprovalManager:
             )
         )
 
-    def _generate_diff(self, old_content: str, new_content: str, file_name: str) -> str:
-        """Generate a unified diff preview.
+        # Show diff for file overwrites in separate panel
+        if request.old_content is not None and request.new_content is not None:
+            diff = self._generate_diff(
+                request.old_content,
+                request.new_content,
+                request.file_path or "file"
+            )
+            self.console.print()
+            self.console.print(
+                Panel(
+                    diff,  # This is now a Text object
+                    title="[yellow]Changes:[/yellow]",
+                    border_style="cyan",
+                    padding=(1, 2)
+                )
+            )
+
+    def _generate_diff(self, old_content: str, new_content: str, file_name: str) -> Text:
+        """Generate a colorized diff preview (Claude Code style).
 
         Args:
             old_content: Original file content
@@ -158,10 +166,10 @@ class ApprovalManager:
             file_name: Name of the file
 
         Returns:
-            Formatted diff string
+            Rich Text object with colorized diff
         """
-        old_lines = old_content.splitlines(keepends=True)
-        new_lines = new_content.splitlines(keepends=True)
+        old_lines = old_content.splitlines(keepends=False)
+        new_lines = new_content.splitlines(keepends=False)
 
         diff_lines = list(difflib.unified_diff(
             old_lines,
@@ -172,13 +180,34 @@ class ApprovalManager:
         ))
 
         if not diff_lines:
-            return "[dim]No changes detected[/dim]"
+            return Text("No changes detected", style="dim")
 
-        # Limit diff to first 30 lines
-        if len(diff_lines) > 30:
-            diff_lines = diff_lines[:30] + ["... (diff truncated)"]
+        # Create colorized diff text
+        diff_text = Text()
+        max_lines = 30
 
-        return "\n".join(diff_lines)
+        for i, line in enumerate(diff_lines):
+            if i >= max_lines:
+                diff_text.append(f"\n... ({len(diff_lines) - max_lines} more lines)", style="yellow dim")
+                break
+
+            if line.startswith('---') or line.startswith('+++'):
+                # File headers in bold cyan
+                diff_text.append(line + '\n', style="bold cyan")
+            elif line.startswith('@@'):
+                # Hunk headers in cyan with background
+                diff_text.append(line + '\n', style="bold cyan on #1a1a1a")
+            elif line.startswith('-'):
+                # Removed lines in bold red
+                diff_text.append(line + '\n', style="bold red")
+            elif line.startswith('+'):
+                # Added lines in bold green
+                diff_text.append(line + '\n', style="bold green")
+            else:
+                # Context lines dimmed
+                diff_text.append(line + '\n', style="dim")
+
+        return diff_text
 
     async def _prompt_user_async(self, request: ApprovalRequest) -> ApprovalDecision:
         """Prompt user for approval decision using interactive menu (async version).
