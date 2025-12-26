@@ -148,11 +148,10 @@ class TestApprovalManager:
         decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.NO
 
-    @patch('questionary.text')
+    @patch('builtins.input', return_value="y")
     @pytest.mark.asyncio
-    async def test_user_approves_operation(self, mock_text):
+    async def test_user_approves_operation(self, mock_input):
         """Test user approving operation."""
-        mock_text.return_value.ask_async = AsyncMock(return_value="y")
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -164,11 +163,10 @@ class TestApprovalManager:
         decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.YES
 
-    @patch('questionary.text')
+    @patch('builtins.input', return_value="n")
     @pytest.mark.asyncio
-    async def test_user_denies_operation(self, mock_text):
+    async def test_user_denies_operation(self, mock_input):
         """Test user denying operation."""
-        mock_text.return_value.ask_async = AsyncMock(return_value="n")
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -180,11 +178,10 @@ class TestApprovalManager:
         decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.NO
 
-    @patch('questionary.text')
+    @patch('builtins.input', return_value="a")
     @pytest.mark.asyncio
-    async def test_user_always_approve_updates_session_memory(self, mock_text):
+    async def test_user_always_approve_updates_session_memory(self, mock_input):
         """Test that 'always' choice updates session memory."""
-        mock_text.return_value.ask_async = AsyncMock(return_value="a")
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -201,11 +198,10 @@ class TestApprovalManager:
         # Should add to always approve set
         assert ApprovalType.FILE_WRITE in manager._always_approve
 
-    @patch('questionary.text')
+    @patch('builtins.input', return_value="v")
     @pytest.mark.asyncio
-    async def test_user_never_approve_updates_session_memory(self, mock_text):
+    async def test_user_never_approve_updates_session_memory(self, mock_input):
         """Test that 'never' choice updates session memory."""
-        mock_text.return_value.ask_async = AsyncMock(return_value="v")
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -423,13 +419,11 @@ class TestHelperFunctions:
 class TestApprovalManagerIntegration:
     """Test ApprovalManager integration scenarios."""
 
-    @patch('questionary.text')
+    @patch('builtins.input', return_value="a")
     @pytest.mark.asyncio
-    async def test_multiple_operations_with_session_memory(self, mock_text):
+    async def test_multiple_operations_with_session_memory(self, mock_input):
         """Test multiple operations using session memory."""
         # First approval: user chooses 'always'
-        mock_text.return_value.ask_async = AsyncMock(return_value="a")
-
         manager = ApprovalManager(auto_approve=False)
 
         # First request
@@ -453,11 +447,11 @@ class TestApprovalManagerIntegration:
         assert decision2 == ApprovalDecision.YES
 
         # Should only prompt once
-        assert mock_text.call_count == 1
+        assert mock_input.call_count == 1
 
-    @patch('questionary.text')
+    @patch('builtins.input')
     @pytest.mark.asyncio
-    async def test_different_operation_types_independent(self, mock_text):
+    async def test_different_operation_types_independent(self, mock_input):
         """Test that different operation types are tracked independently."""
         manager = ApprovalManager(auto_approve=False)
 
@@ -484,7 +478,7 @@ class TestApprovalManagerIntegration:
         assert await manager.request_approval(push_request) == ApprovalDecision.NO
 
         # Should not have prompted user
-        assert mock_text.call_count == 0
+        assert mock_input.call_count == 0
 
     def test_file_write_with_diff_preview(self, tmp_path):
         """Test file write request includes proper details for diff."""

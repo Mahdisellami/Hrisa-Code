@@ -181,9 +181,7 @@ class ApprovalManager:
     async def _prompt_user_async(self, request: ApprovalRequest) -> ApprovalDecision:
         """Prompt user for approval decision using interactive menu (async version).
 
-        Supports hybrid input:
-        - Arrow keys to navigate + Enter to confirm
-        - OR press y/n/a/v for immediate selection (no Enter needed)
+        Uses plain input() wrapped in executor for compatibility with running event loop.
 
         Args:
             request: Details about the operation
@@ -191,6 +189,8 @@ class ApprovalManager:
         Returns:
             User's decision
         """
+        import asyncio
+
         self.console.print()
 
         try:
@@ -202,21 +202,22 @@ class ApprovalManager:
             self.console.print("  [cyan]v[/cyan] - Never: Never approve this type (for this session)")
             self.console.print()
 
-            # Use simple text input (most reliable)
+            # Use plain input() with executor for compatibility with running event loop
             # Loop until valid input received
             while True:
-                choice = await questionary.text(
-                    "Enter choice [y/n/a/v] (default: n):",
-                    default="n",
-                    style=questionary.Style([
-                        ('question', 'fg:yellow bold'),
-                        ('answer', 'fg:green bold'),
-                    ])
-                ).ask_async()
+                # Run input() in executor to avoid blocking the event loop
+                loop = asyncio.get_event_loop()
+                prompt_text = "[bold yellow]Enter choice [y/n/a/v] (default: n):[/bold yellow] "
 
-                if choice is None:
-                    # User pressed Ctrl+C
-                    return ApprovalDecision.NO
+                # Print prompt using console
+                self.console.print(prompt_text, end="")
+
+                # Get input in executor
+                choice = await loop.run_in_executor(None, input)
+
+                # Use default if empty
+                if not choice or not choice.strip():
+                    choice = "n"
 
                 choice = choice.strip().lower()
 
@@ -224,11 +225,6 @@ class ApprovalManager:
                     break
                 else:
                     self.console.print("[red]Invalid choice. Please enter y, n, a, or v.[/red]")
-
-            if choice is None:
-                # User pressed Ctrl+C
-                self.console.print("\n[yellow]Operation cancelled[/yellow]")
-                return ApprovalDecision.NO
 
             # Map choice to decision
             if choice == "y":
