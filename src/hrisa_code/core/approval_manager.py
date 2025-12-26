@@ -194,7 +194,7 @@ class ApprovalManager:
         self.console.print()
 
         try:
-            # Print options clearly before prompt
+            # Print options clearly
             self.console.print("[bold yellow]Options:[/bold yellow]")
             self.console.print("  [cyan]y[/cyan] - Yes: Approve this operation")
             self.console.print("  [cyan]n[/cyan] - No: Deny this operation")
@@ -202,25 +202,28 @@ class ApprovalManager:
             self.console.print("  [cyan]v[/cyan] - Never: Never approve this type (for this session)")
             self.console.print()
 
-            # Use rawselect for single-key shortcuts
-            # rawselect allows: arrow keys + Enter OR single key press (no Enter needed)
-            choice = await questionary.rawselect(
-                "Select option:",
-                choices=[
-                    Choice(title="Yes - Approve this operation", value="y", shortcut_key="y"),
-                    Choice(title="No - Deny this operation", value="n", shortcut_key="n"),
-                    Choice(title="Always - Always approve this type (this session)", value="a", shortcut_key="a"),
-                    Choice(title="Never - Never approve this type (this session)", value="v", shortcut_key="v"),
-                ],
-                default="n",
-                style=questionary.Style([
-                    ('selected', 'fg:green bold'),
-                    ('pointer', 'fg:yellow bold'),
-                    ('highlighted', 'fg:cyan bold'),
-                    ('question', 'fg:yellow bold'),
-                    ('answer', 'fg:green bold'),
-                ])
-            ).ask_async()
+            # Use simple text input (most reliable)
+            # Loop until valid input received
+            while True:
+                choice = await questionary.text(
+                    "Enter choice [y/n/a/v] (default: n):",
+                    default="n",
+                    style=questionary.Style([
+                        ('question', 'fg:yellow bold'),
+                        ('answer', 'fg:green bold'),
+                    ])
+                ).ask_async()
+
+                if choice is None:
+                    # User pressed Ctrl+C
+                    return ApprovalDecision.NO
+
+                choice = choice.strip().lower()
+
+                if choice in ['y', 'n', 'a', 'v']:
+                    break
+                else:
+                    self.console.print("[red]Invalid choice. Please enter y, n, a, or v.[/red]")
 
             if choice is None:
                 # User pressed Ctrl+C
