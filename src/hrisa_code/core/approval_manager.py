@@ -10,6 +10,8 @@ from rich.panel import Panel
 from rich.syntax import Syntax
 from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style as PTStyle
+import questionary
+from questionary import Choice
 
 
 class ApprovalType(Enum):
@@ -202,39 +204,37 @@ class ApprovalManager:
             self.console.print("  [cyan]v[/cyan] - Never: Never approve this type (for this session)")
             self.console.print()
 
-            # Use prompt_toolkit's async API directly
-            # Create a prompt session for approval
-            session = PromptSession()
+            # Use questionary select menu for arrow key navigation
+            try:
+                # Create menu choices
+                choices = [
+                    Choice(title="Yes - Approve this operation", value="y"),
+                    Choice(title="No - Deny this operation", value="n"),
+                    Choice(title="Always - Approve this type (for this session)", value="a"),
+                    Choice(title="Never - Never approve this type (for this session)", value="v"),
+                ]
 
-            # Loop until valid input received
-            while True:
-                try:
-                    # Define prompt style
-                    style = PTStyle.from_dict({
-                        '': '#ffff00 bold',  # Yellow bold
-                    })
+                # Use questionary select with async
+                choice = await questionary.select(
+                    "Select your choice:",
+                    choices=choices,
+                    default="n",
+                    style=questionary.Style([
+                        ('question', 'fg:#ffff00 bold'),
+                        ('highlighted', 'fg:#00ff00 bold'),
+                        ('selected', 'fg:#00ff00 bold'),
+                    ])
+                ).ask_async()
 
-                    # Get input using prompt_toolkit's async method
-                    choice = await session.prompt_async(
-                        "Enter choice (y/n/a/v, default: n): ",
-                        style=style,
-                        default="n"
-                    )
-
-                    # Handle empty input
-                    if not choice or not choice.strip():
-                        choice = "n"
-
-                    choice = choice.strip().lower()
-
-                    if choice in ['y', 'n', 'a', 'v']:
-                        break
-                    else:
-                        self.console.print("[red]Invalid choice. Please enter y, n, a, or v.[/red]")
-
-                except (EOFError, KeyboardInterrupt):
-                    # User pressed Ctrl+C or Ctrl+D
+                # Handle cancellation
+                if choice is None:
+                    self.console.print("\n[yellow]Operation cancelled[/yellow]")
                     return ApprovalDecision.NO
+
+            except (EOFError, KeyboardInterrupt):
+                # User pressed Ctrl+C or Ctrl+D
+                self.console.print("\n[yellow]Operation cancelled[/yellow]")
+                return ApprovalDecision.NO
 
             # Map choice to decision
             if choice == "y":
