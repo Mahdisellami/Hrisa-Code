@@ -146,9 +146,10 @@ class TestApprovalManager:
         assert decision == ApprovalDecision.NO
 
     @patch('questionary.select')
-    def test_user_approves_operation(self, mock_select):
+    @pytest.mark.asyncio
+    async def test_user_approves_operation(self, mock_select):
         """Test user approving operation."""
-        mock_select.return_value.ask.return_value = "y"
+        mock_select.return_value.ask_async.return_value = "y"
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -157,13 +158,14 @@ class TestApprovalManager:
             details={},
         )
 
-        decision = manager.request_approval(request)
+        decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.YES
 
     @patch('questionary.select')
-    def test_user_denies_operation(self, mock_select):
+    @pytest.mark.asyncio
+    async def test_user_denies_operation(self, mock_select):
         """Test user denying operation."""
-        mock_select.return_value.ask.return_value = "n"
+        mock_select.return_value.ask_async.return_value = "n"
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -172,13 +174,14 @@ class TestApprovalManager:
             details={},
         )
 
-        decision = manager.request_approval(request)
+        decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.NO
 
     @patch('questionary.select')
-    def test_user_always_approve_updates_session_memory(self, mock_select):
+    @pytest.mark.asyncio
+    async def test_user_always_approve_updates_session_memory(self, mock_select):
         """Test that 'always' choice updates session memory."""
-        mock_select.return_value.ask.return_value = "a"
+        mock_select.return_value.ask_async.return_value = "a"
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -187,7 +190,7 @@ class TestApprovalManager:
             details={},
         )
 
-        decision = manager.request_approval(request)
+        decision = await manager.request_approval(request)
 
         # Should return YES
         assert decision == ApprovalDecision.YES
@@ -196,9 +199,10 @@ class TestApprovalManager:
         assert ApprovalType.FILE_WRITE in manager._always_approve
 
     @patch('questionary.select')
-    def test_user_never_approve_updates_session_memory(self, mock_select):
+    @pytest.mark.asyncio
+    async def test_user_never_approve_updates_session_memory(self, mock_select):
         """Test that 'never' choice updates session memory."""
-        mock_select.return_value.ask.return_value = "v"
+        mock_select.return_value.ask_async.return_value = "v"
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -207,7 +211,7 @@ class TestApprovalManager:
             details={},
         )
 
-        decision = manager.request_approval(request)
+        decision = await manager.request_approval(request)
 
         # Should return NO
         assert decision == ApprovalDecision.NO
@@ -415,10 +419,11 @@ class TestApprovalManagerIntegration:
     """Test ApprovalManager integration scenarios."""
 
     @patch('questionary.select')
-    def test_multiple_operations_with_session_memory(self, mock_select):
+    @pytest.mark.asyncio
+    async def test_multiple_operations_with_session_memory(self, mock_select):
         """Test multiple operations using session memory."""
         # First approval: user chooses 'always'
-        mock_select.return_value.ask.return_value = "a"
+        mock_select.return_value.ask_async.return_value = "a"
 
         manager = ApprovalManager(auto_approve=False)
 
@@ -429,7 +434,7 @@ class TestApprovalManagerIntegration:
             details={},
         )
 
-        decision1 = manager.request_approval(request1)
+        decision1 = await manager.request_approval(request1)
         assert decision1 == ApprovalDecision.YES
 
         # Second request of same type - should not prompt
@@ -439,7 +444,7 @@ class TestApprovalManagerIntegration:
             details={},
         )
 
-        decision2 = manager.request_approval(request2)
+        decision2 = await manager.request_approval(request2)
         assert decision2 == ApprovalDecision.YES
 
         # Should only prompt once

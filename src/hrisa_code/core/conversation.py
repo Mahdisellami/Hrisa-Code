@@ -228,8 +228,8 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
         return "[WARNING] This operation may be destructive. Continue?"
 
-    def _check_approval(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[str]:
-        """Check if operation requires approval and request it.
+    async def _check_approval(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[str]:
+        """Check if operation requires approval and request it (async).
 
         Args:
             tool_name: Name of the tool
@@ -259,8 +259,8 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 old_content=old_content
             )
 
-            # Request approval
-            if not self.approval_manager.is_approved(request):
+            # Request approval (await async call)
+            if not await self.approval_manager.is_approved(request):
                 return f"[DENIED] User denied write operation to: {file_path}"
 
         # Check delete_file operations
@@ -270,8 +270,8 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             # Create approval request
             request = create_file_delete_request(file_path=file_path)
 
-            # Request approval
-            if not self.approval_manager.is_approved(request):
+            # Request approval (await async call)
+            if not await self.approval_manager.is_approved(request):
                 return f"[DENIED] User denied delete operation for: {file_path}"
 
         # Check destructive commands
@@ -280,7 +280,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             if self._is_command_destructive(command):
                 request = create_command_request(command)
 
-                if not self.approval_manager.is_approved(request):
+                if not await self.approval_manager.is_approved(request):
                     return f"[DENIED] User denied destructive command: {command}"
 
         # Check git_commit operations
@@ -295,7 +295,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             # Create approval request
             request = create_git_commit_request(message=message, files=files)
 
-            if not self.approval_manager.is_approved(request):
+            if not await self.approval_manager.is_approved(request):
                 return f"[DENIED] User denied git commit"
 
         # Check git_push operations
@@ -306,7 +306,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             # Create approval request
             request = create_git_push_request(branch=branch, remote=remote)
 
-            if not self.approval_manager.is_approved(request):
+            if not await self.approval_manager.is_approved(request):
                 return f"[DENIED] User denied git push to {remote}/{branch}"
 
         # Check git_pull operations
@@ -328,7 +328,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 command=f"git pull {remote} {branch}".strip()
             )
 
-            if not self.approval_manager.is_approved(request):
+            if not await self.approval_manager.is_approved(request):
                 return f"[DENIED] User denied git pull from {remote}"
 
         # Check git_stash operations
@@ -375,7 +375,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                     command=f"git stash {action}"
                 )
 
-                if not self.approval_manager.is_approved(request):
+                if not await self.approval_manager.is_approved(request):
                     return f"[DENIED] User denied git stash {action}"
 
         return None
@@ -526,8 +526,8 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
         return None
 
-    def _execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
-        """Execute a tool with given arguments.
+    async def _execute_tool(self, tool_name: str, arguments: Dict[str, Any]) -> str:
+        """Execute a tool with given arguments (async).
 
         Args:
             tool_name: Name of the tool to execute
@@ -544,8 +544,8 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         if validation_error:
             return validation_error
 
-        # Check for approval on write operations
-        approval_result = self._check_approval(tool_name, arguments)
+        # Check for approval on write operations (await async call)
+        approval_result = await self._check_approval(tool_name, arguments)
         if approval_result:
             return approval_result  # Return denial message if not approved
 
@@ -881,7 +881,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                     f"[bold cyan]Executing {tool_name}...[/bold cyan]",
                     spinner=spinner_style
                 ):
-                    result = self._execute_tool(tool_name, arguments)
+                    result = await self._execute_tool(tool_name, arguments)
 
                 execution_time = time.time() - tool_start
 

@@ -68,8 +68,8 @@ class ApprovalManager:
         self._always_approve: Set[ApprovalType] = set()
         self._never_approve: Set[ApprovalType] = set()
 
-    def request_approval(self, request: ApprovalRequest) -> ApprovalDecision:
-        """Request user approval for an operation.
+    async def request_approval(self, request: ApprovalRequest) -> ApprovalDecision:
+        """Request user approval for an operation (async).
 
         Args:
             request: Details about the operation
@@ -91,8 +91,8 @@ class ApprovalManager:
         # Display operation details
         self._display_approval_request(request)
 
-        # Get user decision
-        decision = self._prompt_user(request)
+        # Get user decision (async)
+        decision = await self._prompt_user_async(request)
 
         # Update session memory if always/never chosen
         if decision == ApprovalDecision.ALWAYS:
@@ -178,8 +178,8 @@ class ApprovalManager:
 
         return "\n".join(diff_lines)
 
-    def _prompt_user(self, request: ApprovalRequest) -> ApprovalDecision:
-        """Prompt user for approval decision using interactive menu.
+    async def _prompt_user_async(self, request: ApprovalRequest) -> ApprovalDecision:
+        """Prompt user for approval decision using interactive menu (async version).
 
         Args:
             request: Details about the operation
@@ -190,9 +190,9 @@ class ApprovalManager:
         self.console.print()
 
         try:
-            # Use questionary for beautiful interactive selection
+            # Use questionary with async for compatibility with running event loop
             # Users can use arrow keys OR press the shortcut key directly
-            choice = questionary.select(
+            choice = await questionary.select(
                 "Approve this operation?",
                 choices=[
                     Choice(title="✅ Yes - Approve this operation", value="y", shortcut_key="y"),
@@ -207,7 +207,7 @@ class ApprovalManager:
                     ('highlighted', 'fg:cyan bold'),
                     ('question', 'fg:yellow bold'),
                 ])
-            ).ask()
+            ).ask_async()
 
             if choice is None:
                 # User pressed Ctrl+C
@@ -231,8 +231,8 @@ class ApprovalManager:
             self.console.print("\n[yellow]Operation cancelled[/yellow]")
             return ApprovalDecision.NO
 
-    def is_approved(self, request: ApprovalRequest) -> bool:
-        """Check if an operation is approved (convenience method).
+    async def is_approved(self, request: ApprovalRequest) -> bool:
+        """Check if an operation is approved (convenience method, async).
 
         Args:
             request: Details about the operation
@@ -240,7 +240,7 @@ class ApprovalManager:
         Returns:
             True if approved, False otherwise
         """
-        decision = self.request_approval(request)
+        decision = await self.request_approval(request)
         return decision in (ApprovalDecision.YES, ApprovalDecision.ALWAYS)
 
     def reset_session_memory(self) -> None:
