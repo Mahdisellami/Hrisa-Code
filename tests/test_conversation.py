@@ -370,7 +370,7 @@ class TestDestructiveOperationDetection:
 class TestToolExecution:
     """Test tool execution with mocking."""
 
-    def test_execute_tool_unknown_tool(self, tmp_path):
+    async def test_execute_tool_unknown_tool(self, tmp_path):
         """Test executing unknown tool returns error."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -378,11 +378,11 @@ class TestToolExecution:
             working_directory=tmp_path,
         )
 
-        result = manager._execute_tool("unknown_tool", {})
+        result = await manager._execute_tool("unknown_tool", {})
         assert "Error: Unknown tool" in result
         assert "unknown_tool" in result
 
-    def test_execute_tool_with_placeholder_path(self, tmp_path):
+    async def test_execute_tool_with_placeholder_path(self, tmp_path):
         """Test executing tool with placeholder path returns error."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -390,11 +390,11 @@ class TestToolExecution:
             working_directory=tmp_path,
         )
 
-        result = manager._execute_tool("read_file", {"file_path": "/path/to/file.txt"})
+        result = await manager._execute_tool("read_file", {"file_path": "/path/to/file.txt"})
         assert "Error: Placeholder path detected" in result
 
     @patch('hrisa_code.tools.file_operations.ReadFileTool.execute')
-    def test_execute_tool_read_file_success(self, mock_execute, tmp_path):
+    async def test_execute_tool_read_file_success(self, mock_execute, tmp_path):
         """Test successful read_file execution."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -403,12 +403,12 @@ class TestToolExecution:
         )
 
         mock_execute.return_value = "File content here"
-        result = manager._execute_tool("read_file", {"file_path": "README.md"})
+        result = await manager._execute_tool("read_file", {"file_path": "README.md"})
 
         assert result == "File content here"
         mock_execute.assert_called_once()
 
-    def test_execute_tool_background_execution_no_task_manager(self, tmp_path):
+    async def test_execute_tool_background_execution_no_task_manager(self, tmp_path):
         """Test background execution without task manager returns error."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -417,14 +417,14 @@ class TestToolExecution:
             task_manager=None,
         )
 
-        result = manager._execute_tool(
+        result = await manager._execute_tool(
             "execute_command",
             {"command": "pytest", "background": True}
         )
 
         assert "Error: Background execution not available" in result
 
-    def test_execute_tool_background_string_conversion(self, tmp_path):
+    async def test_execute_tool_background_string_conversion(self, tmp_path):
         """Test background parameter handles string values."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         mock_task_manager = Mock()
@@ -440,7 +440,7 @@ class TestToolExecution:
         )
 
         # Test string "true"
-        result = manager._execute_tool(
+        result = await manager._execute_tool(
             "execute_command",
             {"command": "pytest", "background": "true"}
         )
@@ -692,7 +692,7 @@ class TestApprovalManagerIntegration:
         assert manager.approval_manager is not None
         assert manager.approval_manager.auto_approve is True
 
-    def test_write_file_new_file_with_auto_approve(self, tmp_path):
+    async def test_write_file_new_file_with_auto_approve(self, tmp_path):
         """Test writing new file with auto_approve enabled."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -705,7 +705,7 @@ class TestApprovalManagerIntegration:
 
         with patch('hrisa_code.tools.file_operations.WriteFileTool.execute') as mock_execute:
             mock_execute.return_value = "Successfully wrote to file"
-            result = manager._execute_tool("write_file", {
+            result = await manager._execute_tool("write_file", {
                 "file_path": str(new_file),
                 "content": "Test content"
             })
@@ -714,7 +714,7 @@ class TestApprovalManagerIntegration:
         assert "Successfully wrote" in result
         assert "[DENIED]" not in result
 
-    def test_write_file_existing_file_requires_approval_denied(self, tmp_path):
+    async def test_write_file_existing_file_requires_approval_denied(self, tmp_path):
         """Test writing existing file requires approval and handles denial."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -727,9 +727,11 @@ class TestApprovalManagerIntegration:
         existing_file = tmp_path / "existing.txt"
         existing_file.write_text("Original content")
 
-        # Mock user denying approval
-        with patch('hrisa_code.core.approval_manager.Prompt.ask', return_value='n'):
-            result = manager._execute_tool("write_file", {
+        # Mock user denying approval - patch questionary.select
+        mock_select = AsyncMock()
+        mock_select.ask_async = AsyncMock(return_value='n')
+        with patch('questionary.select', return_value=mock_select):
+            result = await manager._execute_tool("write_file", {
                 "file_path": str(existing_file),
                 "content": "New content"
             })
@@ -737,7 +739,7 @@ class TestApprovalManagerIntegration:
         assert "[DENIED]" in result
         assert str(existing_file) in result
 
-    def test_write_file_existing_file_with_auto_approve(self, tmp_path):
+    async def test_write_file_existing_file_with_auto_approve(self, tmp_path):
         """Test writing existing file with auto_approve bypasses prompts."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -752,7 +754,7 @@ class TestApprovalManagerIntegration:
 
         with patch('hrisa_code.tools.file_operations.WriteFileTool.execute') as mock_execute:
             mock_execute.return_value = "Successfully wrote to file"
-            result = manager._execute_tool("write_file", {
+            result = await manager._execute_tool("write_file", {
                 "file_path": str(existing_file),
                 "content": "New content"
             })
@@ -761,7 +763,7 @@ class TestApprovalManagerIntegration:
         assert "Successfully wrote" in result
         assert "[DENIED]" not in result
 
-    def test_write_file_existing_file_approved(self, tmp_path):
+    async def test_write_file_existing_file_approved(self, tmp_path):
         """Test writing existing file with user approval."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -774,11 +776,13 @@ class TestApprovalManagerIntegration:
         existing_file = tmp_path / "existing.txt"
         existing_file.write_text("Original content")
 
-        # Mock user approving
-        with patch('hrisa_code.core.approval_manager.Prompt.ask', return_value='y'):
+        # Mock user approving - patch questionary.select
+        mock_select = AsyncMock()
+        mock_select.ask_async = AsyncMock(return_value='y')
+        with patch('questionary.select', return_value=mock_select):
             with patch('hrisa_code.tools.file_operations.WriteFileTool.execute') as mock_execute:
                 mock_execute.return_value = "Successfully wrote to file"
-                result = manager._execute_tool("write_file", {
+                result = await manager._execute_tool("write_file", {
                     "file_path": str(existing_file),
                     "content": "New content"
                 })
@@ -786,7 +790,7 @@ class TestApprovalManagerIntegration:
         assert "Successfully wrote" in result
         assert "[DENIED]" not in result
 
-    def test_destructive_command_requires_approval_denied(self, tmp_path):
+    async def test_destructive_command_requires_approval_denied(self, tmp_path):
         """Test destructive command requires approval and handles denial."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -795,16 +799,18 @@ class TestApprovalManagerIntegration:
             auto_approve=False,
         )
 
-        # Mock user denying approval
-        with patch('hrisa_code.core.approval_manager.Prompt.ask', return_value='n'):
-            result = manager._execute_tool("execute_command", {
+        # Mock user denying approval - patch questionary.select
+        mock_select = AsyncMock()
+        mock_select.ask_async = AsyncMock(return_value='n')
+        with patch('questionary.select', return_value=mock_select):
+            result = await manager._execute_tool("execute_command", {
                 "command": "rm -rf dangerous_dir"
             })
 
         assert "[DENIED]" in result
         assert "rm -rf dangerous_dir" in result
 
-    def test_destructive_command_with_auto_approve(self, tmp_path):
+    async def test_destructive_command_with_auto_approve(self, tmp_path):
         """Test destructive command with auto_approve bypasses prompts."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -815,7 +821,7 @@ class TestApprovalManagerIntegration:
 
         with patch('hrisa_code.tools.file_operations.ExecuteCommandTool.execute') as mock_execute:
             mock_execute.return_value = "Command executed"
-            result = manager._execute_tool("execute_command", {
+            result = await manager._execute_tool("execute_command", {
                 "command": "rm -rf test_dir"
             })
 
@@ -823,7 +829,7 @@ class TestApprovalManagerIntegration:
         assert "Command executed" in result
         assert "[DENIED]" not in result
 
-    def test_destructive_command_approved(self, tmp_path):
+    async def test_destructive_command_approved(self, tmp_path):
         """Test destructive command with user approval."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -832,18 +838,20 @@ class TestApprovalManagerIntegration:
             auto_approve=False,
         )
 
-        # Mock user approving
-        with patch('hrisa_code.core.approval_manager.Prompt.ask', return_value='y'):
+        # Mock user approving - patch questionary.select
+        mock_select = AsyncMock()
+        mock_select.ask_async = AsyncMock(return_value='y')
+        with patch('questionary.select', return_value=mock_select):
             with patch('hrisa_code.tools.file_operations.ExecuteCommandTool.execute') as mock_execute:
                 mock_execute.return_value = "Command executed"
-                result = manager._execute_tool("execute_command", {
+                result = await manager._execute_tool("execute_command", {
                     "command": "rm test_file.txt"
                 })
 
         assert "Command executed" in result
         assert "[DENIED]" not in result
 
-    def test_safe_command_no_approval_needed(self, tmp_path):
+    async def test_safe_command_no_approval_needed(self, tmp_path):
         """Test safe commands don't require approval."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -854,7 +862,7 @@ class TestApprovalManagerIntegration:
 
         with patch('hrisa_code.tools.file_operations.ExecuteCommandTool.execute') as mock_execute:
             mock_execute.return_value = "Command output"
-            result = manager._execute_tool("execute_command", {
+            result = await manager._execute_tool("execute_command", {
                 "command": "git status"
             })
 
@@ -862,7 +870,7 @@ class TestApprovalManagerIntegration:
         assert "Command output" in result
         assert "[DENIED]" not in result
 
-    def test_read_operations_no_approval_needed(self, tmp_path):
+    async def test_read_operations_no_approval_needed(self, tmp_path):
         """Test read operations don't require approval."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -874,7 +882,7 @@ class TestApprovalManagerIntegration:
         # Test read_file
         with patch('hrisa_code.tools.file_operations.ReadFileTool.execute') as mock_execute:
             mock_execute.return_value = "File content"
-            result = manager._execute_tool("read_file", {
+            result = await manager._execute_tool("read_file", {
                 "file_path": "README.md"
             })
 
@@ -902,7 +910,7 @@ class TestApprovalManagerIntegration:
         assert not manager._is_command_destructive("cat README.md")
         assert not manager._is_command_destructive("grep pattern file.txt")
 
-    def test_approval_check_returns_none_for_approved(self, tmp_path):
+    async def test_approval_check_returns_none_for_approved(self, tmp_path):
         """Test _check_approval returns None for approved operations."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -915,14 +923,14 @@ class TestApprovalManagerIntegration:
         existing_file = tmp_path / "existing.txt"
         existing_file.write_text("Content")
 
-        result = manager._check_approval("write_file", {
+        result = await manager._check_approval("write_file", {
             "file_path": str(existing_file),
             "content": "New content"
         })
 
         assert result is None  # Approved
 
-    def test_approval_check_returns_error_for_denied(self, tmp_path):
+    async def test_approval_check_returns_error_for_denied(self, tmp_path):
         """Test _check_approval returns error message for denied operations."""
         config = OllamaConfig(model="qwen2.5-coder:32b")
         manager = ConversationManager(
@@ -935,9 +943,11 @@ class TestApprovalManagerIntegration:
         existing_file = tmp_path / "existing.txt"
         existing_file.write_text("Content")
 
-        # Mock user denying
-        with patch('hrisa_code.core.approval_manager.Prompt.ask', return_value='n'):
-            result = manager._check_approval("write_file", {
+        # Mock user denying - patch questionary.select
+        mock_select = AsyncMock()
+        mock_select.ask_async = AsyncMock(return_value='n')
+        with patch('questionary.select', return_value=mock_select):
+            result = await manager._check_approval("write_file", {
                 "file_path": str(existing_file),
                 "content": "New content"
             })
