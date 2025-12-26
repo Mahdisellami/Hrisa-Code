@@ -69,9 +69,10 @@ class ConversationManager:
         )
 
         # Goal tracking to detect task completion
+        # Use the same model as the main conversation (no need for separate evaluation model)
         self.goal_tracker = GoalTracker(
             ollama_client=self.ollama_client,
-            evaluation_model="qwen2.5-coder:7b",  # Lightweight model for checks
+            evaluation_model=ollama_config.model,  # Use main model
             check_frequency=3  # Check every 3 rounds
         )
 

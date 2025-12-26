@@ -194,10 +194,18 @@ class ApprovalManager:
         self.console.print()
 
         try:
+            # Print options clearly before prompt
+            self.console.print("[bold yellow]Options:[/bold yellow]")
+            self.console.print("  [cyan]y[/cyan] - Yes: Approve this operation")
+            self.console.print("  [cyan]n[/cyan] - No: Deny this operation")
+            self.console.print("  [cyan]a[/cyan] - Always: Approve this type (for this session)")
+            self.console.print("  [cyan]v[/cyan] - Never: Never approve this type (for this session)")
+            self.console.print()
+
             # Use rawselect for single-key shortcuts
             # rawselect allows: arrow keys + Enter OR single key press (no Enter needed)
             choice = await questionary.rawselect(
-                "Approve this operation?",
+                "Select option:",
                 choices=[
                     Choice(title="Yes - Approve this operation", value="y", shortcut_key="y"),
                     Choice(title="No - Deny this operation", value="n", shortcut_key="n"),
