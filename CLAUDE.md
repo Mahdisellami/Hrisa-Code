@@ -144,6 +144,7 @@ src/hrisa_code/          # Main package
 - **Linting**: Ruff for fast Python linting
 - **Type Checking**: MyPy with strict mode
 - **Docstrings**: Google-style for all public functions
+- **NO EMOJIS**: Do not use emojis in code, UI, or terminal output. Documentation (README, markdown files) may use emojis sparingly if needed, but code and user interfaces must be emoji-free
 
 ### Testing
 - **Framework**: pytest with coverage
