@@ -2,11 +2,17 @@
 
 import pytest
 from pathlib import Path
+from unittest.mock import patch, Mock
 from src.hrisa_code.tools.git_operations import (
     GitStatusTool,
     GitDiffTool,
     GitLogTool,
     GitBranchTool,
+    GitCommitTool,
+    GitPushTool,
+    GitPullTool,
+    GitStashTool,
+    get_all_git_tool_definitions,
 )
 
 
@@ -135,10 +141,8 @@ class TestGitToolsIntegration:
 
     def test_tool_definitions_format(self):
         """Test that all tool definitions follow correct format."""
-        from src.hrisa_code.tools.git_operations import get_all_git_tool_definitions
-
         definitions = get_all_git_tool_definitions()
-        assert len(definitions) == 4
+        assert len(definitions) == 8  # 4 read + 4 write tools
 
         for definition in definitions:
             assert "type" in definition
@@ -147,6 +151,180 @@ class TestGitToolsIntegration:
             assert "name" in definition["function"]
             assert "description" in definition["function"]
             assert "parameters" in definition["function"]
+
+
+class TestGitCommitTool:
+    """Test suite for git_commit tool."""
+
+    def test_git_commit_definition(self):
+        """Test that tool definition is correct."""
+        definition = GitCommitTool.get_definition()
+        assert definition["type"] == "function"
+        assert definition["function"]["name"] == "git_commit"
+        assert "IMPORTANT" in definition["function"]["description"]  # Warning about write operation
+        assert "message" in definition["function"]["parameters"]["properties"]
+        assert "message" in definition["function"]["parameters"]["required"]
+
+    @patch('subprocess.run')
+    def test_git_commit_execute_success(self, mock_run):
+        """Test successful git commit."""
+        mock_run.return_value = Mock(returncode=0, stdout="[main abc123] Test commit\n 1 file changed", stderr="")
+
+        result = GitCommitTool.execute(message="Test commit")
+        assert "Test commit" in result
+        assert "Error" not in result
+        mock_run.assert_called_once()
+
+    @patch('subprocess.run')
+    def test_git_commit_with_add_all(self, mock_run):
+        """Test git commit with add_all flag."""
+        mock_run.return_value = Mock(returncode=0, stdout="Commit created", stderr="")
+
+        result = GitCommitTool.execute(message="Test commit", add_all=True)
+        assert "Error" not in result
+        # Should be called twice: once for add, once for commit
+        assert mock_run.call_count == 2
+
+    @patch('subprocess.run')
+    def test_git_commit_nothing_to_commit(self, mock_run):
+        """Test git commit when nothing to commit."""
+        mock_run.return_value = Mock(returncode=1, stdout="", stderr="nothing to commit")
+
+        result = GitCommitTool.execute(message="Test commit")
+        assert "No changes to commit" in result
+
+
+class TestGitPushTool:
+    """Test suite for git_push tool."""
+
+    def test_git_push_definition(self):
+        """Test that tool definition is correct."""
+        definition = GitPushTool.get_definition()
+        assert definition["type"] == "function"
+        assert definition["function"]["name"] == "git_push"
+        assert "IMPORTANT" in definition["function"]["description"]  # Warning
+        assert "remote" in definition["function"]["parameters"]["properties"]
+
+    @patch('subprocess.run')
+    def test_git_push_execute_success(self, mock_run):
+        """Test successful git push."""
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="Everything up-to-date")
+
+        result = GitPushTool.execute()
+        assert "Error" not in result
+        mock_run.assert_called_once()
+
+    @patch('subprocess.run')
+    def test_git_push_with_branch(self, mock_run):
+        """Test git push with specific branch."""
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="Successfully pushed")
+
+        result = GitPushTool.execute(remote="origin", branch="main")
+        assert "Error" not in result
+        call_args = mock_run.call_args[0][0]
+        assert "main" in call_args
+
+    @patch('subprocess.run')
+    def test_git_push_set_upstream(self, mock_run):
+        """Test git push with set_upstream flag."""
+        mock_run.return_value = Mock(returncode=0, stdout="", stderr="Branch set to track")
+
+        result = GitPushTool.execute(set_upstream=True, branch="feature")
+        assert "Error" not in result
+        call_args = mock_run.call_args[0][0]
+        assert "-u" in call_args
+
+
+class TestGitPullTool:
+    """Test suite for git_pull tool."""
+
+    def test_git_pull_definition(self):
+        """Test that tool definition is correct."""
+        definition = GitPullTool.get_definition()
+        assert definition["type"] == "function"
+        assert definition["function"]["name"] == "git_pull"
+        assert "IMPORTANT" in definition["function"]["description"]  # Warning
+        assert "rebase" in definition["function"]["parameters"]["properties"]
+
+    @patch('subprocess.run')
+    def test_git_pull_execute_success(self, mock_run):
+        """Test successful git pull."""
+        mock_run.return_value = Mock(returncode=0, stdout="Already up to date.", stderr="")
+
+        result = GitPullTool.execute()
+        assert "Error" not in result
+        assert "up to date" in result.lower() or "up-to-date" in result.lower()
+        mock_run.assert_called_once()
+
+    @patch('subprocess.run')
+    def test_git_pull_with_rebase(self, mock_run):
+        """Test git pull with rebase."""
+        mock_run.return_value = Mock(returncode=0, stdout="Successfully rebased", stderr="")
+
+        result = GitPullTool.execute(rebase=True)
+        assert "Error" not in result
+        call_args = mock_run.call_args[0][0]
+        assert "--rebase" in call_args
+
+    @patch('subprocess.run')
+    def test_git_pull_merge_conflict(self, mock_run):
+        """Test git pull with merge conflict."""
+        mock_run.return_value = Mock(returncode=1, stdout="", stderr="CONFLICT: merge conflict in file.txt")
+
+        result = GitPullTool.execute()
+        assert "conflict" in result.lower()
+        assert "Error" in result
+
+
+class TestGitStashTool:
+    """Test suite for git_stash tool."""
+
+    def test_git_stash_definition(self):
+        """Test that tool definition is correct."""
+        definition = GitStashTool.get_definition()
+        assert definition["type"] == "function"
+        assert definition["function"]["name"] == "git_stash"
+        assert "IMPORTANT" in definition["function"]["description"]  # Warning
+        assert "action" in definition["function"]["parameters"]["properties"]
+
+    @patch('subprocess.run')
+    def test_git_stash_save(self, mock_run):
+        """Test git stash save."""
+        mock_run.return_value = Mock(returncode=0, stdout="Saved working directory", stderr="")
+
+        result = GitStashTool.execute(action="save", message="WIP changes")
+        assert "Error" not in result
+        mock_run.assert_called_once()
+        call_args = mock_run.call_args[0][0]
+        assert "git" in call_args
+        assert "stash" in call_args
+
+    @patch('subprocess.run')
+    def test_git_stash_list(self, mock_run):
+        """Test git stash list."""
+        mock_run.return_value = Mock(returncode=0, stdout="stash@{0}: WIP on main\nstash@{1}: WIP on feature", stderr="")
+
+        result = GitStashTool.execute(action="list")
+        assert "stash@{0}" in result
+        assert "Error" not in result
+
+    @patch('subprocess.run')
+    def test_git_stash_pop(self, mock_run):
+        """Test git stash pop."""
+        mock_run.return_value = Mock(returncode=0, stdout="Dropped refs/stash@{0}", stderr="")
+
+        result = GitStashTool.execute(action="pop", stash_index=0)
+        assert "Error" not in result
+        call_args = mock_run.call_args[0][0]
+        assert "pop" in call_args
+
+    @patch('subprocess.run')
+    def test_git_stash_no_changes(self, mock_run):
+        """Test git stash with no changes."""
+        mock_run.return_value = Mock(returncode=1, stdout="", stderr="No local changes to save")
+
+        result = GitStashTool.execute(action="save")
+        assert "No local changes to stash" in result
 
 
 if __name__ == "__main__":

@@ -666,4 +666,284 @@ class TestGoalTrackerIntegration:
         assert manager.goal_tracker.current_round >= 0  # May have incremented
 
 
+class TestApprovalManagerIntegration:
+    """Test approval manager integration with conversation flow."""
+
+    def test_approval_manager_initialization_default(self, tmp_path):
+        """Test that approval manager is initialized by default."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+        )
+
+        assert manager.approval_manager is not None
+        assert manager.approval_manager.auto_approve is False
+
+    def test_approval_manager_initialization_auto_approve(self, tmp_path):
+        """Test approval manager with auto_approve enabled."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=True,
+        )
+
+        assert manager.approval_manager is not None
+        assert manager.approval_manager.auto_approve is True
+
+    def test_write_file_new_file_with_auto_approve(self, tmp_path):
+        """Test writing new file with auto_approve enabled."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=True,  # Auto-approve enabled
+        )
+
+        new_file = tmp_path / "new_file.txt"
+
+        with patch('hrisa_code.tools.file_operations.WriteFileTool.execute') as mock_execute:
+            mock_execute.return_value = "Successfully wrote to file"
+            result = manager._execute_tool("write_file", {
+                "file_path": str(new_file),
+                "content": "Test content"
+            })
+
+        # Should execute without prompting user
+        assert "Successfully wrote" in result
+        assert "[DENIED]" not in result
+
+    def test_write_file_existing_file_requires_approval_denied(self, tmp_path):
+        """Test writing existing file requires approval and handles denial."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=False,
+        )
+
+        # Create existing file
+        existing_file = tmp_path / "existing.txt"
+        existing_file.write_text("Original content")
+
+        # Mock user denying approval
+        with patch('hrisa_code.core.approval_manager.Prompt.ask', return_value='n'):
+            result = manager._execute_tool("write_file", {
+                "file_path": str(existing_file),
+                "content": "New content"
+            })
+
+        assert "[DENIED]" in result
+        assert str(existing_file) in result
+
+    def test_write_file_existing_file_with_auto_approve(self, tmp_path):
+        """Test writing existing file with auto_approve bypasses prompts."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=True,
+        )
+
+        # Create existing file
+        existing_file = tmp_path / "existing.txt"
+        existing_file.write_text("Original content")
+
+        with patch('hrisa_code.tools.file_operations.WriteFileTool.execute') as mock_execute:
+            mock_execute.return_value = "Successfully wrote to file"
+            result = manager._execute_tool("write_file", {
+                "file_path": str(existing_file),
+                "content": "New content"
+            })
+
+        # Should succeed without prompting user
+        assert "Successfully wrote" in result
+        assert "[DENIED]" not in result
+
+    def test_write_file_existing_file_approved(self, tmp_path):
+        """Test writing existing file with user approval."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=False,
+        )
+
+        # Create existing file
+        existing_file = tmp_path / "existing.txt"
+        existing_file.write_text("Original content")
+
+        # Mock user approving
+        with patch('hrisa_code.core.approval_manager.Prompt.ask', return_value='y'):
+            with patch('hrisa_code.tools.file_operations.WriteFileTool.execute') as mock_execute:
+                mock_execute.return_value = "Successfully wrote to file"
+                result = manager._execute_tool("write_file", {
+                    "file_path": str(existing_file),
+                    "content": "New content"
+                })
+
+        assert "Successfully wrote" in result
+        assert "[DENIED]" not in result
+
+    def test_destructive_command_requires_approval_denied(self, tmp_path):
+        """Test destructive command requires approval and handles denial."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=False,
+        )
+
+        # Mock user denying approval
+        with patch('hrisa_code.core.approval_manager.Prompt.ask', return_value='n'):
+            result = manager._execute_tool("execute_command", {
+                "command": "rm -rf dangerous_dir"
+            })
+
+        assert "[DENIED]" in result
+        assert "rm -rf dangerous_dir" in result
+
+    def test_destructive_command_with_auto_approve(self, tmp_path):
+        """Test destructive command with auto_approve bypasses prompts."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=True,
+        )
+
+        with patch('hrisa_code.tools.file_operations.ExecuteCommandTool.execute') as mock_execute:
+            mock_execute.return_value = "Command executed"
+            result = manager._execute_tool("execute_command", {
+                "command": "rm -rf test_dir"
+            })
+
+        # Should execute without denial
+        assert "Command executed" in result
+        assert "[DENIED]" not in result
+
+    def test_destructive_command_approved(self, tmp_path):
+        """Test destructive command with user approval."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=False,
+        )
+
+        # Mock user approving
+        with patch('hrisa_code.core.approval_manager.Prompt.ask', return_value='y'):
+            with patch('hrisa_code.tools.file_operations.ExecuteCommandTool.execute') as mock_execute:
+                mock_execute.return_value = "Command executed"
+                result = manager._execute_tool("execute_command", {
+                    "command": "rm test_file.txt"
+                })
+
+        assert "Command executed" in result
+        assert "[DENIED]" not in result
+
+    def test_safe_command_no_approval_needed(self, tmp_path):
+        """Test safe commands don't require approval."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=False,
+        )
+
+        with patch('hrisa_code.tools.file_operations.ExecuteCommandTool.execute') as mock_execute:
+            mock_execute.return_value = "Command output"
+            result = manager._execute_tool("execute_command", {
+                "command": "git status"
+            })
+
+        # Should execute without approval check
+        assert "Command output" in result
+        assert "[DENIED]" not in result
+
+    def test_read_operations_no_approval_needed(self, tmp_path):
+        """Test read operations don't require approval."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=False,
+        )
+
+        # Test read_file
+        with patch('hrisa_code.tools.file_operations.ReadFileTool.execute') as mock_execute:
+            mock_execute.return_value = "File content"
+            result = manager._execute_tool("read_file", {
+                "file_path": "README.md"
+            })
+
+        assert "File content" in result
+        assert "[DENIED]" not in result
+
+    def test_is_command_destructive_detection(self, tmp_path):
+        """Test destructive command detection."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+        )
+
+        # Test destructive commands
+        assert manager._is_command_destructive("rm -rf /")
+        assert manager._is_command_destructive("del important.txt")
+        assert manager._is_command_destructive("delete from users")
+        assert manager._is_command_destructive("rmdir folder")
+        assert manager._is_command_destructive("echo test > file.txt")  # Redirection
+
+        # Test safe commands
+        assert not manager._is_command_destructive("git status")
+        assert not manager._is_command_destructive("ls -la")
+        assert not manager._is_command_destructive("cat README.md")
+        assert not manager._is_command_destructive("grep pattern file.txt")
+
+    def test_approval_check_returns_none_for_approved(self, tmp_path):
+        """Test _check_approval returns None for approved operations."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=True,
+        )
+
+        # Create existing file
+        existing_file = tmp_path / "existing.txt"
+        existing_file.write_text("Content")
+
+        result = manager._check_approval("write_file", {
+            "file_path": str(existing_file),
+            "content": "New content"
+        })
+
+        assert result is None  # Approved
+
+    def test_approval_check_returns_error_for_denied(self, tmp_path):
+        """Test _check_approval returns error message for denied operations."""
+        config = OllamaConfig(model="qwen2.5-coder:32b")
+        manager = ConversationManager(
+            ollama_config=config,
+            working_directory=tmp_path,
+            auto_approve=False,
+        )
+
+        # Create existing file
+        existing_file = tmp_path / "existing.txt"
+        existing_file.write_text("Content")
+
+        # Mock user denying
+        with patch('hrisa_code.core.approval_manager.Prompt.ask', return_value='n'):
+            result = manager._check_approval("write_file", {
+                "file_path": str(existing_file),
+                "content": "New content"
+            })
+
+        assert result is not None
+        assert "[DENIED]" in result
+
+
 # Run with: pytest tests/test_conversation.py -v

@@ -533,27 +533,43 @@ class GoalTracker:
 - Agent communication protocols
 - Coordinated execution
 
-### 6.2 Human-in-the-Loop ⚠️ **HIGH PRIORITY**
-**Current Need**: Essential for write operations and complex decisions.
+### 6.2 Human-in-the-Loop ✅ **PARTIALLY IMPLEMENTED**
+**Status**: Core approval manager implemented. Additional features planned.
 
-**Implementation Areas:**
-- **Write Operation Approval**: User must confirm all writes (files, git commits, pushes)
-- **Clarification Requests**: LLM asks when uncertain about intent
-- **Destructive Operation Prevention**: Double confirmation for deletes, force pushes
-- **Manual Intervention**: Allow user to pause, modify, or abort at any step
-- **Diff Preview**: Show what will change before applying
-- **Undo Support**: Track operations for potential rollback
+**Implemented Features:**
+- ✅ **Write Operation Approval**: User confirms file overwrites and destructive commands
+- ✅ **Destructive Operation Detection**: Automatic detection of dangerous commands (rm, del, etc.)
+- ✅ **Diff Preview**: Shows file changes before applying overwrites
+- ✅ **Session Memory**: "Always/Never" approval for operation types during session
+- ✅ **Auto-approve Mode**: Testing-friendly mode to bypass prompts
+- ✅ **Rich UI**: Formatted panels with colored options and clear descriptions
+- ✅ **Git Operation Approval**: Approval for commits, pushes, pulls, stash operations
+- ✅ **File Delete Approval**: Explicit approval for file deletion with warnings
 
-**Example Workflow:**
+**Remaining Implementation Areas:**
+- ⏳ **Clarification Requests**: LLM asks when uncertain about intent
+- ⏳ **Manual Intervention**: Allow user to pause, modify, or abort at any step
+- ⏳ **Undo Support**: Track operations for potential rollback
+
+**Current Workflow Example:**
 ```
-User: "Commit these changes"
-Assistant: *uses git_status, git_diff*
-Assistant: "I found 5 modified files. Here's the diff:"
-[Shows diff preview]
-Assistant: "Suggested commit message: 'Add git integration tools'"
-User Prompt: "Approve commit? [Yes/No/Edit message]"
-User: "Yes"
-Assistant: *executes git_commit*
+User: "Update config.yaml"
+Assistant: *tries to write file*
+System: [Displays approval panel]
+  📝 File Write Operation
+  Overwrite existing file: config.yaml
+  File: /path/to/config.yaml
+  Action: Overwrite
+  [Shows unified diff preview]
+
+  Options:
+    y - Approve this operation
+    n - Deny this operation
+    a - Always approve this type (for this session)
+    v - Never approve this type (for this session)
+
+User: "y"
+Assistant: *executes write*
 ```
 
 ---
@@ -569,19 +585,19 @@ Assistant: *executes git_commit*
 
 ### Q2 2025: Robustness & Safety ⚠️ (HIGH PRIORITY - Current Focus)
 **Critical Issues Identified in Testing:**
-- ⚠️ **Loop Detection & Prevention**: Models get stuck in repetitive tool calls (20+ identical calls observed)
-- ⚠️ **Goal Detection**: Models don't recognize when task is complete
-- ⚠️ **Write Operations with Approval**: Need user confirmation for git commits, pushes, file writes/deletes
+- ✅ **Loop Detection & Prevention**: Implemented - prevents models from getting stuck (max 3 identical calls)
+- ✅ **Goal Detection**: Implemented - detects when task is complete
+- ✅ **Write Operations with Approval**: Implemented - user confirmation for write operations
 - 🔄 Abstract orchestration patterns
 - ⏳ Result verification system
 - ⏳ Intelligent tool selection guidance
 
 **Implementation Priority:**
-1. Loop detector (max 3 identical calls)
-2. Goal tracker (completion detection)
-3. Approval manager (write operation confirmation)
-4. Git write tools (commit, push, pull, stash) with approval
-5. File write/delete tools with approval
+1. ✅ Loop detector (max 3 identical calls) - COMPLETE
+2. ✅ Goal tracker (completion detection) - COMPLETE
+3. ✅ Approval manager (write operation confirmation) - COMPLETE
+4. ✅ Git write tools (commit, push, pull, stash) with approval - COMPLETE
+5. ✅ File delete tool with approval - COMPLETE
 
 ### Q3 2025: Intelligence & Generalization
 - ✅ Multi-model orchestration

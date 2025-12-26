@@ -14,8 +14,11 @@ This document provides context and guidelines for AI coding assistants (like Cla
 - **Agent mode** for autonomous multi-step tasks
 - **Background task execution** with process management
 - **HRISA.md generation** with multi-step orchestration
-- File operations (read, write, search)
-- Git integration (status, diff, log, branch)
+- **Approval manager** for write operation safety
+- **Loop detection** to prevent repetitive tool calls
+- **Goal tracking** for task completion detection
+- File operations (read, write, delete, search)
+- Git integration (status, diff, log, branch, commit, push, pull, stash)
 - Command execution
 - Conversation management
 - Docker support
@@ -42,6 +45,9 @@ src/hrisa_code/          # Main package
 │   ├── agent.py        # Autonomous agent loop for multi-step tasks
 │   ├── task_manager.py # Background task execution & process management
 │   ├── hrisa_orchestrator.py # Multi-step orchestration for HRISA.md
+│   ├── approval_manager.py # User approval for write operations
+│   ├── loop_detector.py    # Detection of repetitive tool calls
+│   ├── goal_tracker.py     # Task completion detection
 │   └── repo_context.py # Repository context management
 ├── tools/              # Extensible tool system
 │   ├── file_operations.py # File/command tools with function calling
@@ -98,17 +104,38 @@ src/hrisa_code/          # Main package
 - Guided LLM exploration
 - Comprehensive documentation generation
 
-### 7. Configuration (`core/config.py`)
+### 7. Approval Manager (`core/approval_manager.py`)
+- User confirmation for write operations
+- Interactive prompts with rich formatting
+- Diff preview for file overwrites
+- Session-based memory (always/never approvals)
+- Destructive operation detection
+- Auto-approve mode for testing
+
+### 8. Loop Detector (`core/loop_detector.py`)
+- Detects repetitive tool calls
+- Prevents models from getting stuck
+- Configurable thresholds (max 3 identical calls)
+- Provides feedback to the LLM
+
+### 9. Goal Tracker (`core/goal_tracker.py`)
+- Tracks task completion status
+- Detects when sufficient information gathered
+- Monitors progress across tool rounds
+- Prevents premature termination
+
+### 10. Configuration (`core/config.py`)
 - Pydantic models for validation
 - YAML-based configuration
 - Three-level fallback: project → user → defaults
 - Configures models, tools, and server settings
 
-### 8. Tools (`tools/file_operations.py` and `tools/git_operations.py`)
+### 11. Tools (`tools/file_operations.py` and `tools/git_operations.py`)
 - Tool definition via get_definition()
 - Tool execution via execute()
-- **File operation tools**: read_file, write_file, list_directory, execute_command, search_files
-- **Git operation tools**: git_status, git_diff, git_log, git_branch
+- **File operation tools**: read_file, write_file, delete_file, list_directory, execute_command, search_files
+- **Git read tools**: git_status, git_diff, git_log, git_branch
+- **Git write tools** (require approval): git_commit, git_push, git_pull, git_stash
 
 ## Development Practices
 

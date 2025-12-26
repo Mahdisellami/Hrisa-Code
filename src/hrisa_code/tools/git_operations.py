@@ -329,12 +329,407 @@ class GitBranchTool:
             return f"Error executing git branch: {str(e)}"
 
 
+class GitCommitTool:
+    """Tool for creating git commits.
+
+    NOTE: This is a WRITE operation that requires user approval.
+    """
+
+    @staticmethod
+    def get_definition() -> Dict[str, Any]:
+        """Get the tool definition for Ollama function calling."""
+        return {
+            "type": "function",
+            "function": {
+                "name": "git_commit",
+                "description": "Create a git commit with staged changes. IMPORTANT: This is a write operation that requires user approval. Use git_status and git_diff first to review changes before committing.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "message": {
+                            "type": "string",
+                            "description": "The commit message describing the changes.",
+                        },
+                        "directory": {
+                            "type": "string",
+                            "description": "Directory of the git repository. Defaults to current working directory.",
+                        },
+                        "add_all": {
+                            "type": "boolean",
+                            "description": "Stage all modified and deleted files before committing (git add -A). Default is false.",
+                        },
+                    },
+                    "required": ["message"],
+                },
+            },
+        }
+
+    @staticmethod
+    def execute(
+        message: str,
+        directory: Optional[str] = None,
+        add_all: bool = False,
+    ) -> str:
+        """Create a git commit.
+
+        Args:
+            message: Commit message
+            directory: Directory of the git repository
+            add_all: Stage all changes before committing
+
+        Returns:
+            Commit output or error message
+        """
+        try:
+            cwd = Path(directory) if directory else None
+
+            # Stage all changes if requested
+            if add_all:
+                add_result = subprocess.run(
+                    ["git", "add", "-A"],
+                    capture_output=True,
+                    text=True,
+                    cwd=cwd,
+                    timeout=10,
+                )
+                if add_result.returncode != 0:
+                    return f"Error staging files: {add_result.stderr.strip()}"
+
+            # Create commit
+            result = subprocess.run(
+                ["git", "commit", "-m", message],
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                timeout=10,
+            )
+
+            if result.returncode != 0:
+                stderr = result.stderr.strip()
+                # Check for common issues
+                if "nothing to commit" in stderr.lower():
+                    return "No changes to commit. Use git_status to check repository state."
+                return f"Error creating commit: {stderr}"
+
+            return result.stdout.strip()
+
+        except subprocess.TimeoutExpired:
+            return "Error: Command timed out after 10 seconds"
+        except Exception as e:
+            return f"Error executing git commit: {str(e)}"
+
+
+class GitPushTool:
+    """Tool for pushing commits to remote repository.
+
+    NOTE: This is a WRITE operation that requires user approval.
+    """
+
+    @staticmethod
+    def get_definition() -> Dict[str, Any]:
+        """Get the tool definition for Ollama function calling."""
+        return {
+            "type": "function",
+            "function": {
+                "name": "git_push",
+                "description": "Push commits to remote repository. IMPORTANT: This is a write operation that makes changes visible to others and requires user approval. Review commits with git_log before pushing.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "directory": {
+                            "type": "string",
+                            "description": "Directory of the git repository. Defaults to current working directory.",
+                        },
+                        "remote": {
+                            "type": "string",
+                            "description": "Remote name to push to. Default is 'origin'.",
+                        },
+                        "branch": {
+                            "type": "string",
+                            "description": "Branch name to push. If not specified, pushes current branch.",
+                        },
+                        "set_upstream": {
+                            "type": "boolean",
+                            "description": "Set upstream tracking for the branch (-u flag). Useful for first push.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        }
+
+    @staticmethod
+    def execute(
+        directory: Optional[str] = None,
+        remote: str = "origin",
+        branch: Optional[str] = None,
+        set_upstream: bool = False,
+    ) -> str:
+        """Push commits to remote repository.
+
+        Args:
+            directory: Directory of the git repository
+            remote: Remote name (default: origin)
+            branch: Branch name to push
+            set_upstream: Set upstream tracking
+
+        Returns:
+            Push output or error message
+        """
+        try:
+            cwd = Path(directory) if directory else None
+
+            # Build git push command
+            cmd = ["git", "push"]
+            if set_upstream:
+                cmd.append("-u")
+            cmd.append(remote)
+            if branch:
+                cmd.append(branch)
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                timeout=60,  # Push can take longer
+            )
+
+            if result.returncode != 0:
+                stderr = result.stderr.strip()
+                # Provide helpful messages for common issues
+                if "no upstream branch" in stderr.lower():
+                    return f"Error: No upstream branch configured. Use set_upstream=true to configure.\n{stderr}"
+                return f"Error pushing to remote: {stderr}"
+
+            # Git push outputs to stderr even on success
+            output = result.stderr.strip() if result.stderr else result.stdout.strip()
+            return output if output else "Successfully pushed to remote"
+
+        except subprocess.TimeoutExpired:
+            return "Error: Command timed out after 60 seconds"
+        except Exception as e:
+            return f"Error executing git push: {str(e)}"
+
+
+class GitPullTool:
+    """Tool for pulling changes from remote repository.
+
+    NOTE: This is a WRITE operation that modifies local repository and requires user approval.
+    """
+
+    @staticmethod
+    def get_definition() -> Dict[str, Any]:
+        """Get the tool definition for Ollama function calling."""
+        return {
+            "type": "function",
+            "function": {
+                "name": "git_pull",
+                "description": "Pull changes from remote repository and merge into current branch. IMPORTANT: This is a write operation that modifies your local repository and requires user approval. Check git_status first to ensure clean working directory.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "directory": {
+                            "type": "string",
+                            "description": "Directory of the git repository. Defaults to current working directory.",
+                        },
+                        "remote": {
+                            "type": "string",
+                            "description": "Remote name to pull from. Default is 'origin'.",
+                        },
+                        "branch": {
+                            "type": "string",
+                            "description": "Branch name to pull. If not specified, pulls current branch.",
+                        },
+                        "rebase": {
+                            "type": "boolean",
+                            "description": "Use rebase instead of merge when pulling. Default is false.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        }
+
+    @staticmethod
+    def execute(
+        directory: Optional[str] = None,
+        remote: str = "origin",
+        branch: Optional[str] = None,
+        rebase: bool = False,
+    ) -> str:
+        """Pull changes from remote repository.
+
+        Args:
+            directory: Directory of the git repository
+            remote: Remote name (default: origin)
+            branch: Branch name to pull
+            rebase: Use rebase instead of merge
+
+        Returns:
+            Pull output or error message
+        """
+        try:
+            cwd = Path(directory) if directory else None
+
+            # Build git pull command
+            cmd = ["git", "pull"]
+            if rebase:
+                cmd.append("--rebase")
+            cmd.append(remote)
+            if branch:
+                cmd.append(branch)
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                timeout=60,  # Pull can take longer
+            )
+
+            if result.returncode != 0:
+                stderr = result.stderr.strip()
+                # Provide helpful messages for common issues
+                if "merge conflict" in stderr.lower() or "conflict" in stderr.lower():
+                    return f"Error: Merge conflict detected. Resolve conflicts manually.\n{stderr}"
+                if "uncommitted changes" in stderr.lower():
+                    return f"Error: Uncommitted changes would be overwritten. Commit or stash them first.\n{stderr}"
+                return f"Error pulling from remote: {stderr}"
+
+            return result.stdout.strip()
+
+        except subprocess.TimeoutExpired:
+            return "Error: Command timed out after 60 seconds"
+        except Exception as e:
+            return f"Error executing git pull: {str(e)}"
+
+
+class GitStashTool:
+    """Tool for stashing uncommitted changes.
+
+    NOTE: This is a WRITE operation that modifies working directory and requires user approval.
+    """
+
+    @staticmethod
+    def get_definition() -> Dict[str, Any]:
+        """Get the tool definition for Ollama function calling."""
+        return {
+            "type": "function",
+            "function": {
+                "name": "git_stash",
+                "description": "Stash uncommitted changes to save them temporarily. IMPORTANT: This is a write operation that clears your working directory and requires user approval. Use to save work-in-progress before switching branches or pulling changes.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "directory": {
+                            "type": "string",
+                            "description": "Directory of the git repository. Defaults to current working directory.",
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Message describing the stashed changes. Helps identify stash later.",
+                        },
+                        "include_untracked": {
+                            "type": "boolean",
+                            "description": "Include untracked files in stash (-u flag). Default is false.",
+                        },
+                        "action": {
+                            "type": "string",
+                            "description": "Stash action: 'save' (default), 'list', 'pop', 'apply', or 'drop'. Use 'list' to see all stashes.",
+                        },
+                        "stash_index": {
+                            "type": "integer",
+                            "description": "Index of stash to pop/apply/drop (0 is most recent). Only used with pop/apply/drop actions.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        }
+
+    @staticmethod
+    def execute(
+        directory: Optional[str] = None,
+        message: Optional[str] = None,
+        include_untracked: bool = False,
+        action: str = "save",
+        stash_index: Optional[int] = None,
+    ) -> str:
+        """Stash uncommitted changes.
+
+        Args:
+            directory: Directory of the git repository
+            message: Message describing the stash
+            include_untracked: Include untracked files
+            action: Stash action (save/list/pop/apply/drop)
+            stash_index: Index for pop/apply/drop operations
+
+        Returns:
+            Stash output or error message
+        """
+        try:
+            cwd = Path(directory) if directory else None
+
+            # Build git stash command based on action
+            if action == "list":
+                cmd = ["git", "stash", "list"]
+            elif action == "pop":
+                cmd = ["git", "stash", "pop"]
+                if stash_index is not None:
+                    cmd.append(f"stash@{{{stash_index}}}")
+            elif action == "apply":
+                cmd = ["git", "stash", "apply"]
+                if stash_index is not None:
+                    cmd.append(f"stash@{{{stash_index}}}")
+            elif action == "drop":
+                cmd = ["git", "stash", "drop"]
+                if stash_index is not None:
+                    cmd.append(f"stash@{{{stash_index}}}")
+            else:  # save (default)
+                cmd = ["git", "stash", "push"]
+                if include_untracked:
+                    cmd.append("-u")
+                if message:
+                    cmd.extend(["-m", message])
+
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                cwd=cwd,
+                timeout=10,
+            )
+
+            if result.returncode != 0:
+                stderr = result.stderr.strip()
+                if "no local changes to save" in stderr.lower():
+                    return "No local changes to stash"
+                if "no stash entries" in stderr.lower():
+                    return "No stash entries found"
+                return f"Error executing git stash: {stderr}"
+
+            output = result.stdout.strip()
+            return output if output else f"Stash operation '{action}' completed successfully"
+
+        except subprocess.TimeoutExpired:
+            return "Error: Command timed out after 10 seconds"
+        except Exception as e:
+            return f"Error executing git stash: {str(e)}"
+
+
 # Tool registry
 GIT_TOOLS = {
+    # Read-only operations
     "git_status": GitStatusTool,
     "git_diff": GitDiffTool,
     "git_log": GitLogTool,
     "git_branch": GitBranchTool,
+    # Write operations (require approval)
+    "git_commit": GitCommitTool,
+    "git_push": GitPushTool,
+    "git_pull": GitPullTool,
+    "git_stash": GitStashTool,
 }
 
 

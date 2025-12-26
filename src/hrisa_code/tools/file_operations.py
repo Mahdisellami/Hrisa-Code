@@ -380,6 +380,65 @@ class SearchFilesTool:
             return f"Error searching files: {str(e)}"
 
 
+class DeleteFileTool:
+    """Tool for deleting files.
+
+    NOTE: This is a WRITE operation that requires user approval.
+    """
+
+    @staticmethod
+    def get_definition() -> Dict[str, Any]:
+        """Get the tool definition for Ollama function calling."""
+        return {
+            "type": "function",
+            "function": {
+                "name": "delete_file",
+                "description": "Delete a file from the filesystem. IMPORTANT: This is a destructive write operation that cannot be undone and requires user approval. Use with extreme caution.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "Path to the file to delete (absolute or relative to working directory)",
+                        },
+                    },
+                    "required": ["file_path"],
+                },
+            },
+        }
+
+    @staticmethod
+    def execute(file_path: str) -> str:
+        """Delete a file.
+
+        Args:
+            file_path: Path to the file to delete
+
+        Returns:
+            Success message or error
+        """
+        try:
+            path = Path(file_path)
+
+            # Check if file exists
+            if not path.exists():
+                return f"Error: File not found: {file_path}"
+
+            # Check if it's a file (not a directory)
+            if not path.is_file():
+                return f"Error: Path is not a file: {file_path}. Use remove_directory for directories."
+
+            # Delete the file
+            path.unlink()
+
+            return f"Successfully deleted file: {file_path}"
+
+        except PermissionError:
+            return f"Error: Permission denied to delete: {file_path}"
+        except Exception as e:
+            return f"Error deleting file: {str(e)}"
+
+
 # Tool registry
 AVAILABLE_TOOLS = {
     "read_file": ReadFileTool,
@@ -387,6 +446,7 @@ AVAILABLE_TOOLS = {
     "list_directory": ListDirectoryTool,
     "execute_command": ExecuteCommandTool,
     "search_files": SearchFilesTool,
+    "delete_file": DeleteFileTool,
     **GIT_TOOLS,  # Add git tools
 }
 

@@ -15,6 +15,15 @@ from rich.spinner import Spinner
 from hrisa_code.core.ollama_client import OllamaClient, OllamaConfig
 from hrisa_code.core.loop_detector import LoopDetector, LoopStatus
 from hrisa_code.core.goal_tracker import GoalTracker, GoalStatus
+from hrisa_code.core.approval_manager import (
+    ApprovalManager,
+    ApprovalType,
+    create_file_write_request,
+    create_file_delete_request,
+    create_command_request,
+    create_git_commit_request,
+    create_git_push_request,
+)
 from hrisa_code.tools.file_operations import AVAILABLE_TOOLS, get_all_tool_definitions
 
 
@@ -28,6 +37,7 @@ class ConversationManager:
         system_prompt: Optional[str] = None,
         enable_tools: bool = True,
         task_manager=None,
+        auto_approve: bool = False,
     ):
         """Initialize the conversation manager.
 
@@ -37,6 +47,7 @@ class ConversationManager:
             system_prompt: Optional system prompt
             enable_tools: Whether to enable tool calling (some models don't support it)
             task_manager: Optional TaskManager for background execution
+            auto_approve: If True, automatically approve all operations (for testing)
         """
         self.ollama_client = OllamaClient(ollama_config)
         self.working_directory = working_directory
@@ -63,6 +74,9 @@ class ConversationManager:
             evaluation_model="qwen2.5-coder:7b",  # Lightweight model for checks
             check_frequency=3  # Check every 3 rounds
         )
+
+        # Approval manager for write operations
+        self.approval_manager = ApprovalManager(auto_approve=auto_approve)
 
     def _extract_tool_calls_from_text(self, text: str) -> List[Dict[str, Any]]:
         """Extract tool calls from text response (for models that output JSON as text).
@@ -214,6 +228,248 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
         return "[WARNING] This operation may be destructive. Continue?"
 
+    def _check_approval(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[str]:
+        """Check if operation requires approval and request it.
+
+        Args:
+            tool_name: Name of the tool
+            arguments: Tool arguments
+
+        Returns:
+            Error message if operation denied, None if approved or doesn't need approval
+        """
+        # Check write_file operations
+        if tool_name == "write_file":
+            file_path = arguments.get("file_path", "")
+            new_content = arguments.get("content", "")
+
+            # Check if file exists (overwrite case)
+            path = Path(file_path)
+            old_content = None
+            if path.exists():
+                try:
+                    old_content = path.read_text()
+                except Exception:
+                    pass  # If can't read, treat as new file
+
+            # Create approval request
+            request = create_file_write_request(
+                file_path=file_path,
+                new_content=new_content,
+                old_content=old_content
+            )
+
+            # Request approval
+            if not self.approval_manager.is_approved(request):
+                return f"[DENIED] User denied write operation to: {file_path}"
+
+        # Check delete_file operations
+        elif tool_name == "delete_file":
+            file_path = arguments.get("file_path", "")
+
+            # Create approval request
+            request = create_file_delete_request(file_path=file_path)
+
+            # Request approval
+            if not self.approval_manager.is_approved(request):
+                return f"[DENIED] User denied delete operation for: {file_path}"
+
+        # Check destructive commands
+        elif tool_name == "execute_command":
+            command = arguments.get("command", "")
+            if self._is_command_destructive(command):
+                request = create_command_request(command)
+
+                if not self.approval_manager.is_approved(request):
+                    return f"[DENIED] User denied destructive command: {command}"
+
+        # Check git_commit operations
+        elif tool_name == "git_commit":
+            message = arguments.get("message", "")
+            directory = arguments.get("directory", str(self.working_directory))
+
+            # Get list of files that will be committed
+            # Try to get staged files, fall back to status if needed
+            files = self._get_staged_files(directory)
+
+            # Create approval request
+            request = create_git_commit_request(message=message, files=files)
+
+            if not self.approval_manager.is_approved(request):
+                return f"[DENIED] User denied git commit"
+
+        # Check git_push operations
+        elif tool_name == "git_push":
+            remote = arguments.get("remote", "origin")
+            branch = arguments.get("branch", self._get_current_branch(arguments.get("directory", str(self.working_directory))))
+
+            # Create approval request
+            request = create_git_push_request(branch=branch, remote=remote)
+
+            if not self.approval_manager.is_approved(request):
+                return f"[DENIED] User denied git push to {remote}/{branch}"
+
+        # Check git_pull operations
+        elif tool_name == "git_pull":
+            remote = arguments.get("remote", "origin")
+            branch = arguments.get("branch", "")
+            directory = arguments.get("directory", str(self.working_directory))
+
+            # Create approval request using ApprovalRequest directly
+            from hrisa_code.core.approval_manager import ApprovalRequest
+            request = ApprovalRequest(
+                operation_type=ApprovalType.GIT_PULL,
+                description=f"Pull changes from {remote}",
+                details={
+                    "Remote": remote,
+                    "Branch": branch if branch else "current branch",
+                    "Warning": "This will merge remote changes into your local branch!"
+                },
+                command=f"git pull {remote} {branch}".strip()
+            )
+
+            if not self.approval_manager.is_approved(request):
+                return f"[DENIED] User denied git pull from {remote}"
+
+        # Check git_stash operations
+        elif tool_name == "git_stash":
+            action = arguments.get("action", "save")
+
+            # Only require approval for write operations (not list)
+            if action != "list":
+                from hrisa_code.core.approval_manager import ApprovalRequest
+
+                if action == "save":
+                    message = arguments.get("message", "")
+                    description = f"Stash uncommitted changes"
+                    details = {
+                        "Action": "Save stash",
+                        "Message": message if message else "(no message)",
+                        "Warning": "This will clear your working directory!"
+                    }
+                elif action in ["pop", "apply"]:
+                    stash_index = arguments.get("stash_index", 0)
+                    description = f"{action.capitalize()} stashed changes"
+                    details = {
+                        "Action": f"{action.capitalize()} stash",
+                        "Stash": f"stash@{{{stash_index}}}",
+                        "Warning": f"This will apply stashed changes to your working directory!"
+                    }
+                elif action == "drop":
+                    stash_index = arguments.get("stash_index", 0)
+                    description = f"Drop stashed changes"
+                    details = {
+                        "Action": "Drop stash",
+                        "Stash": f"stash@{{{stash_index}}}",
+                        "Warning": "This operation cannot be undone!"
+                    }
+                else:
+                    # Unknown action, still require approval
+                    description = f"Execute git stash {action}"
+                    details = {"Action": action}
+
+                request = ApprovalRequest(
+                    operation_type=ApprovalType.GIT_STASH,
+                    description=description,
+                    details=details,
+                    command=f"git stash {action}"
+                )
+
+                if not self.approval_manager.is_approved(request):
+                    return f"[DENIED] User denied git stash {action}"
+
+        return None
+
+    def _is_command_destructive(self, command: str) -> bool:
+        """Check if a command is potentially destructive.
+
+        Args:
+            command: Command to check
+
+        Returns:
+            True if command is destructive
+        """
+        command_lower = command.lower()
+        dangerous_patterns = ["rm ", "del ", "delete", "rmdir", "format", "mkfs", "truncate", ">"]
+        return any(pattern in command_lower for pattern in dangerous_patterns)
+
+    def _get_staged_files(self, directory: str) -> List[str]:
+        """Get list of staged files in git repository.
+
+        Args:
+            directory: Directory of the git repository
+
+        Returns:
+            List of staged file paths
+        """
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                ["git", "diff", "--cached", "--name-only"],
+                capture_output=True,
+                text=True,
+                cwd=directory,
+                timeout=5,
+            )
+
+            if result.returncode == 0 and result.stdout.strip():
+                files = result.stdout.strip().split("\n")
+                return [f.strip() for f in files if f.strip()]
+
+            # If no staged files, get all modified files
+            result = subprocess.run(
+                ["git", "status", "--short"],
+                capture_output=True,
+                text=True,
+                cwd=directory,
+                timeout=5,
+            )
+
+            if result.returncode == 0 and result.stdout.strip():
+                # Parse git status short format
+                files = []
+                for line in result.stdout.strip().split("\n"):
+                    if line.strip():
+                        # Format is "XY filename" where X and Y are status codes
+                        parts = line.strip().split(maxsplit=1)
+                        if len(parts) >= 2:
+                            files.append(parts[1])
+                return files if files else ["(no files)"]
+
+            return ["(no files)"]
+
+        except Exception:
+            return ["(unknown files)"]
+
+    def _get_current_branch(self, directory: str) -> str:
+        """Get current git branch name.
+
+        Args:
+            directory: Directory of the git repository
+
+        Returns:
+            Current branch name or "unknown"
+        """
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                ["git", "branch", "--show-current"],
+                capture_output=True,
+                text=True,
+                cwd=directory,
+                timeout=5,
+            )
+
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+
+            return "unknown"
+
+        except Exception:
+            return "unknown"
+
     def _validate_path_arguments(self, tool_name: str, arguments: Dict[str, Any]) -> Optional[str]:
         """Validate that path arguments are not placeholders.
 
@@ -287,6 +543,11 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         validation_error = self._validate_path_arguments(tool_name, arguments)
         if validation_error:
             return validation_error
+
+        # Check for approval on write operations
+        approval_result = self._check_approval(tool_name, arguments)
+        if approval_result:
+            return approval_result  # Return denial message if not approved
 
         # Handle background execution for execute_command
         # Parse background parameter properly (handle both boolean and string values)

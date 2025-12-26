@@ -18,6 +18,7 @@ from hrisa_code.tools.file_operations import (
     WriteFileTool,
     ListDirectoryTool,
     ExecuteCommandTool,
+    DeleteFileTool,
     AVAILABLE_TOOLS,
     get_all_tool_definitions,
 )
@@ -347,6 +348,67 @@ class TestToolRegistry:
             assert callable(tool_class.execute)
 
 
+class TestDeleteFileTool:
+    """Test DeleteFileTool."""
+
+    def test_get_definition(self):
+        """Test tool definition format."""
+        definition = DeleteFileTool.get_definition()
+
+        assert definition["type"] == "function"
+        assert definition["function"]["name"] == "delete_file"
+        assert "IMPORTANT" in definition["function"]["description"]
+        assert "parameters" in definition["function"]
+        assert "file_path" in definition["function"]["parameters"]["properties"]
+        assert "file_path" in definition["function"]["parameters"]["required"]
+
+    def test_execute_delete_existing_file(self, tmp_path):
+        """Test deleting an existing file."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("content")
+
+        assert test_file.exists()
+
+        result = DeleteFileTool.execute(str(test_file))
+        assert "Successfully deleted" in result
+        assert not test_file.exists()
+
+    def test_execute_delete_non_existent_file(self, tmp_path):
+        """Test deleting a non-existent file."""
+        test_file = tmp_path / "nonexistent.txt"
+
+        result = DeleteFileTool.execute(str(test_file))
+        assert "Error: File not found" in result
+
+    def test_execute_delete_directory_fails(self, tmp_path):
+        """Test that attempting to delete a directory fails."""
+        test_dir = tmp_path / "testdir"
+        test_dir.mkdir()
+
+        result = DeleteFileTool.execute(str(test_dir))
+        assert "Error" in result
+        assert "not a file" in result
+        assert test_dir.exists()  # Directory should still exist
+
+    def test_execute_delete_relative_path(self, tmp_path):
+        """Test deleting file with relative path."""
+        test_file = tmp_path / "test.txt"
+        test_file.write_text("content")
+
+        result = DeleteFileTool.execute(str(test_file))
+        assert "Successfully deleted" in result
+        assert not test_file.exists()
+
+    def test_execute_delete_large_file(self, tmp_path):
+        """Test deleting a large file."""
+        test_file = tmp_path / "large.txt"
+        test_file.write_text("x" * 10000)  # 10KB file
+
+        result = DeleteFileTool.execute(str(test_file))
+        assert "Successfully deleted" in result
+        assert not test_file.exists()
+
+
 class TestToolIntegration:
     """Test tool integration scenarios."""
 
@@ -391,6 +453,21 @@ class TestToolIntegration:
         # On systems without cat, this might fail
         if "Error" not in cat_result:
             assert content in cat_result
+
+    def test_write_then_delete_file(self, tmp_path):
+        """Test writing then deleting a file."""
+        test_file = tmp_path / "test.txt"
+        content = "Test content"
+
+        # Write
+        write_result = WriteFileTool.execute(str(test_file), content)
+        assert "Successfully" in write_result
+        assert test_file.exists()
+
+        # Delete
+        delete_result = DeleteFileTool.execute(str(test_file))
+        assert "Successfully deleted" in delete_result
+        assert not test_file.exists()
 
 
 # Run with: pytest tests/test_file_operations.py -v
