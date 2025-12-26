@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 class ModelConfig(BaseModel):
     """LLM model configuration."""
 
-    name: str = "codellama"
+    name: str = "qwen2.5:72b"
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     top_p: float = Field(default=0.9, ge=0.0, le=1.0)
     top_k: int = Field(default=40, ge=0)

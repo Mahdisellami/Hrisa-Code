@@ -2,10 +2,10 @@
 # Copy this file to ~/.config/hrisa-code/config.yaml or .hrisa/config.yaml
 
 model:
-  name: codellama  # Or: deepseek-coder, mistral, llama2, etc.
-  temperature: 0.7  # Creativity level (0.0 - 2.0)
-  top_p: 0.9        # Nucleus sampling parameter
-  top_k: 40         # Top-k sampling parameter
+  name: qwen2.5:72b  # Or: qwen2.5-coder:32b, deepseek-coder, mistral, llama2, etc.
+  temperature: 0.7   # Creativity level (0.0 - 2.0)
+  top_p: 0.9         # Nucleus sampling parameter
+  top_k: 40          # Top-k sampling parameter
 
 ollama:
   host: http://localhost:11434  # Ollama server URL

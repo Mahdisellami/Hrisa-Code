@@ -11,7 +11,7 @@ from hrisa_code.core.config import Config, ModelConfig, OllamaServerConfig, Tool
 def test_model_config_defaults():
     """Test ModelConfig default values."""
     config = ModelConfig()
-    assert config.name == "codellama"
+    assert config.name == "qwen2.5:72b"
     assert config.temperature == 0.7
     assert config.top_p == 0.9
     assert config.top_k == 40
@@ -62,7 +62,7 @@ def test_config_save_and_load():
 def test_config_load_nonexistent():
     """Test loading non-existent config returns defaults."""
     config = Config.load(Path("/nonexistent/config.yaml"))
-    assert config.model.name == "codellama"
+    assert config.model.name == "qwen2.5:72b"
 
 
 def test_get_default_config_path():

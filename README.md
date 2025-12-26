@@ -93,7 +93,7 @@ After local installation:
 ollama serve
 
 # 2. Pull a coding model (if you haven't already)
-ollama pull codellama
+ollama pull qwen2.5:72b
 
 # 3. Initialize configuration (optional)
 hrisa init
@@ -181,7 +181,7 @@ Example configuration:
 
 ```yaml
 model:
-  name: codellama
+  name: qwen2.5:72b
   temperature: 0.7
   top_p: 0.9
   top_k: 40
@@ -258,15 +258,18 @@ Assistant: *uses git_log with file_path parameter*
 
 For coding tasks, these models work well:
 
-- **codellama** (7B, 13B, 34B): General purpose coding
+- **qwen2.5:72b** (Recommended): Excellent reasoning and coding capabilities
+- **qwen2.5-coder:32b**: Specialized for coding with text-based tool calling support
 - **deepseek-coder** (6.7B, 33B): Strong coding capabilities
+- **codellama** (7B, 13B, 34B): General purpose coding
 - **mistral**: Good general purpose model
 - **llama3**: Latest Meta model with strong reasoning
 
 Pull a model:
 
 ```bash
-ollama pull codellama
+ollama pull qwen2.5:72b
+ollama pull qwen2.5-coder:32b
 ollama pull deepseek-coder
 ```
 

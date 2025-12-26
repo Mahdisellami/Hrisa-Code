@@ -26,9 +26,10 @@ ollama serve
 
 ```bash
 # Recommended for coding
-ollama pull codellama
+ollama pull qwen2.5:72b
 
 # Or try these alternatives
+ollama pull qwen2.5-coder:32b
 ollama pull deepseek-coder
 ollama pull mistral
 ```
@@ -86,7 +87,7 @@ Edit `.hrisa/config.yaml` to customize:
 
 ```yaml
 model:
-  name: codellama
+  name: qwen2.5:72b
   temperature: 0.7
 
 tools:
