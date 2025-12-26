@@ -83,6 +83,40 @@ class TestGoalTracker:
         assert tracker.tool_results[0].tool_name == "tool_0"
         assert tracker.tool_results[4].tool_name == "tool_4"
 
+    def test_add_tool_result_with_denied_sets_status_complete(self):
+        """Test that [DENIED] result immediately sets status to COMPLETE."""
+        tracker = GoalTracker()
+        tracker.set_user_question("Can you create a git commit?")
+
+        # Add a denied result
+        tracker.add_tool_result(
+            tool_name="git_commit",
+            arguments={"message": "test"},
+            result="[DENIED] User denied git commit",
+            had_error=False
+        )
+
+        # Status should be immediately set to COMPLETE
+        assert tracker.current_status == GoalStatus.COMPLETE
+        assert len(tracker.tool_results) == 1
+
+    def test_add_tool_result_without_denied_keeps_status_unknown(self):
+        """Test that non-denied results don't change status to COMPLETE."""
+        tracker = GoalTracker()
+        tracker.set_user_question("What is the git status?")
+
+        # Add a successful result
+        tracker.add_tool_result(
+            tool_name="git_status",
+            arguments={"directory": "."},
+            result="On branch main\nnothing to commit",
+            had_error=False
+        )
+
+        # Status should remain UNKNOWN (not automatically COMPLETE)
+        assert tracker.current_status == GoalStatus.UNKNOWN
+        assert len(tracker.tool_results) == 1
+
     def test_should_check_progress_first_round(self):
         """Test that first round should check progress."""
         tracker = GoalTracker(check_frequency=3)
