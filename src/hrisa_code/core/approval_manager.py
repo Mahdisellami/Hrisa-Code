@@ -8,7 +8,7 @@ import difflib
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
-from prompt_toolkit import prompt as pt_prompt
+from prompt_toolkit import PromptSession
 from prompt_toolkit.styles import Style as PTStyle
 
 
@@ -202,26 +202,23 @@ class ApprovalManager:
             self.console.print("  [cyan]v[/cyan] - Never: Never approve this type (for this session)")
             self.console.print()
 
-            # Use prompt_toolkit for input (compatible with interactive session)
+            # Use prompt_toolkit's async API directly
+            # Create a prompt session for approval
+            session = PromptSession()
+
             # Loop until valid input received
             while True:
                 try:
-                    # Use prompt_toolkit's prompt function with executor
-                    loop = asyncio.get_event_loop()
-
                     # Define prompt style
                     style = PTStyle.from_dict({
                         '': '#ffff00 bold',  # Yellow bold
                     })
 
-                    # Get input using prompt_toolkit in executor
-                    choice = await loop.run_in_executor(
-                        None,
-                        lambda: pt_prompt(
-                            "Enter choice (y/n/a/v, default: n): ",
-                            style=style,
-                            default="n"
-                        )
+                    # Get input using prompt_toolkit's async method
+                    choice = await session.prompt_async(
+                        "Enter choice (y/n/a/v, default: n): ",
+                        style=style,
+                        default="n"
                     )
 
                     # Handle empty input
