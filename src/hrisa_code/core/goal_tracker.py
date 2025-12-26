@@ -89,6 +89,10 @@ class GoalTracker:
         )
         self.tool_results.append(tool_result)
 
+        # Check if user denied an operation - this is a definitive completion
+        if result.startswith("[DENIED]"):
+            self.current_status = GoalStatus.COMPLETE
+
     def should_check_progress(self) -> bool:
         """Determine if we should check progress now.
 

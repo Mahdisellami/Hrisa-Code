@@ -914,26 +914,34 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                     had_error=tool_result_data["had_error"]
                 )
 
-            # Check goal progress periodically
-            if self.goal_tracker.should_check_progress():
+            # Check if status was immediately set to COMPLETE (e.g., user denial)
+            # This takes precedence over periodic checks
+            goal_status = self.goal_tracker.current_status
+
+            # Otherwise, check goal progress periodically using LLM evaluation
+            if goal_status == GoalStatus.UNKNOWN and self.goal_tracker.should_check_progress():
                 goal_status = await self.goal_tracker.check_progress()
 
-                if goal_status in (GoalStatus.COMPLETE, GoalStatus.STUCK, GoalStatus.CLARIFICATION_NEEDED):
-                    intervention_msg = self.goal_tracker.get_intervention_message(goal_status)
+            # Handle intervention for any detected status (immediate or periodic)
+            if goal_status in (GoalStatus.COMPLETE, GoalStatus.STUCK, GoalStatus.CLARIFICATION_NEEDED):
+                intervention_msg = self.goal_tracker.get_intervention_message(goal_status)
 
-                    # Display intervention to user
-                    style = "green bold" if goal_status == GoalStatus.COMPLETE else "yellow"
-                    self.console.print(f"\n[{style}]{intervention_msg}[/{style}]\n")
+                # Display intervention to user
+                style = "green bold" if goal_status == GoalStatus.COMPLETE else "yellow"
+                self.console.print(f"\n[{style}]{intervention_msg}[/{style}]\n")
 
-                    # Add intervention as tool result if goal is complete or stuck
-                    if goal_status in (GoalStatus.COMPLETE, GoalStatus.STUCK):
-                        tool_results.append({
-                            "tool_call_id": "",
-                            "role": "tool",
-                            "content": intervention_msg,
-                        })
+                # Add intervention as tool result if goal is complete or stuck
+                if goal_status in (GoalStatus.COMPLETE, GoalStatus.STUCK):
+                    tool_results.append({
+                        "tool_call_id": "",
+                        "role": "tool",
+                        "content": intervention_msg,
+                    })
 
             # Send tool results back to LLM and check for more tool calls
+            # If goal is COMPLETE, don't provide tools - force a final response
+            tools_for_next_round = None if goal_status == GoalStatus.COMPLETE else self.tool_definitions
+
             response_start = time.time()
             with self.console.status(
                 "[bold green]Generating response...[/bold green]",
@@ -942,7 +950,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 raw_response = await self.ollama_client.chat_with_tools_result_raw(
                     tool_results=tool_results,
                     system_prompt=self.system_prompt,
-                    tools=self.tool_definitions,  # Keep tools available for follow-up
+                    tools=tools_for_next_round,
                 )
             response_time = time.time() - response_start
             if response_time > 0.5:
