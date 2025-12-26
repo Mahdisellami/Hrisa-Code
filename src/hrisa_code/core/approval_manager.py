@@ -108,16 +108,16 @@ class ApprovalManager:
         """Display details about the operation requiring approval."""
         # Title based on operation type
         title_map = {
-            ApprovalType.FILE_WRITE: "📝 File Write Operation",
-            ApprovalType.FILE_DELETE: "🗑️  File Delete Operation",
-            ApprovalType.GIT_COMMIT: "📦 Git Commit Operation",
-            ApprovalType.GIT_PUSH: "🚀 Git Push Operation",
-            ApprovalType.GIT_PULL: "⬇️  Git Pull Operation",
-            ApprovalType.GIT_STASH: "📥 Git Stash Operation",
-            ApprovalType.COMMAND_DESTRUCTIVE: "⚠️  Destructive Command",
+            ApprovalType.FILE_WRITE: "File Write Operation",
+            ApprovalType.FILE_DELETE: "File Delete Operation",
+            ApprovalType.GIT_COMMIT: "Git Commit Operation",
+            ApprovalType.GIT_PUSH: "Git Push Operation",
+            ApprovalType.GIT_PULL: "Git Pull Operation",
+            ApprovalType.GIT_STASH: "Git Stash Operation",
+            ApprovalType.COMMAND_DESTRUCTIVE: "Destructive Command",
         }
 
-        title = title_map.get(request.operation_type, "⚠️  Operation Requires Approval")
+        title = title_map.get(request.operation_type, "Operation Requires Approval")
 
         # Build content
         content_lines = [f"[bold]{request.description}[/bold]", ""]
@@ -191,14 +191,14 @@ class ApprovalManager:
 
         try:
             # Use questionary with async for compatibility with running event loop
-            # Users can use arrow keys OR press the shortcut key directly
+            # Arrow keys to select, then Enter to confirm
             choice = await questionary.select(
-                "Approve this operation?",
+                "Approve this operation? (Use arrow keys, then press Enter)",
                 choices=[
-                    Choice(title="✅ Yes - Approve this operation", value="y", shortcut_key="y"),
-                    Choice(title="❌ No - Deny this operation", value="n", shortcut_key="n"),
-                    Choice(title="⭐ Always - Always approve this type (this session)", value="a", shortcut_key="a"),
-                    Choice(title="🚫 Never - Never approve this type (this session)", value="v", shortcut_key="v"),
+                    Choice(title="[y] Yes - Approve this operation", value="y", shortcut_key="y"),
+                    Choice(title="[n] No - Deny this operation", value="n", shortcut_key="n"),
+                    Choice(title="[a] Always - Always approve this type (this session)", value="a", shortcut_key="a"),
+                    Choice(title="[v] Never - Never approve this type (this session)", value="v", shortcut_key="v"),
                 ],
                 default="n",
                 style=questionary.Style([
