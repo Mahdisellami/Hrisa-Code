@@ -8,7 +8,6 @@ import difflib
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
-from rich.prompt import Prompt, Confirm
 
 
 class ApprovalType(Enum):
@@ -197,20 +196,30 @@ class ApprovalManager:
         self.console.print()
 
         while True:
-            choice = Prompt.ask(
-                "[bold yellow]Approve this operation?[/bold yellow]",
-                choices=["y", "n", "a", "v"],
-                default="n"
-            ).lower()
+            # Use input() instead of Prompt.ask() for better compatibility
+            try:
+                self.console.print("[bold yellow]Approve this operation? [y/n/a/v] (default: n):[/bold yellow] ", end="")
+                choice = input().strip().lower()
 
-            if choice == "y":
-                return ApprovalDecision.YES
-            elif choice == "n":
+                # Handle empty input (use default)
+                if not choice:
+                    choice = "n"
+
+                if choice in ["y", "n", "a", "v"]:
+                    if choice == "y":
+                        return ApprovalDecision.YES
+                    elif choice == "n":
+                        return ApprovalDecision.NO
+                    elif choice == "a":
+                        return ApprovalDecision.ALWAYS
+                    elif choice == "v":
+                        return ApprovalDecision.NEVER
+                else:
+                    self.console.print("[red]Invalid choice. Please enter y, n, a, or v.[/red]")
+            except (EOFError, KeyboardInterrupt):
+                # User pressed Ctrl+C or Ctrl+D - default to deny
+                self.console.print("\n[yellow]Operation cancelled[/yellow]")
                 return ApprovalDecision.NO
-            elif choice == "a":
-                return ApprovalDecision.ALWAYS
-            elif choice == "v":
-                return ApprovalDecision.NEVER
 
     def is_approved(self, request: ApprovalRequest) -> bool:
         """Check if an operation is approved (convenience method).
