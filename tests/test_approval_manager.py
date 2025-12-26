@@ -148,9 +148,9 @@ class TestApprovalManager:
         decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.NO
 
-    @patch('builtins.input', return_value="y")
+    @patch('hrisa_code.core.approval_manager.pt_prompt', return_value="y")
     @pytest.mark.asyncio
-    async def test_user_approves_operation(self, mock_input):
+    async def test_user_approves_operation(self, mock_prompt):
         """Test user approving operation."""
         manager = ApprovalManager(auto_approve=False)
 
@@ -163,9 +163,9 @@ class TestApprovalManager:
         decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.YES
 
-    @patch('builtins.input', return_value="n")
+    @patch('hrisa_code.core.approval_manager.pt_prompt', return_value="n")
     @pytest.mark.asyncio
-    async def test_user_denies_operation(self, mock_input):
+    async def test_user_denies_operation(self, mock_prompt):
         """Test user denying operation."""
         manager = ApprovalManager(auto_approve=False)
 
@@ -178,9 +178,9 @@ class TestApprovalManager:
         decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.NO
 
-    @patch('builtins.input', return_value="a")
+    @patch('hrisa_code.core.approval_manager.pt_prompt', return_value="a")
     @pytest.mark.asyncio
-    async def test_user_always_approve_updates_session_memory(self, mock_input):
+    async def test_user_always_approve_updates_session_memory(self, mock_prompt):
         """Test that 'always' choice updates session memory."""
         manager = ApprovalManager(auto_approve=False)
 
@@ -198,9 +198,9 @@ class TestApprovalManager:
         # Should add to always approve set
         assert ApprovalType.FILE_WRITE in manager._always_approve
 
-    @patch('builtins.input', return_value="v")
+    @patch('hrisa_code.core.approval_manager.pt_prompt', return_value="v")
     @pytest.mark.asyncio
-    async def test_user_never_approve_updates_session_memory(self, mock_input):
+    async def test_user_never_approve_updates_session_memory(self, mock_prompt):
         """Test that 'never' choice updates session memory."""
         manager = ApprovalManager(auto_approve=False)
 
@@ -419,9 +419,9 @@ class TestHelperFunctions:
 class TestApprovalManagerIntegration:
     """Test ApprovalManager integration scenarios."""
 
-    @patch('builtins.input', return_value="a")
+    @patch('hrisa_code.core.approval_manager.pt_prompt', return_value="a")
     @pytest.mark.asyncio
-    async def test_multiple_operations_with_session_memory(self, mock_input):
+    async def test_multiple_operations_with_session_memory(self, mock_prompt):
         """Test multiple operations using session memory."""
         # First approval: user chooses 'always'
         manager = ApprovalManager(auto_approve=False)
@@ -447,11 +447,11 @@ class TestApprovalManagerIntegration:
         assert decision2 == ApprovalDecision.YES
 
         # Should only prompt once
-        assert mock_input.call_count == 1
+        assert mock_prompt.call_count == 1
 
-    @patch('builtins.input')
+    @patch('hrisa_code.core.approval_manager.pt_prompt')
     @pytest.mark.asyncio
-    async def test_different_operation_types_independent(self, mock_input):
+    async def test_different_operation_types_independent(self, mock_prompt):
         """Test that different operation types are tracked independently."""
         manager = ApprovalManager(auto_approve=False)
 
@@ -478,7 +478,7 @@ class TestApprovalManagerIntegration:
         assert await manager.request_approval(push_request) == ApprovalDecision.NO
 
         # Should not have prompted user
-        assert mock_input.call_count == 0
+        assert mock_prompt.call_count == 0
 
     def test_file_write_with_diff_preview(self, tmp_path):
         """Test file write request includes proper details for diff."""

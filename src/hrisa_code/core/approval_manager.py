@@ -8,8 +8,8 @@ import difflib
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
-import questionary
-from questionary import Choice
+from prompt_toolkit import prompt as pt_prompt
+from prompt_toolkit.styles import Style as PTStyle
 
 
 class ApprovalType(Enum):
@@ -202,31 +202,42 @@ class ApprovalManager:
             self.console.print("  [cyan]v[/cyan] - Never: Never approve this type (for this session)")
             self.console.print()
 
-            # Use plain input() with executor for compatibility with running event loop
+            # Use prompt_toolkit for input (compatible with interactive session)
             # Loop until valid input received
             while True:
-                # Run input() in executor to avoid blocking the event loop
-                loop = asyncio.get_event_loop()
+                try:
+                    # Use prompt_toolkit's prompt function with executor
+                    loop = asyncio.get_event_loop()
 
-                # Use plain print to ensure proper flushing before input()
-                # Rich console and input() don't mix well
-                import sys
-                sys.stdout.write("\033[1;33mEnter choice [y/n/a/v] (default: n):\033[0m ")
-                sys.stdout.flush()
+                    # Define prompt style
+                    style = PTStyle.from_dict({
+                        '': '#ffff00 bold',  # Yellow bold
+                    })
 
-                # Get input in executor
-                choice = await loop.run_in_executor(None, input)
+                    # Get input using prompt_toolkit in executor
+                    choice = await loop.run_in_executor(
+                        None,
+                        lambda: pt_prompt(
+                            "Enter choice (y/n/a/v, default: n): ",
+                            style=style,
+                            default="n"
+                        )
+                    )
 
-                # Use default if empty
-                if not choice or not choice.strip():
-                    choice = "n"
+                    # Handle empty input
+                    if not choice or not choice.strip():
+                        choice = "n"
 
-                choice = choice.strip().lower()
+                    choice = choice.strip().lower()
 
-                if choice in ['y', 'n', 'a', 'v']:
-                    break
-                else:
-                    self.console.print("[red]Invalid choice. Please enter y, n, a, or v.[/red]")
+                    if choice in ['y', 'n', 'a', 'v']:
+                        break
+                    else:
+                        self.console.print("[red]Invalid choice. Please enter y, n, a, or v.[/red]")
+
+                except (EOFError, KeyboardInterrupt):
+                    # User pressed Ctrl+C or Ctrl+D
+                    return ApprovalDecision.NO
 
             # Map choice to decision
             if choice == "y":
@@ -243,6 +254,10 @@ class ApprovalManager:
         except (EOFError, KeyboardInterrupt):
             # User pressed Ctrl+C or Ctrl+D - default to deny
             self.console.print("\n[yellow]Operation cancelled[/yellow]")
+            return ApprovalDecision.NO
+        except Exception as e:
+            # Unexpected error - default to deny
+            self.console.print(f"\n[red]Error during approval: {str(e)}[/red]")
             return ApprovalDecision.NO
 
     async def is_approved(self, request: ApprovalRequest) -> bool:
