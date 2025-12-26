@@ -13,6 +13,7 @@ from rich.text import Text
 from rich.spinner import Spinner
 
 from hrisa_code.core.ollama_client import OllamaClient, OllamaConfig
+from hrisa_code.core.loop_detector import LoopDetector, LoopStatus
 from hrisa_code.tools.file_operations import AVAILABLE_TOOLS, get_all_tool_definitions
 
 
@@ -47,6 +48,13 @@ class ConversationManager:
         # Track last tool execution results for error recovery
         self.last_tool_results: list[dict] = []
         self.last_tools_had_errors: bool = False
+
+        # Loop detection to prevent unproductive repeated tool calls
+        self.loop_detector = LoopDetector(
+            max_identical_calls=3,
+            warning_threshold=2,
+            history_window=10
+        )
 
     def _extract_tool_calls_from_text(self, text: str) -> List[Dict[str, Any]]:
         """Extract tool calls from text response (for models that output JSON as text).
@@ -465,6 +473,9 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         self.last_tool_results = []
         self.last_tools_had_errors = False
 
+        # Reset loop detector for new conversation turn
+        self.loop_detector.reset()
+
         # Get initial response from LLM
         start_time = time.time()
         with self.console.status("[bold blue]Thinking...[/bold blue]", spinner="dots"):
@@ -503,6 +514,10 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
             if tool_round > 1:
                 self.console.print(f"[dim]→ Tool round {tool_round}[/dim]")
+
+            # Increment loop detector round counter
+            self.loop_detector.next_round()
+
             tool_calls = raw_response["message"]["tool_calls"]
 
             # Execute each tool call
@@ -511,6 +526,33 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 function = tool_call.get("function", {})
                 tool_name = function.get("name")
                 arguments = function.get("arguments", {})
+
+                # Check for loops before executing
+                loop_status = self.loop_detector.check_loop(tool_name, arguments)
+
+                # Handle loop detection
+                if loop_status in (LoopStatus.WARNING, LoopStatus.DETECTED):
+                    intervention_msg = self.loop_detector.get_intervention_message(
+                        tool_name, arguments, loop_status
+                    )
+
+                    # Display warning/intervention to user
+                    style = "yellow" if loop_status == LoopStatus.WARNING else "red bold"
+                    self.console.print(f"\n[{style}]{intervention_msg}[/{style}]\n")
+
+                    if loop_status == LoopStatus.DETECTED:
+                        # Add intervention message as a system/tool result
+                        tool_results.append({
+                            "tool_call_id": tool_call.get("id", ""),
+                            "role": "tool",
+                            "content": intervention_msg,
+                        })
+
+                        # Skip this tool execution and let LLM respond to intervention
+                        continue
+
+                # Add this call to history (after loop check, so we track what we execute)
+                self.loop_detector.add_call(tool_name, arguments)
 
                 # Check if operation needs confirmation
                 if self._is_destructive_operation(tool_name, arguments):
