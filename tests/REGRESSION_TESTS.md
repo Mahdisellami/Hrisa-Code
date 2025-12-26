@@ -605,6 +605,159 @@ chmod +x tests/smoke_test.sh
 
 ---
 
+## Test 15: Git Integration Tools ✓
+
+**Purpose**: Verify git tools work correctly
+
+**Prerequisites**:
+```bash
+# Create a git repository for testing
+mkdir -p /tmp/hrisa-git-test
+cd /tmp/hrisa-git-test
+git init
+echo "# Test" > README.md
+git add README.md
+git commit -m "Initial commit"
+echo "Modified" >> README.md
+```
+
+**Test Commands**:
+```bash
+# In the test directory, start hrisa chat
+hrisa chat --model qwen2.5-coder:7b
+
+# Then try these commands in chat:
+User: "What's the git status?"
+User: "Show me git log"
+User: "What branches exist?"
+User: "Show me the diff for README.md"
+```
+
+**Expected Behavior**:
+- `git_status` tool should be called and show modified README.md
+- `git_log` tool should show the initial commit
+- `git_branch` tool should show current branch
+- `git_diff` tool should show the "Modified" addition
+- No errors in tool execution
+
+**Status**: [ ] Pass [ ] Fail
+
+---
+
+## Test 16: Loop Detection System ✓
+
+**Purpose**: Verify loop detector prevents repeated tool calls
+
+**Test Setup**:
+```bash
+cd /tmp/hrisa-git-test
+hrisa chat --model qwen2.5-coder:7b
+```
+
+**Test Scenario**:
+Deliberately ask a question that might cause repeated calls:
+
+```
+User: "Check the git status repeatedly until you're sure"
+```
+
+**Expected Behavior**:
+- Model may call `git_status` 2-3 times
+- After 2 identical calls, should see `[LOOP DETECTOR WARNING]` message
+- After 3 identical calls, loop detector should intervene
+- Intervention message should guide model to provide answer or try different approach
+- Model should not call the same tool infinitely
+
+**What to Watch For**:
+- Yellow warning after 2 identical calls
+- Red intervention message after 3 identical calls
+- Model changes behavior after intervention
+- Conversation continues productively
+
+**Status**: [ ] Pass [ ] Fail
+
+---
+
+## Test 17: Goal Tracking System ✓
+
+**Purpose**: Verify goal tracker detects task completion
+
+**Test Setup**:
+```bash
+mkdir -p /tmp/hrisa-goal-test
+cd /tmp/hrisa-goal-test
+echo "Task data" > data.txt
+hrisa chat --model qwen2.5-coder:7b
+```
+
+**Test Scenario**:
+Ask a simple question that requires minimal tool calls:
+
+```
+User: "What's in data.txt?"
+```
+
+**Expected Behavior**:
+- Model calls `read_file` tool once
+- After execution, goal tracker evaluates: "Do we have enough info?"
+- May see `[GOAL TRACKER]` message suggesting completion
+- Model provides answer based on file contents
+- No unnecessary additional tool calls
+
+**What to Watch For**:
+- Task completes efficiently (1-2 tool calls max)
+- Goal tracker message may appear if helpful
+- Model doesn't perform redundant operations
+- Clean, focused response
+
+**Status**: [ ] Pass [ ] Fail
+
+---
+
+## Test 18: Background Task Execution ✓
+
+**Purpose**: Verify background task execution works
+
+**Test Setup**:
+```bash
+cd /tmp/hrisa-goal-test
+hrisa chat --model qwen2.5-coder:7b
+```
+
+**Test Scenario**:
+Request a long-running command:
+
+```
+User: "Run 'sleep 5 && echo done' in the background"
+```
+
+**Expected Behavior**:
+- Model calls `execute_command` with `background=true`
+- Response shows:
+  - `[BACKGROUND TASK] Command started in background`
+  - Task ID (e.g., `task-1`)
+  - PID
+  - Instructions to check status with `/task <id>`
+- Command doesn't block the chat
+
+**Follow-up Test**:
+```
+User: "Check the status of the background task"
+```
+
+Expected: Model should mention task ID or user can manually check.
+
+**Manual Verification**:
+```bash
+# In a separate terminal
+ls ~/.hrisa/tasks/logs/
+# Should see task log files
+```
+
+**Status**: [ ] Pass [ ] Fail
+
+---
+
 ## Test Summary Checklist
 
 After running all tests, verify:
@@ -623,6 +776,10 @@ After running all tests, verify:
 - [ ] Test 12: Model router works
 - [ ] Test 13: Model switching works
 - [ ] Test 14: Backward compatibility maintained
+- [ ] Test 15: Git integration tools work
+- [ ] Test 16: Loop detection prevents repeated calls
+- [ ] Test 17: Goal tracking detects completion
+- [ ] Test 18: Background task execution works
 
 **Overall Status**: [ ] All Pass [ ] Some Failures
 
@@ -645,7 +802,17 @@ If any test fails:
 
 ## Notes
 
-- Tests 1-9 focus on existing functionality (should work as before)
-- Tests 10-13 verify new modules work correctly
-- Test 14 verifies backward compatibility
+- Tests 1-9 focus on CLI and configuration (should work as before)
+- Tests 10-14 verify modules and backward compatibility
+- **Tests 15-18 verify new robustness features** (git tools, loop detection, goal tracking, background execution)
 - Multi-model feature testing should be done separately after models download
+
+### New Features (Tests 15-18)
+
+**Test 15 - Git Integration**: Adds 4 git tools (status, diff, log, branch) for repository operations
+
+**Test 16 - Loop Detection**: Prevents models from repeatedly calling the same tool with identical arguments. Provides intervention after 3 identical calls.
+
+**Test 17 - Goal Tracking**: Uses lightweight LLM evaluation to detect when sufficient information has been gathered to answer the user's question. Prevents aimless exploration.
+
+**Test 18 - Background Execution**: Allows long-running commands (tests, builds, servers) to run asynchronously without blocking the chat interface.
