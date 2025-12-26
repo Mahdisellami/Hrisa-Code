@@ -145,10 +145,10 @@ class TestApprovalManager:
         decision = manager.request_approval(request)
         assert decision == ApprovalDecision.NO
 
-    @patch('builtins.input')
-    def test_user_approves_operation(self, mock_input):
+    @patch('questionary.select')
+    def test_user_approves_operation(self, mock_select):
         """Test user approving operation."""
-        mock_input.return_value = "y"
+        mock_select.return_value.ask.return_value = "y"
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -160,10 +160,10 @@ class TestApprovalManager:
         decision = manager.request_approval(request)
         assert decision == ApprovalDecision.YES
 
-    @patch('builtins.input')
-    def test_user_denies_operation(self, mock_input):
+    @patch('questionary.select')
+    def test_user_denies_operation(self, mock_select):
         """Test user denying operation."""
-        mock_input.return_value = "n"
+        mock_select.return_value.ask.return_value = "n"
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -175,10 +175,10 @@ class TestApprovalManager:
         decision = manager.request_approval(request)
         assert decision == ApprovalDecision.NO
 
-    @patch('builtins.input')
-    def test_user_always_approve_updates_session_memory(self, mock_input):
+    @patch('questionary.select')
+    def test_user_always_approve_updates_session_memory(self, mock_select):
         """Test that 'always' choice updates session memory."""
-        mock_input.return_value = "a"
+        mock_select.return_value.ask.return_value = "a"
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -195,10 +195,10 @@ class TestApprovalManager:
         # Should add to always approve set
         assert ApprovalType.FILE_WRITE in manager._always_approve
 
-    @patch('builtins.input')
-    def test_user_never_approve_updates_session_memory(self, mock_input):
+    @patch('questionary.select')
+    def test_user_never_approve_updates_session_memory(self, mock_select):
         """Test that 'never' choice updates session memory."""
-        mock_input.return_value = "v"
+        mock_select.return_value.ask.return_value = "v"
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -414,11 +414,11 @@ class TestHelperFunctions:
 class TestApprovalManagerIntegration:
     """Test ApprovalManager integration scenarios."""
 
-    @patch('builtins.input')
-    def test_multiple_operations_with_session_memory(self, mock_input):
+    @patch('questionary.select')
+    def test_multiple_operations_with_session_memory(self, mock_select):
         """Test multiple operations using session memory."""
         # First approval: user chooses 'always'
-        mock_input.return_value = "a"
+        mock_select.return_value.ask.return_value = "a"
 
         manager = ApprovalManager(auto_approve=False)
 
@@ -443,10 +443,10 @@ class TestApprovalManagerIntegration:
         assert decision2 == ApprovalDecision.YES
 
         # Should only prompt once
-        assert mock_input.call_count == 1
+        assert mock_select.call_count == 1
 
-    @patch('builtins.input')
-    def test_different_operation_types_independent(self, mock_input):
+    @patch('questionary.select')
+    def test_different_operation_types_independent(self, mock_select):
         """Test that different operation types are tracked independently."""
         manager = ApprovalManager(auto_approve=False)
 
@@ -473,7 +473,7 @@ class TestApprovalManagerIntegration:
         assert manager.request_approval(push_request) == ApprovalDecision.NO
 
         # Should not have prompted user
-        assert mock_input.call_count == 0
+        assert mock_select.call_count == 0
 
     def test_file_write_with_diff_preview(self, tmp_path):
         """Test file write request includes proper details for diff."""

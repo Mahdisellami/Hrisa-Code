@@ -8,6 +8,8 @@ import difflib
 from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
+import questionary
+from questionary import Choice
 
 
 class ApprovalType(Enum):
@@ -177,7 +179,7 @@ class ApprovalManager:
         return "\n".join(diff_lines)
 
     def _prompt_user(self, request: ApprovalRequest) -> ApprovalDecision:
-        """Prompt user for approval decision.
+        """Prompt user for approval decision using interactive menu.
 
         Args:
             request: Details about the operation
@@ -187,39 +189,47 @@ class ApprovalManager:
         """
         self.console.print()
 
-        # Show options
-        self.console.print("[bold]Options:[/bold]")
-        self.console.print("  [green]y[/green] - Approve this operation")
-        self.console.print("  [red]n[/red] - Deny this operation")
-        self.console.print("  [cyan]a[/cyan] - Always approve this type (for this session)")
-        self.console.print("  [magenta]v[/magenta] - Never approve this type (for this session)")
-        self.console.print()
+        try:
+            # Use questionary for beautiful interactive selection
+            # Users can use arrow keys OR press the shortcut key directly
+            choice = questionary.select(
+                "Approve this operation?",
+                choices=[
+                    Choice(title="✅ Yes - Approve this operation", value="y", shortcut_key="y"),
+                    Choice(title="❌ No - Deny this operation", value="n", shortcut_key="n"),
+                    Choice(title="⭐ Always - Always approve this type (this session)", value="a", shortcut_key="a"),
+                    Choice(title="🚫 Never - Never approve this type (this session)", value="v", shortcut_key="v"),
+                ],
+                default="n",
+                style=questionary.Style([
+                    ('selected', 'fg:green bold'),
+                    ('pointer', 'fg:yellow bold'),
+                    ('highlighted', 'fg:cyan bold'),
+                    ('question', 'fg:yellow bold'),
+                ])
+            ).ask()
 
-        while True:
-            # Use input() instead of Prompt.ask() for better compatibility
-            try:
-                self.console.print("[bold yellow]Approve this operation? [y/n/a/v] (default: n):[/bold yellow] ", end="")
-                choice = input().strip().lower()
-
-                # Handle empty input (use default)
-                if not choice:
-                    choice = "n"
-
-                if choice in ["y", "n", "a", "v"]:
-                    if choice == "y":
-                        return ApprovalDecision.YES
-                    elif choice == "n":
-                        return ApprovalDecision.NO
-                    elif choice == "a":
-                        return ApprovalDecision.ALWAYS
-                    elif choice == "v":
-                        return ApprovalDecision.NEVER
-                else:
-                    self.console.print("[red]Invalid choice. Please enter y, n, a, or v.[/red]")
-            except (EOFError, KeyboardInterrupt):
-                # User pressed Ctrl+C or Ctrl+D - default to deny
+            if choice is None:
+                # User pressed Ctrl+C
                 self.console.print("\n[yellow]Operation cancelled[/yellow]")
                 return ApprovalDecision.NO
+
+            # Map choice to decision
+            if choice == "y":
+                return ApprovalDecision.YES
+            elif choice == "n":
+                return ApprovalDecision.NO
+            elif choice == "a":
+                return ApprovalDecision.ALWAYS
+            elif choice == "v":
+                return ApprovalDecision.NEVER
+            else:
+                return ApprovalDecision.NO
+
+        except (EOFError, KeyboardInterrupt):
+            # User pressed Ctrl+C or Ctrl+D - default to deny
+            self.console.print("\n[yellow]Operation cancelled[/yellow]")
+            return ApprovalDecision.NO
 
     def is_approved(self, request: ApprovalRequest) -> bool:
         """Check if an operation is approved (convenience method).
