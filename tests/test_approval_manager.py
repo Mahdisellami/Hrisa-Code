@@ -11,7 +11,7 @@ Tests cover:
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from pathlib import Path
 
 from hrisa_code.core.approval_manager import (
@@ -100,7 +100,8 @@ class TestApprovalManager:
         assert len(manager._always_approve) == 0
         assert len(manager._never_approve) == 0
 
-    def test_approval_manager_auto_approve_mode(self):
+    @pytest.mark.asyncio
+    async def test_approval_manager_auto_approve_mode(self):
         """Test auto-approve mode always returns YES."""
         manager = ApprovalManager(auto_approve=True)
 
@@ -110,10 +111,11 @@ class TestApprovalManager:
             details={},
         )
 
-        decision = manager.request_approval(request)
+        decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.YES
 
-    def test_session_memory_always_approve(self):
+    @pytest.mark.asyncio
+    async def test_session_memory_always_approve(self):
         """Test session memory for always approve."""
         manager = ApprovalManager(auto_approve=False)
 
@@ -126,10 +128,11 @@ class TestApprovalManager:
             details={},
         )
 
-        decision = manager.request_approval(request)
+        decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.YES
 
-    def test_session_memory_never_approve(self):
+    @pytest.mark.asyncio
+    async def test_session_memory_never_approve(self):
         """Test session memory for never approve."""
         manager = ApprovalManager(auto_approve=False)
 
@@ -142,14 +145,14 @@ class TestApprovalManager:
             details={},
         )
 
-        decision = manager.request_approval(request)
+        decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.NO
 
-    @patch('questionary.select')
+    @patch('questionary.text')
     @pytest.mark.asyncio
-    async def test_user_approves_operation(self, mock_select):
+    async def test_user_approves_operation(self, mock_text):
         """Test user approving operation."""
-        mock_select.return_value.ask_async.return_value = "y"
+        mock_text.return_value.ask_async = AsyncMock(return_value="y")
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -161,11 +164,11 @@ class TestApprovalManager:
         decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.YES
 
-    @patch('questionary.select')
+    @patch('questionary.text')
     @pytest.mark.asyncio
-    async def test_user_denies_operation(self, mock_select):
+    async def test_user_denies_operation(self, mock_text):
         """Test user denying operation."""
-        mock_select.return_value.ask_async.return_value = "n"
+        mock_text.return_value.ask_async = AsyncMock(return_value="n")
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -177,11 +180,11 @@ class TestApprovalManager:
         decision = await manager.request_approval(request)
         assert decision == ApprovalDecision.NO
 
-    @patch('questionary.select')
+    @patch('questionary.text')
     @pytest.mark.asyncio
-    async def test_user_always_approve_updates_session_memory(self, mock_select):
+    async def test_user_always_approve_updates_session_memory(self, mock_text):
         """Test that 'always' choice updates session memory."""
-        mock_select.return_value.ask_async.return_value = "a"
+        mock_text.return_value.ask_async = AsyncMock(return_value="a")
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -198,11 +201,11 @@ class TestApprovalManager:
         # Should add to always approve set
         assert ApprovalType.FILE_WRITE in manager._always_approve
 
-    @patch('questionary.select')
+    @patch('questionary.text')
     @pytest.mark.asyncio
-    async def test_user_never_approve_updates_session_memory(self, mock_select):
+    async def test_user_never_approve_updates_session_memory(self, mock_text):
         """Test that 'never' choice updates session memory."""
-        mock_select.return_value.ask_async.return_value = "v"
+        mock_text.return_value.ask_async = AsyncMock(return_value="v")
         manager = ApprovalManager(auto_approve=False)
 
         request = ApprovalRequest(
@@ -219,7 +222,8 @@ class TestApprovalManager:
         # Should add to never approve set
         assert ApprovalType.FILE_WRITE in manager._never_approve
 
-    def test_is_approved_returns_true_for_yes(self):
+    @pytest.mark.asyncio
+    async def test_is_approved_returns_true_for_yes(self):
         """Test is_approved convenience method for YES."""
         manager = ApprovalManager(auto_approve=True)
 
@@ -229,9 +233,10 @@ class TestApprovalManager:
             details={},
         )
 
-        assert manager.is_approved(request) is True
+        assert await manager.is_approved(request) is True
 
-    def test_is_approved_returns_false_for_no(self):
+    @pytest.mark.asyncio
+    async def test_is_approved_returns_false_for_no(self):
         """Test is_approved convenience method for NO."""
         manager = ApprovalManager(auto_approve=False)
         manager._never_approve.add(ApprovalType.FILE_WRITE)
@@ -242,7 +247,7 @@ class TestApprovalManager:
             details={},
         )
 
-        assert manager.is_approved(request) is False
+        assert await manager.is_approved(request) is False
 
     def test_reset_session_memory(self):
         """Test resetting session memory."""
@@ -418,12 +423,12 @@ class TestHelperFunctions:
 class TestApprovalManagerIntegration:
     """Test ApprovalManager integration scenarios."""
 
-    @patch('questionary.select')
+    @patch('questionary.text')
     @pytest.mark.asyncio
-    async def test_multiple_operations_with_session_memory(self, mock_select):
+    async def test_multiple_operations_with_session_memory(self, mock_text):
         """Test multiple operations using session memory."""
         # First approval: user chooses 'always'
-        mock_select.return_value.ask_async.return_value = "a"
+        mock_text.return_value.ask_async = AsyncMock(return_value="a")
 
         manager = ApprovalManager(auto_approve=False)
 
@@ -448,10 +453,11 @@ class TestApprovalManagerIntegration:
         assert decision2 == ApprovalDecision.YES
 
         # Should only prompt once
-        assert mock_select.call_count == 1
+        assert mock_text.call_count == 1
 
-    @patch('questionary.select')
-    def test_different_operation_types_independent(self, mock_select):
+    @patch('questionary.text')
+    @pytest.mark.asyncio
+    async def test_different_operation_types_independent(self, mock_text):
         """Test that different operation types are tracked independently."""
         manager = ApprovalManager(auto_approve=False)
 
@@ -467,7 +473,7 @@ class TestApprovalManagerIntegration:
             description="Write",
             details={},
         )
-        assert manager.request_approval(write_request) == ApprovalDecision.YES
+        assert await manager.request_approval(write_request) == ApprovalDecision.YES
 
         # Git push should be denied
         push_request = ApprovalRequest(
@@ -475,10 +481,10 @@ class TestApprovalManagerIntegration:
             description="Push",
             details={},
         )
-        assert manager.request_approval(push_request) == ApprovalDecision.NO
+        assert await manager.request_approval(push_request) == ApprovalDecision.NO
 
         # Should not have prompted user
-        assert mock_select.call_count == 0
+        assert mock_text.call_count == 0
 
     def test_file_write_with_diff_preview(self, tmp_path):
         """Test file write request includes proper details for diff."""
