@@ -207,10 +207,12 @@ class ApprovalManager:
             while True:
                 # Run input() in executor to avoid blocking the event loop
                 loop = asyncio.get_event_loop()
-                prompt_text = "[bold yellow]Enter choice [y/n/a/v] (default: n):[/bold yellow] "
 
-                # Print prompt using console
-                self.console.print(prompt_text, end="")
+                # Use plain print to ensure proper flushing before input()
+                # Rich console and input() don't mix well
+                import sys
+                sys.stdout.write("\033[1;33mEnter choice [y/n/a/v] (default: n):\033[0m ")
+                sys.stdout.flush()
 
                 # Get input in executor
                 choice = await loop.run_in_executor(None, input)
