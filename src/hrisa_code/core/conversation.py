@@ -14,6 +14,7 @@ from rich.spinner import Spinner
 
 from hrisa_code.core.ollama_client import OllamaClient, OllamaConfig
 from hrisa_code.core.loop_detector import LoopDetector, LoopStatus
+from hrisa_code.core.goal_tracker import GoalTracker, GoalStatus
 from hrisa_code.tools.file_operations import AVAILABLE_TOOLS, get_all_tool_definitions
 
 
@@ -54,6 +55,13 @@ class ConversationManager:
             max_identical_calls=3,
             warning_threshold=2,
             history_window=10
+        )
+
+        # Goal tracking to detect task completion
+        self.goal_tracker = GoalTracker(
+            ollama_client=self.ollama_client,
+            evaluation_model="qwen2.5-coder:7b",  # Lightweight model for checks
+            check_frequency=3  # Check every 3 rounds
         )
 
     def _extract_tool_calls_from_text(self, text: str) -> List[Dict[str, Any]]:
@@ -476,6 +484,10 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         # Reset loop detector for new conversation turn
         self.loop_detector.reset()
 
+        # Reset goal tracker and set user question
+        self.goal_tracker.reset()
+        self.goal_tracker.set_user_question(user_message)
+
         # Get initial response from LLM
         start_time = time.time()
         with self.console.status("[bold blue]Thinking...[/bold blue]", spinner="dots"):
@@ -515,8 +527,9 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             if tool_round > 1:
                 self.console.print(f"[dim]→ Tool round {tool_round}[/dim]")
 
-            # Increment loop detector round counter
+            # Increment round counters for both trackers
             self.loop_detector.next_round()
+            self.goal_tracker.next_round()
 
             tool_calls = raw_response["message"]["tool_calls"]
 
@@ -630,6 +643,33 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 # Track if any tool had errors
                 if tool_result_data["had_error"]:
                     self.last_tools_had_errors = True
+
+                # Add to goal tracker for progress evaluation
+                self.goal_tracker.add_tool_result(
+                    tool_name=tool_name,
+                    arguments=arguments,
+                    result=result,
+                    had_error=tool_result_data["had_error"]
+                )
+
+            # Check goal progress periodically
+            if self.goal_tracker.should_check_progress():
+                goal_status = await self.goal_tracker.check_progress()
+
+                if goal_status in (GoalStatus.COMPLETE, GoalStatus.STUCK, GoalStatus.CLARIFICATION_NEEDED):
+                    intervention_msg = self.goal_tracker.get_intervention_message(goal_status)
+
+                    # Display intervention to user
+                    style = "green bold" if goal_status == GoalStatus.COMPLETE else "yellow"
+                    self.console.print(f"\n[{style}]{intervention_msg}[/{style}]\n")
+
+                    # Add intervention as tool result if goal is complete or stuck
+                    if goal_status in (GoalStatus.COMPLETE, GoalStatus.STUCK):
+                        tool_results.append({
+                            "tool_call_id": "",
+                            "role": "tool",
+                            "content": intervention_msg,
+                        })
 
             # Send tool results back to LLM and check for more tool calls
             response_start = time.time()

@@ -319,7 +319,7 @@ class OllamaClient:
         """
         await self.client.pull(model_name)
 
-    def switch_model(self, model_name: str) -> None:
+    def switch_model(self, model_name: str, verbose: bool = True) -> None:
         """Switch to a different model.
 
         This changes the model used for future chat calls while preserving
@@ -327,6 +327,7 @@ class OllamaClient:
 
         Args:
             model_name: Name of the model to switch to
+            verbose: Whether to print a message about the switch (default: True)
         """
         self.config.model = model_name
 
@@ -337,3 +338,41 @@ class OllamaClient:
             Current model name
         """
         return self.config.model
+
+    async def chat_simple(
+        self,
+        message: str,
+        system_prompt: Optional[str] = None,
+    ) -> str:
+        """Send a simple chat message without maintaining conversation history.
+
+        This is useful for one-off evaluations or checks that shouldn't be
+        part of the main conversation flow (e.g., progress evaluation).
+
+        Args:
+            message: User message
+            system_prompt: Optional system prompt
+
+        Returns:
+            Assistant's response
+        """
+        # Prepare messages (no conversation history)
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": message})
+
+        # Make the request with minimal options for faster response
+        options = {
+            "temperature": 0.1,  # Low temperature for consistent evaluation
+            "top_p": 0.9,
+            "top_k": 40,
+        }
+
+        response = await self.client.chat(
+            model=self.config.model,
+            messages=messages,
+            options=options,
+        )
+
+        return response.get("message", {}).get("content", "")
