@@ -181,6 +181,10 @@ class ApprovalManager:
     async def _prompt_user_async(self, request: ApprovalRequest) -> ApprovalDecision:
         """Prompt user for approval decision using interactive menu (async version).
 
+        Supports hybrid input:
+        - Arrow keys to navigate + Enter to confirm
+        - OR press y/n/a/v for immediate selection (no Enter needed)
+
         Args:
             request: Details about the operation
 
@@ -190,15 +194,15 @@ class ApprovalManager:
         self.console.print()
 
         try:
-            # Use questionary with async for compatibility with running event loop
-            # Arrow keys to select, then Enter to confirm
-            choice = await questionary.select(
-                "Approve this operation? (Use arrow keys, then press Enter)",
+            # Use rawselect for single-key shortcuts
+            # rawselect allows: arrow keys + Enter OR single key press (no Enter needed)
+            choice = await questionary.rawselect(
+                "Approve this operation?",
                 choices=[
-                    Choice(title="[y] Yes - Approve this operation", value="y", shortcut_key="y"),
-                    Choice(title="[n] No - Deny this operation", value="n", shortcut_key="n"),
-                    Choice(title="[a] Always - Always approve this type (this session)", value="a", shortcut_key="a"),
-                    Choice(title="[v] Never - Never approve this type (this session)", value="v", shortcut_key="v"),
+                    Choice(title="Yes - Approve this operation", value="y", shortcut_key="y"),
+                    Choice(title="No - Deny this operation", value="n", shortcut_key="n"),
+                    Choice(title="Always - Always approve this type (this session)", value="a", shortcut_key="a"),
+                    Choice(title="Never - Never approve this type (this session)", value="v", shortcut_key="v"),
                 ],
                 default="n",
                 style=questionary.Style([
@@ -206,6 +210,7 @@ class ApprovalManager:
                     ('pointer', 'fg:yellow bold'),
                     ('highlighted', 'fg:cyan bold'),
                     ('question', 'fg:yellow bold'),
+                    ('answer', 'fg:green bold'),
                 ])
             ).ask_async()
 
