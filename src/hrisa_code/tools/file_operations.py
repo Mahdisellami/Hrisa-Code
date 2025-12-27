@@ -380,6 +380,89 @@ class SearchFilesTool:
             return f"Error searching files: {str(e)}"
 
 
+class FindFilesTool:
+    """Tool for finding files by name pattern (not content)."""
+
+    @staticmethod
+    def get_definition() -> Dict[str, Any]:
+        """Get the tool definition for Ollama function calling."""
+        return {
+            "type": "function",
+            "function": {
+                "name": "find_files",
+                "description": "Find files by NAME pattern (glob-style). Use when looking for files by filename/extension (e.g., '*.log', '*.py', 'test_*.py'). This searches for FILE NAMES, NOT file contents. For searching inside files, use search_files instead.\n\nExamples:\n- Find log files: pattern='*.log'\n- Find Python test files: pattern='test_*.py'\n- Find all markdown files recursively: pattern='**/*.md'\n- Find config files: pattern='*config*'\n\nReturns list of matching file paths.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "pattern": {
+                            "type": "string",
+                            "description": "Glob pattern to match file names. Use '*' for any characters, '?' for single character, '**/' for recursive search. Examples: '*.log', '**/*.py', 'test_*.txt'",
+                        },
+                        "directory": {
+                            "type": "string",
+                            "description": "Directory to search in (default: current directory)",
+                        },
+                    },
+                    "required": ["pattern"],
+                },
+            },
+        }
+
+    @staticmethod
+    def execute(pattern: str, directory: Optional[str] = None) -> str:
+        """Find files by name pattern.
+
+        Args:
+            pattern: Glob pattern to match file names
+            directory: Directory to search in (default: current directory)
+
+        Returns:
+            List of matching file paths
+        """
+        try:
+            # Use current directory if not specified
+            search_dir = Path(directory) if directory else Path.cwd()
+
+            if not search_dir.exists():
+                return f"Error: Directory not found: {directory}"
+
+            if not search_dir.is_dir():
+                return f"Error: Not a directory: {directory}"
+
+            # Make pattern recursive by default if not already
+            glob_pattern = pattern
+            if not pattern.startswith("**") and "/" not in pattern:
+                # Simple pattern like "*.log" - search recursively
+                glob_pattern = f"**/{pattern}"
+
+            # Find matching files
+            matches = []
+            for file_path in search_dir.glob(glob_pattern):
+                if file_path.is_file():
+                    # Return relative path for readability
+                    try:
+                        rel_path = file_path.relative_to(search_dir)
+                        matches.append(str(rel_path))
+                    except ValueError:
+                        # If relative_to fails, use absolute path
+                        matches.append(str(file_path))
+
+            if not matches:
+                return f"No files found matching pattern: {pattern}"
+
+            # Sort and return (limit to 100 files)
+            matches.sort()
+            if len(matches) > 100:
+                result = "\n".join(matches[:100])
+                result += f"\n... and {len(matches) - 100} more files"
+                return result
+
+            return "\n".join(matches)
+
+        except Exception as e:
+            return f"Error finding files: {str(e)}"
+
+
 class DeleteFileTool:
     """Tool for deleting files.
 
@@ -393,13 +476,13 @@ class DeleteFileTool:
             "type": "function",
             "function": {
                 "name": "delete_file",
-                "description": "Delete a file from the filesystem. IMPORTANT: This is a destructive write operation that cannot be undone and requires user approval. Use with extreme caution.",
+                "description": "Delete a SINGLE file from the filesystem. IMPORTANT: This is a destructive write operation that cannot be undone and requires user approval. Use with extreme caution.\n\nLIMITATION: Only accepts EXACT file paths, NOT glob patterns.\n- WRONG: delete_file(file_path=\"*.log\") - glob patterns not supported!\n- RIGHT: Use find_files(pattern=\"*.log\") first, then delete_file(file_path=\"app.log\") for each file\n\nTo delete multiple files: (1) find_files to get list, (2) delete_file for each",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "file_path": {
                             "type": "string",
-                            "description": "Path to the file to delete (absolute or relative to working directory)",
+                            "description": "EXACT path to a single file to delete. Must be a specific file, NOT a glob pattern like '*.log'. For multiple files, use find_files first to get the list of files.",
                         },
                     },
                     "required": ["file_path"],
@@ -418,6 +501,16 @@ class DeleteFileTool:
             Success message or error
         """
         try:
+            # Check for glob patterns (wildcards)
+            if any(char in file_path for char in ['*', '?', '[', ']']):
+                return (
+                    f"Error: delete_file does not support glob patterns like '{file_path}'.\n"
+                    f"To delete multiple files:\n"
+                    f"1. First use find_files(pattern=\"{file_path}\") to find matching files\n"
+                    f"2. Then delete each file individually using delete_file(file_path=\"exact/path/to/file\")\n"
+                    f"Example: find_files(pattern=\"*.log\") → then delete_file(file_path=\"app.log\")"
+                )
+
             path = Path(file_path)
 
             # Check if file exists
@@ -446,6 +539,7 @@ AVAILABLE_TOOLS = {
     "list_directory": ListDirectoryTool,
     "execute_command": ExecuteCommandTool,
     "search_files": SearchFilesTool,
+    "find_files": FindFilesTool,
     "delete_file": DeleteFileTool,
     **GIT_TOOLS,  # Add git tools
 }

@@ -147,22 +147,26 @@ Available tools:
 - read_file(file_path, start_line?, end_line?): Read file contents
 - write_file(file_path, content): Write content to files
 - list_directory(directory_path, recursive?): List ALL files/dirs in a directory (NO file_pattern parameter!)
-- search_files(pattern, directory, file_pattern?): Search for text INSIDE files, optionally filter by file_pattern like "*.py"
+- find_files(pattern, directory?): Find files BY NAME using glob patterns (e.g., "*.log", "**/*.py")
+- search_files(pattern, directory, file_pattern?): Search for text INSIDE files (grep-like), optionally filter by file_pattern
 - execute_command(command, background?): Execute shell commands (working_directory is automatically set - DO NOT provide it)
   - Set background=true for long-running operations (tests, builds, dev servers) to run asynchronously
   - Returns task ID immediately when background=true - tell user to check status with /task <id>
 
 CRITICAL TOOL USAGE RULES:
-1. To list files by pattern (*.py, *.js, etc.): Use execute_command with "ls *.py" or "find . -name '*.py'"
-2. list_directory does NOT support file_pattern - it lists EVERYTHING in a directory
-3. search_files is for searching TEXT INSIDE files, not for listing files by name
-4. Use background=true for long-running commands to avoid blocking
+1. To find files by name/extension: Use find_files(pattern="*.py") or find_files(pattern="*.log")
+2. To search TEXT inside files: Use search_files(pattern="def main", directory=".")
+3. list_directory does NOT support file_pattern - it lists EVERYTHING in a directory
+4. search_files searches FILE CONTENTS (grep), NOT file names
+5. Use background=true for long-running commands to avoid blocking
 
 EXAMPLES:
 ❌ WRONG: list_directory(directory_path=".", file_pattern="*.py")  # file_pattern doesn't exist!
-❌ WRONG: execute_command(command="ls *.py", working_directory="/home/user/current_directory")  # NO placeholder paths!
-✓ RIGHT: execute_command(command="ls *.py")  # working_directory is auto-set
-✓ RIGHT: execute_command(command="find . -name '*.py'")
+❌ WRONG: search_files(pattern="*.log")  # search_files searches INSIDE files, not file names!
+❌ WRONG: execute_command(command="ls *.py", working_directory="/path/to/dir")  # NO placeholder paths!
+✓ RIGHT: find_files(pattern="*.log")  # Find all .log files by name
+✓ RIGHT: find_files(pattern="test_*.py")  # Find test files by name pattern
+✓ RIGHT: search_files(pattern="def main", directory=".")  # Search for "def main" inside files
 ✓ RIGHT: execute_command(command="pytest tests/", background=true)  # Long-running test in background
 
 Guidelines:
@@ -889,13 +893,31 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                     ).ask_async()
 
                     if response != "Continue":
+                        # User cancelled operation - display but don't send back to LLM
                         result = "[CANCELLED] Operation cancelled by user"
                         self._display_tool_result(result, tool_name)
-                        tool_results.append({
-                            "tool_call_id": tool_call.get("id", ""),
-                            "role": "tool",
-                            "content": result,
-                        })
+
+                        # Track cancellation in goal tracker for evaluation
+                        self.goal_tracker.add_tool_result(
+                            tool_name=tool_name,
+                            arguments=arguments,
+                            result=result,
+                            had_error=False  # Cancellation is not an error
+                        )
+
+                        # Evaluate cancellation impact immediately
+                        await self.goal_tracker.evaluate_denial_if_needed()
+
+                        # If goal is now COMPLETE after cancellation, break tool loop
+                        # This prevents sending [CANCELLED] back to LLM which confuses it
+                        if self.goal_tracker.current_status == GoalStatus.COMPLETE:
+                            # Display completion message
+                            intervention_msg = self.goal_tracker.get_intervention_message(GoalStatus.COMPLETE)
+                            self.console.print(f"\n[green bold]{intervention_msg}[/green bold]\n")
+                            # Break out of tool execution loop - don't send cancellation to LLM
+                            break
+
+                        # If goal still IN_PROGRESS, skip this tool but continue loop
                         continue
 
                 # Display tool call to user
@@ -955,6 +977,9 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                     result=result,
                     had_error=tool_result_data["had_error"]
                 )
+
+                # Evaluate denial impact if user denied this operation
+                await self.goal_tracker.evaluate_denial_if_needed()
 
             # Check if status was immediately set to COMPLETE (e.g., user denial)
             # This takes precedence over periodic checks

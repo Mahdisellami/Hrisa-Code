@@ -89,9 +89,8 @@ class GoalTracker:
         )
         self.tool_results.append(tool_result)
 
-        # Check if user denied an operation - this is a definitive completion
-        if result.startswith("[DENIED]"):
-            self.current_status = GoalStatus.COMPLETE
+        # Note: Denial evaluation is now handled by calling evaluate_denial_if_needed()
+        # after add_tool_result() from the async context in conversation.py
 
     def should_check_progress(self) -> bool:
         """Determine if we should check progress now.
@@ -148,6 +147,113 @@ class GoalTracker:
         except Exception as e:
             # If evaluation fails, assume in progress
             return GoalStatus.IN_PROGRESS
+
+    async def evaluate_denial_if_needed(self) -> None:
+        """Check if last tool result was a denial/cancellation and evaluate its impact.
+
+        This should be called right after add_tool_result() in async context.
+        """
+        if not self.tool_results:
+            return
+
+        last_result = self.tool_results[-1]
+        # Check for both [DENIED] (approval denied) and [CANCELLED] (user cancelled)
+        if last_result.result.startswith("[DENIED]") or last_result.result.startswith("[CANCELLED]"):
+            # User denied/cancelled an operation - evaluate if goal is still achievable
+            await self._evaluate_denial_impact(
+                last_result.tool_name,
+                last_result.arguments,
+                last_result.result
+            )
+
+    async def _evaluate_denial_impact(
+        self,
+        tool_name: str,
+        arguments: dict,
+        denial_message: str
+    ) -> None:
+        """Evaluate whether a user denial/cancellation blocks the goal or if alternatives exist.
+
+        Args:
+            tool_name: Name of the tool that was denied/cancelled
+            arguments: Arguments that were passed to the tool
+            denial_message: The [DENIED] or [CANCELLED] message
+        """
+        if not self.user_question or not self.ollama_client:
+            # Fallback: mark as complete (safe default)
+            self.current_status = GoalStatus.COMPLETE
+            return
+
+        # Count consecutive cancellations in recent history
+        recent_cancellations = sum(
+            1 for r in self.tool_results[-3:]
+            if r.result.startswith("[CANCELLED]") or r.result.startswith("[DENIED]")
+        )
+
+        # Build evaluation prompt with stricter guidance
+        evaluation_prompt = f"""User's original request: "{self.user_question}"
+
+The assistant tried to use this tool:
+- Tool: {tool_name}
+- Arguments: {arguments}
+
+The user CANCELLED/DENIED this operation: {denial_message}
+
+IMPORTANT CONTEXT:
+- This is cancellation #{recent_cancellations} in the last 3 tool calls
+- If this is the 2nd+ consecutive cancellation, the user clearly doesn't want to proceed → COMPLETE
+
+STRICT EVALUATION RULES:
+1. If user requested a SPECIFIC action on a SPECIFIC target (e.g., "create file test.txt", "delete main.py"), and they cancelled that EXACT operation, then NO meaningful alternatives exist → COMPLETE
+
+2. Only say IN_PROGRESS if:
+   - User requested something GENERAL/BROAD (e.g., "delete old logs", "fix the bugs")
+   - The cancelled operation was just ONE OF MANY possible approaches
+   - There are genuinely different approaches that might work better
+
+3. When in doubt, prefer COMPLETE (don't annoy user by retrying what they just cancelled)
+
+EXAMPLES OF COMPLETE (goal blocked):
+- User: "Create file test.txt" → Cancelled write_file(test.txt) → NO alternatives, they don't want test.txt → COMPLETE
+- User: "Update config.yaml" → Cancelled write_file(config.yaml) → NO alternatives for that specific file → COMPLETE
+- User: "Delete main.py" → Cancelled delete_file(main.py) → NO alternatives, they don't want it deleted → COMPLETE
+- User: "Any request" → 2+ consecutive cancellations → User clearly wants to stop → COMPLETE
+
+EXAMPLES OF IN_PROGRESS (alternatives exist):
+- User: "Delete old log files" → Cancelled execute_command("rm *.log") → Could try find_files, different pattern → IN_PROGRESS
+- User: "Show me the code structure" → Cancelled read_file(one_file.py) → Could read other files → IN_PROGRESS
+- User: "Fix the configuration" → Cancelled one approach → Could try different fix → IN_PROGRESS
+
+Respond with ONLY ONE WORD: COMPLETE or IN_PROGRESS"""
+
+        try:
+            # Use lightweight model for evaluation
+            original_model = self.ollama_client.get_current_model()
+            self.ollama_client.switch_model(self.evaluation_model, verbose=False)
+
+            # Get evaluation
+            response = await self.ollama_client.chat_simple(
+                message=evaluation_prompt,
+                system_prompt="You are a goal evaluator. Given a user denial, determine if the goal is blocked or if alternatives exist. Respond with ONLY one word: COMPLETE or IN_PROGRESS."
+            )
+
+            # Restore original model
+            self.ollama_client.switch_model(original_model, verbose=False)
+
+            # Parse response
+            response_clean = response.strip().upper()
+            if "COMPLETE" in response_clean:
+                self.current_status = GoalStatus.COMPLETE
+            elif "IN_PROGRESS" in response_clean or "PROGRESS" in response_clean:
+                self.current_status = GoalStatus.IN_PROGRESS
+            else:
+                # Unclear response, default to COMPLETE (safe)
+                self.current_status = GoalStatus.COMPLETE
+
+        except Exception as e:
+            # On error, default to COMPLETE (safe - don't retry)
+            print(f"Error evaluating denial impact: {e}")
+            self.current_status = GoalStatus.COMPLETE
 
     def _summarize_tool_results(self) -> str:
         """Summarize tool results for evaluation.

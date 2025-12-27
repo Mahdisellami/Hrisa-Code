@@ -84,7 +84,7 @@ class TestGoalTracker:
         assert tracker.tool_results[4].tool_name == "tool_4"
 
     def test_add_tool_result_with_denied_sets_status_complete(self):
-        """Test that [DENIED] result immediately sets status to COMPLETE."""
+        """Test that [DENIED] result no longer immediately sets status (requires async evaluation)."""
         tracker = GoalTracker()
         tracker.set_user_question("Can you create a git commit?")
 
@@ -96,8 +96,8 @@ class TestGoalTracker:
             had_error=False
         )
 
-        # Status should be immediately set to COMPLETE
-        assert tracker.current_status == GoalStatus.COMPLETE
+        # Status is NOT immediately set (requires async evaluation via evaluate_denial_if_needed)
+        assert tracker.current_status == GoalStatus.UNKNOWN
         assert len(tracker.tool_results) == 1
 
     def test_add_tool_result_without_denied_keeps_status_unknown(self):
