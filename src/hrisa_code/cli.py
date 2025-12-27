@@ -329,5 +329,153 @@ Generate the complete HRISA.md content now:"""
     console.print(f"5. Start chatting: [cyan]hrisa chat[/cyan]")
 
 
+@app.command()
+def readme(
+    path: Path = typer.Argument(
+        Path.cwd(),
+        help="Project directory to generate README for",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Ollama model to use for README generation",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force overwrite without confirmation",
+    ),
+    multi_model: bool = typer.Option(
+        False,
+        "--multi-model",
+        help="Use multiple specialized models for different steps",
+    ),
+) -> None:
+    """Generate user-friendly README.md documentation.
+
+    Uses multi-step orchestration to analyze the project and generate
+    comprehensive README.md documentation targeted at human users.
+
+    The orchestrator will:
+    1. Discover the project purpose and value proposition
+    2. Highlight key features and benefits
+    3. Determine installation requirements
+    4. Create practical usage examples
+    5. Synthesize comprehensive README.md
+
+    Example:
+        hrisa readme
+        hrisa readme --multi-model
+        hrisa readme --model qwen2.5:72b --force
+    """
+    # Load config (use default if not found)
+    try:
+        config_path = Config.get_project_config_path(path)
+        if config_path.exists():
+            config = Config.load(config_path)
+        else:
+            config = Config()
+            console.print("[yellow]No config found, using defaults[/yellow]")
+            console.print(f"[dim]Tip: Run 'hrisa init' to create config at {config_path}[/dim]\n")
+    except Exception:
+        config = Config()
+
+    # Override model if specified
+    if model:
+        config.model.name = model
+
+    readme_path = path / "README.md"
+
+    # Check if README.md exists
+    if readme_path.exists() and not force:
+        console.print(f"[yellow]README.md already exists at {readme_path}[/yellow]")
+        overwrite = typer.confirm("Overwrite?")
+        if not overwrite:
+            raise typer.Exit()
+
+    try:
+        console.print("[bold cyan]Generating README.md...[/bold cyan]")
+        if multi_model:
+            console.print("[dim]Using multi-model orchestration with specialized models for each step.[/dim]\n")
+        else:
+            console.print("[dim]Tip: Use --multi-model for better quality with multiple specialized models.[/dim]\n")
+
+        # Create necessary components
+        from hrisa_code.core.conversation import ConversationManager
+        from hrisa_code.core.ollama_client import OllamaConfig
+        from hrisa_code.core.readme_orchestrator import ReadmeOrchestrator
+
+        # Create OllamaConfig
+        ollama_config = OllamaConfig(
+            model=config.model.name,
+            host=config.ollama.host,
+            temperature=config.model.temperature,
+            top_p=config.model.top_p,
+            top_k=config.model.top_k,
+        )
+
+        # Create conversation manager
+        conversation = ConversationManager(
+            ollama_config=ollama_config,
+            system_prompt="You are a technical writer specializing in clear, user-friendly documentation.",
+            enable_tools=True,
+            working_directory=path,
+        )
+
+        # Set up model router if multi-model is enabled
+        model_router = None
+        if multi_model:
+            from hrisa_code.core.model_router import ModelRouter, ModelSelectionStrategy
+            from hrisa_code.core.ollama_client import OllamaClient
+
+            # Create Ollama client to query available models
+            temp_client = OllamaClient(ollama_config)
+            available_models = asyncio.run(temp_client.list_models())
+
+            # Create model router
+            strategy = ModelSelectionStrategy(
+                prefer_quality=True,
+                available_models=set(available_models),
+                default_model=config.model.name
+            )
+            model_router = ModelRouter(strategy=strategy)
+
+            console.print(f"[dim]→ Found {len(available_models)} available models[/dim]")
+            console.print()
+
+        # Create and run orchestrator
+        orchestrator = ReadmeOrchestrator(
+            conversation=conversation,
+            project_path=path,
+            console=console,
+            model_router=model_router,
+            enable_multi_model=multi_model,
+        )
+
+        readme_content = asyncio.run(orchestrator.generate_readme())
+
+        # Write README.md
+        if readme_content:
+            readme_path.write_text(readme_content)
+            console.print(f"[green]README.md created at {readme_path}[/green]")
+            console.print("\n[bold]Next steps:[/bold]")
+            console.print("1. Review the generated README.md")
+            console.print("2. Customize sections as needed")
+            console.print("3. Add project-specific screenshots or examples")
+            console.print("4. Commit to your repository")
+        else:
+            console.print("[yellow]Warning: README generation produced no content[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error generating README.md:[/red]", markup=True)
+        console.print(str(e), markup=False)
+        console.print("\n[yellow]Make sure Ollama is running:[/yellow]")
+        console.print("  ollama serve")
+        console.print(f"\nAnd that you have the model: [cyan]ollama pull {config.model.name}[/cyan]")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()

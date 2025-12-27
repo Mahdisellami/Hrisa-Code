@@ -1,21 +1,23 @@
 """Orchestrator for comprehensive HRISA.md generation.
 
 This module guides an LLM through structured discovery steps to create
-comprehensive repository documentation.
+comprehensive repository documentation for AI assistants.
 """
 
-import asyncio
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional
 from rich.console import Console
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
 
+from hrisa_code.core.base_orchestrator import (
+    BaseOrchestrator,
+    WorkflowDefinition,
+    WorkflowStep,
+)
 from hrisa_code.core.conversation import ConversationManager
-from hrisa_code.core.model_router import ModelRouter, ModelSelectionStrategy
+from hrisa_code.core.model_router import ModelRouter
 
 
-class HrisaOrchestrator:
+class HrisaOrchestrator(BaseOrchestrator):
     """Orchestrates multi-step repository analysis for HRISA.md generation.
 
     This orchestrator guides the LLM through specific discovery steps:
@@ -26,48 +28,20 @@ class HrisaOrchestrator:
     5. Documentation Synthesis - Generate comprehensive HRISA.md
     """
 
-    def __init__(
-        self,
-        conversation: ConversationManager,
-        project_path: Path,
-        console: Optional[Console] = None,
-        model_router: Optional[ModelRouter] = None,
-        enable_multi_model: bool = False,
-    ):
-        """Initialize the orchestrator.
-
-        Args:
-            conversation: ConversationManager for LLM interactions
-            project_path: Path to the project root
-            console: Rich console for output (creates new if None)
-            model_router: Optional ModelRouter for multi-model orchestration
-            enable_multi_model: Whether to use multi-model orchestration
-        """
-        self.conversation = conversation
-        self.project_path = project_path
-        self.console = console or Console()
-        self.model_router = model_router
-        self.enable_multi_model = enable_multi_model
-
-        # Storage for discoveries
-        self.discoveries: Dict[str, Any] = {
-            "architecture": None,
-            "components": None,
-            "features": None,
-            "workflows": None,
-        }
-
-    def _get_step_prompt(self, step: str) -> str:
-        """Get the prompt for a specific discovery step.
-
-        Args:
-            step: The step name (architecture, components, features, workflows)
-
-        Returns:
-            Prompt text for the step
-        """
-        prompts = {
-            "architecture": f"""Analyze the project structure of Hrisa Code at {self.project_path}.
+    @property
+    def workflow_definition(self) -> WorkflowDefinition:
+        """Define the HRISA.md generation workflow."""
+        return WorkflowDefinition(
+            name="HRISA",
+            description="Comprehensive repository documentation for AI assistants",
+            audience="AI assistants (like Claude Code)",
+            output_filename="HRISA.md",
+            steps=[
+                WorkflowStep(
+                    name="architecture",
+                    display_name="Architecture Discovery",
+                    model_preference="architecture",
+                    prompt_template="""Analyze the project structure of Hrisa Code at {project_path}.
 
 Your task: Discover and document the project architecture.
 
@@ -84,8 +58,12 @@ Provide a summary of:
 - Project dependencies from pyproject.toml
 
 Use available tools to explore the codebase. Be thorough.""",
-
-            "components": f"""Analyze the core components of Hrisa Code.
+                ),
+                WorkflowStep(
+                    name="components",
+                    display_name="Component Analysis",
+                    model_preference="components",
+                    prompt_template="""Analyze the core components of Hrisa Code.
 
 Based on the architecture discovered, now dive deeper into key components:
 
@@ -94,7 +72,7 @@ Your task: Understand what each core component does.
 Steps:
 1. Read the main CLI entry point (src/hrisa_code/cli.py)
 2. Read core modules: config.py, interactive.py, ollama_client.py, conversation.py
-3. Read advanced modules: agent.py, task_manager.py (if they exist)
+3. Read advanced modules: agent.py, task_manager.py, orchestrators
 4. Note the key classes, functions, and their responsibilities
 
 Provide a summary of:
@@ -104,8 +82,12 @@ Provide a summary of:
 - Any design patterns used
 
 Use available tools to read and analyze files.""",
-
-            "features": f"""Identify the features and capabilities of Hrisa Code.
+                ),
+                WorkflowStep(
+                    name="features",
+                    display_name="Feature Identification",
+                    model_preference="features",
+                    prompt_template="""Identify the features and capabilities of Hrisa Code.
 
 Your task: Document all features and capabilities.
 
@@ -124,8 +106,12 @@ Provide a summary of:
 - Testing setup
 
 Use search and read tools to explore the codebase.""",
-
-            "workflows": f"""Understand the execution workflows in Hrisa Code.
+                ),
+                WorkflowStep(
+                    name="workflows",
+                    display_name="Workflow Understanding",
+                    model_preference="workflows",
+                    prompt_template="""Understand the execution workflows in Hrisa Code.
 
 Your task: Trace how the application works end-to-end.
 
@@ -135,6 +121,7 @@ Steps:
 3. Understand multi-turn tool calling (Claude Code style)
 4. Understand agent mode workflow (if different from normal mode)
 5. Understand background task execution
+6. Understand orchestration workflows
 
 Provide a summary of:
 - Main execution flow (CLI → Interactive → Conversation → LLM)
@@ -142,134 +129,15 @@ Provide a summary of:
 - How multi-turn tool calling works
 - How agent mode works
 - How background tasks work
+- How orchestration works (HRISA, README generation)
 
 Use available tools to read relevant code sections.""",
-        }
-
-        return prompts.get(step, "")
-
-    async def _execute_step(self, step_name: str, step_num: int, total_steps: int) -> str:
-        """Execute a single discovery step.
-
-        Args:
-            step_name: Name of the step (architecture, components, features, workflows)
-            step_num: Step number (1-indexed)
-            total_steps: Total number of steps
-
-        Returns:
-            The LLM's response for this step
-        """
-        # Select appropriate model for this step if multi-model is enabled
-        if self.enable_multi_model and self.model_router:
-            selected_model = self.model_router.select_model_for_orchestration_step(step_name)
-            current_model = self.conversation.get_current_model()
-
-            if selected_model != current_model:
-                # Get model info for display
-                model_info = self.model_router.get_model_info(selected_model)
-                reason = model_info.strengths if model_info else "selected for this task"
-
-                # Show model selection
-                self.console.print()
-                self.console.print(
-                    Panel(
-                        f"[bold yellow]Selected Model: {selected_model}[/bold yellow]\n\n"
-                        f"[dim]Reason: {reason}[/dim]",
-                        title="► Model Selection",
-                        border_style="yellow",
-                    )
-                )
-
-                # Switch model
-                self.conversation.switch_model(selected_model, verbose=False)
-
-        # Show progress
-        self.console.print()
-        self.console.print(
-            Panel(
-                f"[bold cyan]Step {step_num}/{total_steps}: {step_name.title()} Discovery[/bold cyan]\n\n"
-                f"[dim]Exploring the codebase to understand {step_name}...[/dim]",
-                title="► Orchestrator",
-                border_style="cyan",
-            )
-        )
-        self.console.print()
-
-        # Get the prompt for this step
-        prompt = self._get_step_prompt(step_name)
-
-        # Execute the step (let the conversation handle multi-turn tool calling)
-        response = await self.conversation.process_message(prompt)
-
-        # Display the findings
-        if response:
-            self.console.print(f"[bold blue]Findings:[/bold blue]")
-            # Use markup=False to prevent Rich from parsing LLM output as markup
-            self.console.print(response, markup=False)
-            self.console.print()
-
-        # Store the discovery
-        self.discoveries[step_name] = response
-
-        return response
-
-    async def _synthesize_documentation(self) -> str:
-        """Synthesize all discoveries into comprehensive HRISA.md.
-
-        Returns:
-            The generated HRISA.md content
-        """
-        # Select appropriate model for synthesis if multi-model is enabled
-        if self.enable_multi_model and self.model_router:
-            selected_model = self.model_router.select_model_for_orchestration_step("synthesis")
-            current_model = self.conversation.get_current_model()
-
-            if selected_model != current_model:
-                # Get model info for display
-                model_info = self.model_router.get_model_info(selected_model)
-                reason = model_info.strengths if model_info else "selected for this task"
-
-                # Show model selection
-                self.console.print()
-                self.console.print(
-                    Panel(
-                        f"[bold yellow]Selected Model: {selected_model}[/bold yellow]\n\n"
-                        f"[dim]Reason: {reason}[/dim]",
-                        title="► Model Selection",
-                        border_style="yellow",
-                    )
-                )
-
-                # Switch model
-                self.conversation.switch_model(selected_model, verbose=False)
-
-        self.console.print()
-        self.console.print(
-            Panel(
-                "[bold cyan]Step 5/5: Documentation Synthesis[/bold cyan]\n\n"
-                "[dim]Generating comprehensive HRISA.md from all discoveries...[/dim]",
-                title="► Orchestrator",
-                border_style="cyan",
-            )
-        )
-        self.console.print()
-
-        # Create synthesis prompt with all discoveries
-        synthesis_prompt = f"""You have completed a thorough analysis of the Hrisa Code repository.
+                ),
+            ],
+            synthesis_prompt_template="""You have completed a thorough analysis of the Hrisa Code repository.
 
 Here are your findings from each discovery step:
-
-## ARCHITECTURE DISCOVERY:
-{self.discoveries['architecture']}
-
-## COMPONENT ANALYSIS:
-{self.discoveries['components']}
-
-## FEATURE IDENTIFICATION:
-{self.discoveries['features']}
-
-## WORKFLOW UNDERSTANDING:
-{self.discoveries['workflows']}
+{discoveries}
 
 ---
 
@@ -284,12 +152,12 @@ Required sections:
 4. Key Components - Detailed explanation of each module
 5. CLI Commands - All available commands with descriptions
 6. Tools & Capabilities - All tools the LLM can use
-7. Features - All major features (agent mode, multi-turn tools, background tasks, etc.)
+7. Features - All major features (agent mode, multi-turn tools, background tasks, orchestration, etc.)
 8. Development Practices - Code style, testing, linting
-9. Common Tasks - How to add features, run tests, etc.
+9. Common Tasks - How to add features, run tests, create new orchestrators, etc.
 10. Important Files - Critical files and their purposes
 11. Workflows - How the application works end-to-end
-12. Code Patterns - Common patterns and examples
+12. Code Patterns - Common patterns and examples (including orchestrator patterns)
 13. Notes for AI Assistants - Important guidelines
 14. Version Information - Current version and status
 
@@ -297,57 +165,17 @@ Format: Use Markdown with clear headings, code examples, and detailed explanatio
 
 Be comprehensive and accurate. Include ALL features discovered, not just the basics.
 
-Generate the COMPLETE HRISA.md content now:"""
+IMPORTANT: Describe the new orchestration framework (BaseOrchestrator, WorkflowDefinition, WorkflowStep) and how to create new orchestrators like READMEOrchestrator.
 
-        # Get the synthesized documentation
-        hrisa_content = await self.conversation.process_message(synthesis_prompt)
-
-        return hrisa_content
+Generate the COMPLETE HRISA.md content now:""",
+        )
 
     async def generate_comprehensive_hrisa(self) -> str:
         """Execute the full orchestration to generate comprehensive HRISA.md.
 
+        This is a convenience method that calls the base generate() method.
+
         Returns:
             The generated HRISA.md content
         """
-        # Display orchestration start
-        self.console.print()
-        self.console.print(
-            Panel(
-                "[bold green]COMPREHENSIVE HRISA.MD GENERATION[/bold green]\n\n"
-                f"Project: {self.project_path}\n\n"
-                "[dim]The orchestrator will guide the LLM through 5 discovery steps:\n"
-                "1. Architecture Discovery\n"
-                "2. Component Analysis\n"
-                "3. Feature Identification\n"
-                "4. Workflow Understanding\n"
-                "5. Documentation Synthesis[/dim]",
-                title="► Starting Orchestration",
-                border_style="green",
-            )
-        )
-        self.console.print()
-
-        # Execute discovery steps
-        steps = ["architecture", "components", "features", "workflows"]
-        total_steps = len(steps) + 1  # +1 for synthesis
-
-        for i, step in enumerate(steps, start=1):
-            await self._execute_step(step, i, total_steps)
-
-        # Synthesize documentation
-        hrisa_content = await self._synthesize_documentation()
-
-        # Display completion
-        self.console.print()
-        self.console.print(
-            Panel(
-                "[bold green]✓ Comprehensive HRISA.md generated successfully![/bold green]\n\n"
-                f"All {total_steps} steps completed.",
-                title="► Complete",
-                border_style="green",
-            )
-        )
-        self.console.print()
-
-        return hrisa_content
+        return await self.generate()
