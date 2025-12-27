@@ -49,12 +49,14 @@ class ReadmeOrchestrator(BaseOrchestrator):
 Your task: Understand what this project does and why it exists.
 
 Steps:
-1. Read the existing README.md if it exists (to understand current description)
-2. Read pyproject.toml to understand project metadata, dependencies, and description
-3. List the main source files to understand the codebase structure
-4. Use find_files to locate cli.py (typically in src/hrisa_code/cli.py, not at project root)
-5. Read the cli.py file to identify CLI commands with @app.command() decorators
-6. IMPORTANT: Read files directly instead of using complex regex patterns to search within files
+1. Read {project_path}/README.md if it exists (to understand current description)
+2. Read {project_path}/pyproject.toml to understand project metadata, dependencies, and description
+3. List the main source files with list_directory on {project_path}/src/
+4. Use find_files with pattern="**/cli.py" from {project_path} to locate cli.py
+   - Result will be like "src/hrisa_code/cli.py" (relative to project root)
+   - Read it with: {project_path}/src/hrisa_code/cli.py
+5. Identify CLI commands with @app.command() decorators
+6. IMPORTANT: Read files directly instead of using complex regex patterns
 
 Provide a summary of:
 - Project name and tagline
@@ -75,11 +77,13 @@ Focus on understanding the "why" and "what", not the "how".""",
 Your task: Find features that users care about (not implementation details).
 
 Steps:
-1. Use find_files to locate cli.py, then read it directly to see CLI commands (don't use complex regex)
-2. Read existing README.md to understand current feature descriptions
-3. Identify major capabilities by reading core module files (agent.py, task_manager.py, etc.)
-4. Look for configuration options in config.py or config examples
-5. Check for integration features by reading tool modules (ollama_client.py, git_operations.py, etc.)
+1. Use find_files with pattern="**/cli.py" from {project_path}, then read the file directly
+   - Prepend {project_path} to the result to get absolute path
+2. Read {project_path}/README.md to understand current feature descriptions
+3. Use find_files with pattern="**/core/*.py" to locate core modules
+   - Read key files like agent.py, task_manager.py directly (prepend {project_path})
+4. Look for config.py with find_files, then read {project_path}/[result]
+5. Check tool modules with pattern="**/tools/*.py"
 
 IMPORTANT: Read files directly rather than searching with regex patterns. Use literal search for "@app.command" if needed, then read those files.
 

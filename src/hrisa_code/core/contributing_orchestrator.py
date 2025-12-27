@@ -49,16 +49,16 @@ class ContributingOrchestrator(BaseOrchestrator):
 Your task: Understand what contributors need to get started.
 
 Steps:
-1. Read README.md for existing setup instructions
-2. Read pyproject.toml for dependencies and dev dependencies
-3. Use find_files or list_directory to locate setup scripts (Makefile in root, scripts/ directory)
-4. Use find_files to check for Docker support (Dockerfile, docker-compose.yml in root)
-5. Identify Python version requirements from pyproject.toml
-6. Check for virtual environment recommendations in README or setup scripts
-7. Use find_files to look for pre-commit config (.pre-commit-config.yaml) or git hooks
-8. Check for environment variables or config files needed
+1. Read {project_path}/README.md for existing setup instructions
+2. Read {project_path}/pyproject.toml for dependencies and dev dependencies
+3. Use list_directory on {project_path} to see Makefile, then read {project_path}/Makefile
+4. Use list_directory on {project_path}/scripts/ to see setup scripts
+5. Check for {project_path}/Dockerfile and {project_path}/docker-compose.yml
+6. Identify Python version requirements from pyproject.toml
+7. Look for {project_path}/.pre-commit-config.yaml or git hooks
+8. Check for environment variables or config files
 
-IMPORTANT: Use find_files to locate files before trying to read them. Read files directly rather than using complex search patterns.
+IMPORTANT: Always prepend {project_path} when reading files. Use list_directory to explore, then read files directly with full paths.
 
 Provide a summary of:
 - Python version requirements
@@ -80,14 +80,14 @@ Focus on what a new contributor needs to do FIRST.""",
 Your task: Understand coding style, testing, and quality expectations.
 
 Steps:
-1. Read pyproject.toml and look for [tool.ruff], [tool.black], [tool.mypy], [tool.pytest] sections
-2. Use find_files to check for standalone config files (ruff.toml, mypy.ini, pytest.ini)
-3. Read Makefile to find quality check commands (format, lint, type-check, test)
-4. Use list_directory on tests/ to understand test structure
-5. Use find_files to check for CI/CD config (.github/workflows/)
-6. Read a few example source files to see docstring and type hint patterns
+1. Read {project_path}/pyproject.toml and look for [tool.ruff], [tool.black], [tool.mypy], [tool.pytest] sections
+2. Check for {project_path}/ruff.toml, {project_path}/mypy.ini, {project_path}/pytest.ini
+3. Read {project_path}/Makefile to find quality check commands
+4. Use list_directory on {project_path}/tests/ to understand test structure
+5. Check {project_path}/.github/workflows/ for CI/CD configs
+6. Read example source files with full paths like {project_path}/src/hrisa_code/core/agent.py
 
-IMPORTANT: Read config files directly. Use find_files to locate files before reading them.
+IMPORTANT: Always use full paths with {project_path} prefix. Use list_directory to explore, then read files directly.
 
 Provide a summary of:
 - Code formatting standards (black, ruff, etc.)
@@ -110,15 +110,15 @@ Focus on what contributors need to know to write acceptable code.""",
 Your task: Understand how to submit contributions.
 
 Steps:
-1. Use find_files to check for existing CONTRIBUTING.md
-2. Use git log commands to examine recent commit message style
-3. Use find_files to look for PR templates (.github/pull_request_template.md)
-4. Use find_files to check for issue templates (.github/ISSUE_TEMPLATE/)
-5. Use git branch commands to check branch naming patterns
-6. Use find_files for pre-commit config (.pre-commit-config.yaml)
-7. Use find_files to check CI/CD (.github/workflows/)
+1. Check if {project_path}/CONTRIBUTING.md exists and read it
+2. Use execute_command with "git log --oneline -10" in {project_path} to see commit messages
+3. Check {project_path}/.github/pull_request_template.md if it exists
+4. Use list_directory on {project_path}/.github/ISSUE_TEMPLATE/ to see issue templates
+5. Use execute_command with "git branch -a" to check branch patterns
+6. Check {project_path}/.pre-commit-config.yaml
+7. Use list_directory on {project_path}/.github/workflows/ for CI/CD
 
-IMPORTANT: Use find_files and list_directory to locate files. Read files directly rather than searching.
+IMPORTANT: Always use full paths with {project_path} prefix. Use list_directory to explore directories, then read specific files.
 
 Provide a summary of:
 - Fork vs branch workflow
@@ -141,14 +141,14 @@ Focus on the step-by-step process from idea to merged PR.""",
 Your task: Help contributors understand the codebase structure.
 
 Steps:
-1. Use list_directory on src/ to see project structure
-2. Use find_files to locate key modules in src/hrisa_code/core/ and src/hrisa_code/tools/
-3. Read a few core files to understand architectural patterns (orchestrators, tools, etc.)
-4. Use find_files to check for architecture documentation (ARCHITECTURE.md, CLAUDE.md in docs/ or root)
-5. Use list_directory on tests/ to understand test organization
-6. Read example files to identify patterns (tool classes, orchestrator classes)
+1. Use list_directory on {project_path}/src/ to see project structure
+2. Use list_directory on {project_path}/src/hrisa_code/core/ and {project_path}/src/hrisa_code/tools/
+3. Read {project_path}/src/hrisa_code/core/base_orchestrator.py to understand patterns
+4. Check for {project_path}/ARCHITECTURE.md, {project_path}/CLAUDE.md, {project_path}/docs/ARCHITECTURE.md
+5. Use list_directory on {project_path}/tests/ to understand test organization
+6. Read example orchestrator files like {project_path}/src/hrisa_code/core/api_orchestrator.py
 
-IMPORTANT: Use list_directory and find_files to explore structure. Read files directly.
+IMPORTANT: Always use full paths with {project_path} prefix. Use list_directory to explore, then read specific files with absolute paths.
 
 Provide a summary of:
 - High-level architecture overview

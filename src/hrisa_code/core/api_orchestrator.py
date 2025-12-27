@@ -49,9 +49,12 @@ class ApiOrchestrator(BaseOrchestrator):
 Your task: Document every CLI command with complete usage information.
 
 Steps:
-1. First, use find_files to locate cli.py (it's typically in src/hrisa_code/cli.py, not at the project root)
-2. Read the cli.py file you found to see all @app.command() definitions
-3. IMPORTANT: If you get stuck or can't find the file, try: list_directory on src/ to understand the structure
+1. Use find_files to locate cli.py with pattern="**/cli.py" searching from {project_path} (the project root)
+   - The result will be a path like "src/hrisa_code/cli.py" (relative to project root)
+   - To read the file, prepend {project_path} to get the absolute path
+   - Example: If find_files returns "src/hrisa_code/cli.py", read "{project_path}/src/hrisa_code/cli.py"
+2. Read the cli.py file to see all @app.command() definitions
+3. IMPORTANT: If you get stuck, use list_directory on {project_path}/src/ to understand the structure
 4. For each command, extract:
    - Command name
    - Description (from docstring)
@@ -89,7 +92,9 @@ Format as reference documentation with clear syntax.""",
 Your task: Document the tool system for developers extending functionality.
 
 Steps:
-1. Use find_files to locate tool definition files in src/hrisa_code/tools/ directory
+1. Use find_files with pattern="**/tools/*.py" from {project_path} to locate tool files
+   - Results will be like "src/hrisa_code/tools/file_operations.py"
+   - Prepend {project_path} to read: "{project_path}/src/hrisa_code/tools/file_operations.py"
 2. Read each tool file (file_operations.py, git_operations.py) to see tool class definitions
 3. For each tool class, extract from the get_definition() method:
    - Tool name (function name in schema)
