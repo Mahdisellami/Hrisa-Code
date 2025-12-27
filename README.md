@@ -9,8 +9,12 @@ A CLI coding assistant powered by local LLMs via Ollama. Inspired by Claude Code
 - **Multi-Turn Tool Calling**: Claude Code-style autonomous multi-step task completion
 - **Agent Mode**: Autonomous agent for complex multi-step tasks with reflection and error recovery
 - **Text-Based Tool Parsing**: Compatible with models like qwen2.5-coder:32b that output tool calls as text
-- **HRISA.md Generation**: Automated comprehensive repository documentation with multi-step orchestration
-- **Multi-Model Orchestration**: Use specialized models for different tasks (coding, analysis, synthesis)
+- **Documentation Orchestration**: Multi-step AI-guided generation of comprehensive project documentation
+  - **HRISA.md**: AI assistant-focused repository documentation
+  - **README.md**: User-friendly project overview and getting started guide
+  - **CONTRIBUTING.md**: Contributor guidelines covering setup, workflow, and standards
+  - **API.md**: Complete API reference with CLI commands, tools, and configuration
+- **Multi-Model Orchestration**: Use specialized models for different discovery phases (architecture, features, workflows)
 - **Background Tasks**: Execute long-running commands asynchronously with process management
 - **File Operations**: Read, write, and search files in your project
 - **Git Integration**: Check status, view diffs, browse history, and manage branches
@@ -169,6 +173,40 @@ hrisa init
 hrisa init --global
 ```
 
+### Documentation Generation
+
+Generate comprehensive project documentation using multi-step AI orchestration:
+
+```bash
+# Generate HRISA.md (AI assistant-focused documentation)
+hrisa hrisa
+
+# Generate README.md (user-friendly project overview)
+hrisa readme
+
+# Generate CONTRIBUTING.md (contributor guidelines)
+hrisa contributing
+
+# Generate API.md (complete API reference)
+hrisa api
+
+# Use multi-model orchestration for higher quality
+hrisa readme --multi-model
+hrisa api --multi-model
+
+# Force overwrite existing files
+hrisa contributing --force
+
+# Use specific model
+hrisa api --model qwen2.5:72b
+```
+
+Each documentation orchestrator follows a multi-step discovery process:
+1. **Discovery phases**: Architecture, components, features, workflows
+2. **Analysis**: Deep exploration of codebase with specialized prompts
+3. **Synthesis**: Generate comprehensive, well-structured documentation
+4. **Multi-model support**: Use different models for different analysis phases
+
 ## Configuration
 
 Hrisa Code looks for configuration in this order:
@@ -206,24 +244,42 @@ Hrisa Code is built with a modular architecture:
 
 ```
 src/hrisa_code/
-├── cli.py                 # CLI entry point
+├── cli.py                          # CLI entry point
 ├── core/
-│   ├── ollama_client.py   # Ollama API client
-│   ├── conversation.py    # Conversation management
-│   ├── interactive.py     # Interactive session handler
-│   └── config.py          # Configuration management
+│   ├── ollama_client.py            # Ollama API client
+│   ├── conversation.py             # Conversation management & tool execution
+│   ├── interactive.py              # Interactive session handler
+│   ├── config.py                   # Configuration management
+│   ├── agent.py                    # Autonomous agent mode
+│   ├── task_manager.py             # Background task execution
+│   ├── base_orchestrator.py       # Base orchestration framework
+│   ├── hrisa_orchestrator.py      # HRISA.md generation orchestrator
+│   ├── readme_orchestrator.py     # README.md generation orchestrator
+│   ├── contributing_orchestrator.py # CONTRIBUTING.md orchestrator
+│   ├── api_orchestrator.py        # API.md generation orchestrator
+│   ├── model_router.py             # Multi-model orchestration
+│   ├── approval_manager.py         # User approval for write operations
+│   ├── loop_detector.py            # Repetitive action detection
+│   └── goal_tracker.py             # Task completion tracking
 ├── tools/
-│   └── file_operations.py # File and command tools
+│   ├── file_operations.py          # File and command tools
+│   └── git_operations.py           # Git integration tools
 └── mcp/
-    └── ...                # MCP integration (future)
+    └── ...                          # MCP integration (future)
 ```
 
 ### Key Components
 
 - **OllamaClient**: Handles communication with Ollama, manages conversation history
-- **ConversationManager**: Orchestrates tool execution and LLM interaction
+- **ConversationManager**: Orchestrates tool execution and LLM interaction with multi-turn tool calling
 - **InteractiveSession**: Manages the user interface and command handling
-- **Tools**: Extensible system for file operations, command execution, and more
+- **BaseOrchestrator**: Framework for multi-step documentation generation workflows
+- **Documentation Orchestrators**: Specialized orchestrators (HRISA, README, CONTRIBUTING, API) with discovery phases
+- **ModelRouter**: Intelligently selects specialized models for different tasks
+- **Agent**: Autonomous mode for complex multi-step tasks with reflection and error recovery
+- **TaskManager**: Background process management for long-running operations
+- **ApprovalManager**: User confirmation system for write operations (files, git commits)
+- **Tools**: Extensible system for file operations, git, command execution, and more
 
 ## Available Tools
 
@@ -407,10 +463,16 @@ Hrisa-Code/
 - [x] Multi-turn tool calling (Claude Code style)
 - [x] Agent mode with autonomous task execution
 - [x] Background task execution
-- [x] HRISA.md generation with orchestration
+- [x] Documentation orchestration framework (BaseOrchestrator)
+- [x] HRISA.md generation with multi-step orchestration
+- [x] README.md generation with discovery phases
+- [x] CONTRIBUTING.md generation with workflow analysis
+- [x] API.md generation with comprehensive reference
 - [x] Text-based tool call parsing
 - [x] Multi-model orchestration system
-- [x] Git integration tools (status, diff, log, branch)
+- [x] Git integration tools (status, diff, log, branch, commit, push, pull)
+- [x] Approval manager for write operations
+- [x] Loop detection and goal tracking
 
 ### In Progress 🔄
 - [ ] Full MCP (Model Context Protocol) integration

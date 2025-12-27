@@ -44,7 +44,12 @@ src/hrisa_code/          # Main package
 │   ├── ollama_client.py # Async Ollama API client
 │   ├── agent.py        # Autonomous agent loop for multi-step tasks
 │   ├── task_manager.py # Background task execution & process management
-│   ├── hrisa_orchestrator.py # Multi-step orchestration for HRISA.md
+│   ├── base_orchestrator.py # Base framework for multi-step orchestration
+│   ├── hrisa_orchestrator.py # HRISA.md generation orchestrator
+│   ├── readme_orchestrator.py # README.md generation orchestrator
+│   ├── contributing_orchestrator.py # CONTRIBUTING.md orchestrator
+│   ├── api_orchestrator.py # API.md generation orchestrator
+│   ├── model_router.py # Multi-model orchestration & model selection
 │   ├── approval_manager.py # User approval for write operations
 │   ├── loop_detector.py    # Detection of repetitive tool calls
 │   ├── goal_tracker.py     # Task completion detection
@@ -68,7 +73,7 @@ src/hrisa_code/          # Main package
 
 ### 1. CLI (`cli.py`)
 - Entry point with Typer commands
-- Commands: `chat`, `models`, `init`
+- Commands: `chat`, `models`, `init`, `hrisa`, `readme`, `contributing`, `api`
 - Uses Rich for beautiful output
 
 ### 2. Ollama Client (`core/ollama_client.py`)
@@ -98,11 +103,17 @@ src/hrisa_code/          # Main package
 - Task status tracking
 - Output capture and retrieval
 
-### 6. HRISA Orchestrator (`core/hrisa_orchestrator.py`)
-- Multi-step repository analysis
-- 5-phase orchestration: Architecture → Components → Features → Workflows → Synthesis
-- Guided LLM exploration
-- Comprehensive documentation generation
+### 6. Documentation Orchestration Framework
+- **BaseOrchestrator** (`core/base_orchestrator.py`): Framework for multi-step workflows
+- **HRISA Orchestrator** (`core/hrisa_orchestrator.py`): AI assistant-focused repository documentation
+  - 4 discovery phases: Architecture → Components → Features → Workflows → Synthesis
+- **README Orchestrator** (`core/readme_orchestrator.py`): User-friendly project overview
+  - 4 discovery phases: Project Discovery → Feature Highlights → Installation → Usage Examples → Synthesis
+- **CONTRIBUTING Orchestrator** (`core/contributing_orchestrator.py`): Contributor guidelines
+  - 4 discovery phases: Project Setup → Code Standards → Contribution Workflow → Architecture Guide → Synthesis
+- **API Orchestrator** (`core/api_orchestrator.py`): Complete API reference
+  - 4 discovery phases: CLI Commands → Tools Discovery → Core APIs → Configuration → Synthesis
+- **Model Router** (`core/model_router.py`): Multi-model orchestration with specialized model selection
 
 ### 7. Approval Manager (`core/approval_manager.py`)
 - User confirmation for write operations
@@ -189,6 +200,60 @@ class MyTool:
 2. Register in appropriate `TOOLS` dict
 3. Import and merge into `AVAILABLE_TOOLS` in `file_operations.py`
 4. Add tests in `tests/test_*.py`
+5. Update docs (README.md, CLAUDE.md)
+
+### Adding a New Orchestrator
+
+1. Create orchestrator class inheriting from `BaseOrchestrator`:
+```python
+from hrisa_code.core.base_orchestrator import (
+    BaseOrchestrator,
+    WorkflowDefinition,
+    WorkflowStep,
+)
+
+class MyOrchestrator(BaseOrchestrator):
+    @property
+    def workflow_definition(self) -> WorkflowDefinition:
+        return WorkflowDefinition(
+            name="MY_DOC",
+            description="Description of what it generates",
+            audience="Target audience",
+            output_filename="MY_DOC.md",
+            steps=[
+                WorkflowStep(
+                    name="discovery_step",
+                    display_name="Discovery Step Name",
+                    model_preference="architecture",  # or "features", "workflows", "components"
+                    prompt_template="""Discovery prompt with {project_path}.
+
+Steps:
+1. Use find_files to locate files (be explicit about paths)
+2. Read files directly (avoid complex regex)
+3. Extract information
+
+IMPORTANT: Use find_files before read_file. Read files directly.
+
+Provide a summary of...""",
+                ),
+                # Add more steps...
+            ],
+            synthesis_prompt_template="""Synthesis prompt.
+
+Here are your findings:
+{discoveries}
+
+Generate the complete MY_DOC.md content now:""",
+        )
+```
+
+2. Add CLI command in `cli.py` to expose the orchestrator
+3. Follow prompt engineering best practices:
+   - Use explicit `find_files` instructions with actual paths (e.g., "src/hrisa_code/tools/")
+   - Instruct to read files directly instead of complex regex patterns
+   - Add fallback strategies for when goal tracker warns
+   - Specify exact file locations when known
+4. Add tests for the orchestrator
 5. Update docs (README.md, CLAUDE.md)
 
 ### Modifying Configuration

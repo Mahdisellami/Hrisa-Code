@@ -52,8 +52,9 @@ Steps:
 1. Read the existing README.md if it exists (to understand current description)
 2. Read pyproject.toml to understand project metadata, dependencies, and description
 3. List the main source files to understand the codebase structure
-4. Identify the CLI commands (look for Typer @app.command() definitions)
-5. Read the main entry points (cli.py, __main__.py, etc.)
+4. Use find_files to locate cli.py (typically in src/hrisa_code/cli.py, not at project root)
+5. Read the cli.py file to identify CLI commands with @app.command() decorators
+6. IMPORTANT: Read files directly instead of using complex regex patterns to search within files
 
 Provide a summary of:
 - Project name and tagline
@@ -74,11 +75,13 @@ Focus on understanding the "why" and "what", not the "how".""",
 Your task: Find features that users care about (not implementation details).
 
 Steps:
-1. Search for CLI commands and their descriptions
-2. Identify major capabilities (look for agent mode, background tasks, tool calling, etc.)
-3. Find configuration options that affect user experience
-4. Look for unique selling points (what makes this project different?)
-5. Check for integration features (ollama, git, multi-model support, etc.)
+1. Use find_files to locate cli.py, then read it directly to see CLI commands (don't use complex regex)
+2. Read existing README.md to understand current feature descriptions
+3. Identify major capabilities by reading core module files (agent.py, task_manager.py, etc.)
+4. Look for configuration options in config.py or config examples
+5. Check for integration features by reading tool modules (ollama_client.py, git_operations.py, etc.)
+
+IMPORTANT: Read files directly rather than searching with regex patterns. Use literal search for "@app.command" if needed, then read those files.
 
 Provide a summary of:
 - Top 5-8 features with user-facing benefits (not just "has feature X" but "lets you do Y")

@@ -477,5 +477,303 @@ def readme(
         raise typer.Exit(1)
 
 
+@app.command()
+def contributing(
+    path: Path = typer.Argument(
+        Path.cwd(),
+        help="Project directory to generate CONTRIBUTING.md for",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Ollama model to use for CONTRIBUTING.md generation",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force overwrite without confirmation",
+    ),
+    multi_model: bool = typer.Option(
+        False,
+        "--multi-model",
+        help="Use multiple specialized models for different steps",
+    ),
+) -> None:
+    """Generate comprehensive CONTRIBUTING.md contributor guidelines.
+
+    Uses multi-step orchestration to analyze the project and generate
+    contributor guidelines covering setup, workflow, standards, and architecture.
+
+    The orchestrator will:
+    1. Discover project setup requirements
+    2. Identify code standards and quality expectations
+    3. Understand contribution workflow and git practices
+    4. Map architecture and common patterns
+    5. Synthesize comprehensive CONTRIBUTING.md
+
+    Example:
+        hrisa contributing
+        hrisa contributing --multi-model
+        hrisa contributing --model qwen2.5:72b --force
+    """
+    # Load config (use default if not found)
+    try:
+        config_path = Config.get_project_config_path(path)
+        if config_path.exists():
+            config = Config.load(config_path)
+        else:
+            config = Config()
+            console.print("[yellow]No config found, using defaults[/yellow]")
+            console.print(f"[dim]Tip: Run 'hrisa init' to create config at {config_path}[/dim]\n")
+    except Exception:
+        config = Config()
+
+    # Override model if specified
+    if model:
+        config.model.name = model
+
+    contributing_path = path / "CONTRIBUTING.md"
+
+    # Check if CONTRIBUTING.md exists
+    if contributing_path.exists() and not force:
+        console.print(f"[yellow]CONTRIBUTING.md already exists at {contributing_path}[/yellow]")
+        overwrite = typer.confirm("Overwrite?")
+        if not overwrite:
+            raise typer.Exit()
+
+    try:
+        console.print("[bold cyan]Generating CONTRIBUTING.md...[/bold cyan]")
+        if multi_model:
+            console.print("[dim]Using multi-model orchestration with specialized models for each step.[/dim]\n")
+        else:
+            console.print("[dim]Tip: Use --multi-model for better quality with multiple specialized models.[/dim]\n")
+
+        # Create necessary components
+        from hrisa_code.core.conversation import ConversationManager
+        from hrisa_code.core.ollama_client import OllamaConfig
+        from hrisa_code.core.contributing_orchestrator import ContributingOrchestrator
+
+        # Create OllamaConfig
+        ollama_config = OllamaConfig(
+            model=config.model.name,
+            host=config.ollama.host,
+            temperature=config.model.temperature,
+            top_p=config.model.top_p,
+            top_k=config.model.top_k,
+        )
+
+        # Create conversation manager
+        conversation = ConversationManager(
+            ollama_config=ollama_config,
+            system_prompt="You are a technical writer specializing in contributor documentation and open-source best practices.",
+            enable_tools=True,
+            working_directory=path,
+        )
+
+        # Set up model router if multi-model is enabled
+        model_router = None
+        if multi_model:
+            from hrisa_code.core.model_router import ModelRouter, ModelSelectionStrategy
+            from hrisa_code.core.ollama_client import OllamaClient
+
+            # Create Ollama client to query available models
+            temp_client = OllamaClient(ollama_config)
+            available_models = asyncio.run(temp_client.list_models())
+
+            # Create model router
+            strategy = ModelSelectionStrategy(
+                prefer_quality=True,
+                available_models=set(available_models),
+                default_model=config.model.name
+            )
+            model_router = ModelRouter(strategy=strategy)
+
+            console.print(f"[dim]→ Found {len(available_models)} available models[/dim]")
+            console.print()
+
+        # Create and run orchestrator
+        orchestrator = ContributingOrchestrator(
+            conversation=conversation,
+            project_path=path,
+            console=console,
+            model_router=model_router,
+            enable_multi_model=multi_model,
+        )
+
+        contributing_content = asyncio.run(orchestrator.generate_contributing())
+
+        # Write CONTRIBUTING.md
+        if contributing_content:
+            contributing_path.write_text(contributing_content)
+            console.print(f"[green]CONTRIBUTING.md created at {contributing_path}[/green]")
+            console.print("\n[bold]Next steps:[/bold]")
+            console.print("1. Review the generated CONTRIBUTING.md")
+            console.print("2. Customize sections for your project specifics")
+            console.print("3. Add CODE_OF_CONDUCT.md if you don't have one")
+            console.print("4. Update PR and issue templates to reference this guide")
+            console.print("5. Commit to your repository")
+        else:
+            console.print("[yellow]Warning: CONTRIBUTING generation produced no content[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error generating CONTRIBUTING.md:[/red]", markup=True)
+        console.print(str(e), markup=False)
+        console.print("\n[yellow]Make sure Ollama is running:[/yellow]")
+        console.print("  ollama serve")
+        console.print(f"\nAnd that you have the model: [cyan]ollama pull {config.model.name}[/cyan]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def api(
+    path: Path = typer.Argument(
+        Path.cwd(),
+        help="Project directory to generate API.md for",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Ollama model to use for API.md generation",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force overwrite without confirmation",
+    ),
+    multi_model: bool = typer.Option(
+        False,
+        "--multi-model",
+        help="Use multiple specialized models for different steps",
+    ),
+) -> None:
+    """Generate comprehensive API.md reference documentation.
+
+    Uses multi-step orchestration to analyze the project and generate
+    complete API reference covering CLI commands, tools, core APIs, and configuration.
+
+    The orchestrator will:
+    1. Discover all CLI commands and their usage
+    2. Find all available tools and their schemas
+    3. Analyze public classes, methods, and functions
+    4. Document configuration options
+    5. Synthesize comprehensive API.md
+
+    Example:
+        hrisa api
+        hrisa api --multi-model
+        hrisa api --model qwen2.5:72b --force
+    """
+    # Load config (use default if not found)
+    try:
+        config_path = Config.get_project_config_path(path)
+        if config_path.exists():
+            config = Config.load(config_path)
+        else:
+            config = Config()
+            console.print("[yellow]No config found, using defaults[/yellow]")
+            console.print(f"[dim]Tip: Run 'hrisa init' to create config at {config_path}[/dim]\n")
+    except Exception:
+        config = Config()
+
+    # Override model if specified
+    if model:
+        config.model.name = model
+
+    api_path = path / "API.md"
+
+    # Check if API.md exists
+    if api_path.exists() and not force:
+        console.print(f"[yellow]API.md already exists at {api_path}[/yellow]")
+        overwrite = typer.confirm("Overwrite?")
+        if not overwrite:
+            raise typer.Exit()
+
+    try:
+        console.print("[bold cyan]Generating API.md...[/bold cyan]")
+        if multi_model:
+            console.print("[dim]Using multi-model orchestration with specialized models for each step.[/dim]\n")
+        else:
+            console.print("[dim]Tip: Use --multi-model for better quality with multiple specialized models.[/dim]\n")
+
+        # Create necessary components
+        from hrisa_code.core.conversation import ConversationManager
+        from hrisa_code.core.ollama_client import OllamaConfig
+        from hrisa_code.core.api_orchestrator import ApiOrchestrator
+
+        # Create OllamaConfig
+        ollama_config = OllamaConfig(
+            model=config.model.name,
+            host=config.ollama.host,
+            temperature=config.model.temperature,
+            top_p=config.model.top_p,
+            top_k=config.model.top_k,
+        )
+
+        # Create conversation manager
+        conversation = ConversationManager(
+            ollama_config=ollama_config,
+            system_prompt="You are a technical writer specializing in API documentation and developer references.",
+            enable_tools=True,
+            working_directory=path,
+        )
+
+        # Set up model router if multi-model is enabled
+        model_router = None
+        if multi_model:
+            from hrisa_code.core.model_router import ModelRouter, ModelSelectionStrategy
+            from hrisa_code.core.ollama_client import OllamaClient
+
+            # Create Ollama client to query available models
+            temp_client = OllamaClient(ollama_config)
+            available_models = asyncio.run(temp_client.list_models())
+
+            # Create model router
+            strategy = ModelSelectionStrategy(
+                prefer_quality=True,
+                available_models=set(available_models),
+                default_model=config.model.name
+            )
+            model_router = ModelRouter(strategy=strategy)
+
+            console.print(f"[dim]→ Found {len(available_models)} available models[/dim]")
+            console.print()
+
+        # Create and run orchestrator
+        orchestrator = ApiOrchestrator(
+            conversation=conversation,
+            project_path=path,
+            console=console,
+            model_router=model_router,
+            enable_multi_model=multi_model,
+        )
+
+        api_content = asyncio.run(orchestrator.generate_api())
+
+        # Write API.md
+        if api_content:
+            api_path.write_text(api_content)
+            console.print(f"[green]API.md created at {api_path}[/green]")
+            console.print("\n[bold]Next steps:[/bold]")
+            console.print("1. Review the generated API.md")
+            console.print("2. Verify all APIs are documented correctly")
+            console.print("3. Add examples for complex APIs")
+            console.print("4. Link from README.md to API.md")
+            console.print("5. Commit to your repository")
+        else:
+            console.print("[yellow]Warning: API generation produced no content[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error generating API.md:[/red]", markup=True)
+        console.print(str(e), markup=False)
+        console.print("\n[yellow]Make sure Ollama is running:[/yellow]")
+        console.print("  ollama serve")
+        console.print(f"\nAnd that you have the model: [cyan]ollama pull {config.model.name}[/cyan]")
+        raise typer.Exit(1)
+
+
 if __name__ == "__main__":
     app()
