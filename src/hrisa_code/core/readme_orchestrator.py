@@ -44,29 +44,48 @@ class ReadmeOrchestrator(BaseOrchestrator):
                     name="project_discovery",
                     display_name="Project Discovery",
                     model_preference="architecture",
-                    prompt_template="""Discover and understand the purpose of the project at {project_path}.
+                    prompt_template="""GROUND-TRUTH DISCOVERY: Extract factual project information from {project_path}.
 
-Your task: Understand what this project does and why it exists.
+Your task: Read actual files and extract FACTS about what this project IS (not what it could be).
 
-Steps:
-1. Read {project_path}/README.md if it exists (to understand current description)
-2. Read {project_path}/pyproject.toml to understand project metadata, dependencies, and description
-3. List the main source files with list_directory on {project_path}/src/
-4. Use find_files with pattern="**/cli.py" from {project_path} to locate cli.py
+CRITICAL: Do NOT invent project names, descriptions, or features. Only report what you READ in the files.
+
+Steps (in this exact order):
+1. Read {project_path}/pyproject.toml FIRST
+   - Extract: name (THIS IS THE AUTHORITATIVE PROJECT NAME)
+   - Extract: description (official project description)
+   - Extract: version, python requires, dependencies
+
+2. Read {project_path}/README.md
+   - Note the current title and description
+   - This is the EXISTING documentation (treat as reference)
+
+3. Use find_files with pattern="**/cli.py" from {project_path} to locate cli.py
    - Result will be like "src/hrisa_code/cli.py" (relative to project root)
    - Read it with: {project_path}/src/hrisa_code/cli.py
-5. Identify CLI commands with @app.command() decorators
-6. IMPORTANT: Read files directly instead of using complex regex patterns
+   - Extract ALL @app.command() decorators and their docstrings
+   - This tells you what the CLI actually DOES
 
-Provide a summary of:
-- Project name and tagline
-- What problem does it solve?
-- Who is the target audience?
-- Main value proposition
-- Tech stack (Python version, key libraries)
-- Project category (CLI tool, library, framework, etc.)
+4. List main source files with list_directory on {project_path}/src/
+   - Note the package structure
 
-Focus on understanding the "why" and "what", not the "how".""",
+5. Read {project_path}/src/[package_name]/__init__.py if exists
+   - Extract __version__ and module docstring
+
+IMPORTANT:
+- Use EXACT project name from pyproject.toml (do not invent alternatives)
+- Base description on ACTUAL commands and code, not imagination
+- Report what you READ, not what you think it should be
+
+Provide a summary with SOURCES:
+- Project name: [from pyproject.toml name field]
+- Official description: [from pyproject.toml description field]
+- Current README title: [exact title from README.md]
+- CLI commands found: [list all @app.command() names and their purposes]
+- Tech stack: [Python version from pyproject.toml, key dependencies]
+- Package structure: [main modules found in src/]
+
+Focus on FACTS extracted from files, not interpretations.""",
                 ),
                 WorkflowStep(
                     name="feature_highlights",
@@ -163,7 +182,17 @@ Here are your findings from each discovery step:
 
 Your task: Generate a COMPREHENSIVE README.md file for human users.
 
-This README should be welcoming, clear, and help users get started quickly.
+CRITICAL REQUIREMENTS:
+1. Use the EXACT project name from pyproject.toml (found in Step 1 discoveries)
+2. Use the official description from pyproject.toml (do NOT invent alternatives)
+3. Base features on ACTUAL CLI commands discovered in Step 1 & 2
+4. Use REAL installation methods found in Step 3
+5. Use ACTUAL usage examples from Step 4
+6. Do NOT add emojis unless they exist in the current README
+7. Do NOT create fake badges or placeholder links
+8. Every section must be based on FACTS from your discoveries
+
+This README should be welcoming, clear, and help users get started quickly - but FACTUALLY ACCURATE.
 
 Required sections (in this order):
 1. **Project Title & Badges**
