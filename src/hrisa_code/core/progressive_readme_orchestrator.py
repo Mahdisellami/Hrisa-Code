@@ -67,34 +67,47 @@ Read {self.project_path}/pyproject.toml and extract these EXACT values:
 2. project.description → This is the OFFICIAL description
 3. project.version → Current version
 4. project.requires-python → Python version requirement
-5. dependencies → List of main dependencies
+5. First 5 main dependencies
 
 CRITICAL RULES:
-- Report EXACT strings from the file (no paraphrasing)
+- Report EXACT strings from the file (copy-paste, no paraphrasing)
 - Do NOT add your own descriptions
 - Do NOT invent missing information
-- If a field doesn't exist, report "NOT_FOUND"
 
-Output format (use this EXACT structure):
-```json
-{{
-  "name": "exact-name-from-file",
-  "description": "exact description from file",
-  "version": "x.y.z",
-  "python_requires": ">=x.y",
-  "dependencies": ["dep1", "dep2"]
-}}
-```
+After reading the file, respond with ONLY this format (no markdown, no explanations):
 
-Read the file now and output ONLY the JSON (no other text)."""
+PROJECT_NAME: [exact name from file]
+PROJECT_DESC: [exact description from file]
+VERSION: [exact version]
+PYTHON_REQ: [exact python requirement]
+DEPS: [dep1, dep2, dep3, dep4, dep5]
 
-        response = await self.conversation.chat(prompt)
+Start by reading the file."""
 
-        # TODO: Parse and validate JSON response
-        # For now, store raw response
-        self.facts["raw_extraction"] = response
+        response = await self.conversation.process_message(prompt)
 
-        self.console.print("[green]✓[/green] Facts extracted")
+        # Parse the structured response
+        import re
+
+        name_match = re.search(r'PROJECT_NAME:\s*(.+?)(?:\n|$)', response)
+        desc_match = re.search(r'PROJECT_DESC:\s*(.+?)(?:\n|$)', response)
+        version_match = re.search(r'VERSION:\s*(.+?)(?:\n|$)', response)
+        python_match = re.search(r'PYTHON_REQ:\s*(.+?)(?:\n|$)', response)
+
+        self.facts = {
+            "name": name_match.group(1).strip() if name_match else "UNKNOWN",
+            "description": desc_match.group(1).strip() if desc_match else "UNKNOWN",
+            "version": version_match.group(1).strip() if version_match else "0.0.0",
+            "python_requires": python_match.group(1).strip() if python_match else ">=3.10",
+            "raw_response": response,
+        }
+
+        # Validation
+        if self.facts["name"] == "UNKNOWN":
+            self.console.print("[red]✗ Could not extract project name![/red]")
+        else:
+            self.console.print(f"[green]✓[/green] Facts extracted: {self.facts['name']}")
+
         return self.facts
 
     async def build_title_section(self) -> str:
@@ -109,25 +122,13 @@ Read the file now and output ONLY the JSON (no other text)."""
             border_style="cyan"
         ))
 
-        prompt = f"""BUILD TITLE SECTION (ASSEMBLY ONLY - NO CREATIVITY)
+        # Direct assembly - no LLM needed for simple template!
+        name = self.facts.get("name", "UNKNOWN")
+        description = self.facts.get("description", "UNKNOWN")
 
-You previously extracted these facts:
-{self.facts.get('raw_extraction', 'ERROR: No facts available')}
+        section = f"""# {name}
 
-Your task: Create the title section using ONLY these extracted facts.
-
-CRITICAL RULES:
-- Use the EXACT project name from the facts
-- Use the EXACT description from the facts
-- Do NOT add emojis
-- Do NOT add fake badges
-- Do NOT invent taglines
-
-Output format:
-```markdown
-# [exact project name from facts]
-
-[exact description from facts]
+{description}
 
 ## Table of Contents
 - [Features](#features)
@@ -136,19 +137,15 @@ Output format:
 - [Usage](#usage)
 - [Development](#development)
 - [License](#license)
-```
+"""
 
-Generate the title section now (markdown only, no explanations)."""
-
-        section = await self.conversation.chat(prompt)
         self.sections["title"] = section
 
-        # Validation check
-        extracted_name = "hrisa-code"  # TODO: Parse from facts JSON
-        if extracted_name.lower() not in section.lower():
-            self.console.print(f"[yellow]⚠️  Warning: Project name '{extracted_name}' not found in title section[/yellow]")
+        # Validation
+        if name.lower() in section.lower():
+            self.console.print(f"[green]✓[/green] Title section built: {name}")
         else:
-            self.console.print("[green]✓[/green] Title section validated")
+            self.console.print(f"[red]✗[/red] Validation failed for title")
 
         return section
 
@@ -171,27 +168,36 @@ Task: Find what this CLI actually DOES by reading the code.
 Steps:
 1. Use find_files to locate cli.py: pattern="**/cli.py", directory="{self.project_path}"
 2. Read the cli.py file to find all @app.command() decorators
-3. For each command:
-   - Extract command name
-   - Extract help text/docstring
-   - This tells you what the CLI does
+3. For each command found, extract:
+   - Command name (function name)
+   - Help text/docstring (what it does)
 
 CRITICAL RULES:
 - Only report features that correspond to ACTUAL commands found in cli.py
 - Do NOT invent features
-- Do NOT add generic "features" like "Easy to use" or "Fast performance"
-- Base every feature on a concrete @app.command() you found
+- Do NOT add generic features like "Easy to use" or "Fast performance"
+- Every feature must map to a real @app.command() you found
+- Output PURE MARKDOWN (no code fences, no explanations)
 
-Output format:
+Output format (EXACT):
 ## Features
 
-- **[Command Name]**: [What the command does from its docstring]
-- **[Command Name]**: [What the command does from its docstring]
-[etc.]
+- **Command Name**: Brief description from docstring
+- **Command Name**: Brief description from docstring
 
-Start by finding and reading cli.py."""
+Start by finding and reading cli.py. Output ONLY the markdown (no ```markdown, no extra text)."""
 
-        section = await self.conversation.chat(prompt)
+        section = await self.conversation.process_message(prompt)
+
+        # Clean up markdown fences if present
+        section = section.strip()
+        if section.startswith("```markdown"):
+            section = section[len("```markdown"):].strip()
+        if section.startswith("```"):
+            section = section[3:].strip()
+        if section.endswith("```"):
+            section = section[:-3].strip()
+
         self.sections["features"] = section
 
         self.console.print("[green]✓[/green] Features section built from actual commands")
@@ -238,7 +244,17 @@ Output format:
 
 Start by reading pyproject.toml and README.md."""
 
-        section = await self.conversation.chat(prompt)
+        section = await self.conversation.process_message(prompt)
+
+        # Clean up markdown fences
+        section = section.strip()
+        if section.startswith("```markdown"):
+            section = section[len("```markdown"):].strip()
+        if section.startswith("```"):
+            section = section[3:].strip()
+        if section.endswith("```"):
+            section = section[:-3].strip()
+
         self.sections["installation"] = section
 
         self.console.print("[green]✓[/green] Installation section built from actual files")
@@ -291,7 +307,17 @@ Output format:
 
 Generate usage section now."""
 
-        section = await self.conversation.chat(prompt)
+        section = await self.conversation.process_message(prompt)
+
+        # Clean up markdown fences
+        section = section.strip()
+        if section.startswith("```markdown"):
+            section = section[len("```markdown"):].strip()
+        if section.startswith("```"):
+            section = section[3:].strip()
+        if section.endswith("```"):
+            section = section[:-3].strip()
+
         self.sections["usage"] = section
 
         self.console.print("[green]✓[/green] Usage section built from actual commands")
@@ -312,21 +338,26 @@ Generate usage section now."""
         # Simple string concatenation - no LLM needed!
         readme_parts = [
             self.sections.get("title", "# README\n"),
+            "\n",
             self.sections.get("features", "## Features\n\nTODO\n"),
+            "\n",
             self.sections.get("installation", "## Installation\n\nTODO\n"),
+            "\n",
             self.sections.get("usage", "## Usage\n\nTODO\n"),
             "\n## Development\n\nSee CONTRIBUTING.md for development guidelines.\n",
             "\n## License\n\nMIT License\n",
         ]
 
+        # Join and clean up extra newlines
         readme = "\n".join(readme_parts)
+        readme = re.sub(r'\n{3,}', '\n\n', readme)  # Max 2 consecutive newlines
 
         # Final validation
-        project_name = "hrisa-code"  # TODO: Get from validated facts
+        project_name = self.facts.get("name", "UNKNOWN")
         if project_name.lower() not in readme.lower():
             self.console.print(f"[red]✗ VALIDATION FAILED: Project name '{project_name}' not in final README[/red]")
         else:
-            self.console.print("[green]✓[/green] Final validation passed")
+            self.console.print(f"[green]✓[/green] Final validation passed: {project_name}")
 
         return readme
 

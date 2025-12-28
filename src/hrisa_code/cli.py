@@ -13,6 +13,7 @@ from hrisa_code import __version__
 from hrisa_code.core.config import Config
 from hrisa_code.core.interactive import InteractiveSession
 from hrisa_code.core.ollama_client import OllamaClient, OllamaConfig
+from hrisa_code.core.conversation import ConversationManager
 
 app = typer.Typer(
     name="hrisa",
@@ -657,7 +658,7 @@ def readme_progressive(
     from hrisa_code.core.progressive_readme_orchestrator import ProgressiveReadmeOrchestrator
 
     try:
-        config = Config.load(project_dir=path)
+        config = Config.load_with_fallback(project_dir=path)
         if model:
             config.model.name = model
 
@@ -677,11 +678,17 @@ def readme_progressive(
             raise typer.Exit(1)
 
         # Create conversation manager
-        ollama_config = config.to_ollama_config()
-        ollama_client = OllamaClient(ollama_config)
+        ollama_config = OllamaConfig(
+            model=config.model.name,
+            host=config.ollama.host,
+            temperature=config.model.temperature,
+            top_p=config.model.top_p,
+            top_k=config.model.top_k,
+        )
         conversation = ConversationManager(
-            client=ollama_client,
-            config=config,
+            ollama_config=ollama_config,
+            working_directory=path,
+            enable_tools=True,
         )
 
         # Create progressive orchestrator
