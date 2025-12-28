@@ -8,6 +8,7 @@ This orchestrator uses a fundamentally different approach from base orchestrator
 This prevents hallucination by never allowing freeform "synthesis" thinking.
 """
 
+import re
 from pathlib import Path
 from typing import Optional, Dict, Any
 from rich.console import Console
