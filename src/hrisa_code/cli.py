@@ -627,6 +627,93 @@ def contributing(
 
 
 @app.command()
+def readme_progressive(
+    path: Path = typer.Argument(
+        Path.cwd(),
+        help="Project directory to generate README.md for",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Ollama model to use for README.md generation",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force overwrite without confirmation",
+    ),
+) -> None:
+    """Generate README.md using progressive context-building (NEW APPROACH).
+
+    This command uses a fundamentally different strategy than 'hrisa readme':
+    - Extract ground-truth facts first (validated)
+    - Build each section incrementally (validated)
+    - Assemble final document (no synthesis hallucination)
+
+    This approach prevents the model from inventing project names or features.
+    """
+    from hrisa_code.core.progressive_readme_orchestrator import ProgressiveReadmeOrchestrator
+
+    try:
+        config = Config.load(project_dir=path)
+        if model:
+            config.model.name = model
+
+        console.print(Panel(
+            f"[bold]Progressive README Generation[/bold]\n\n"
+            f"Project: {path}\n"
+            f"Model: {config.model.name}\n"
+            f"Strategy: Extract → Build → Validate → Assemble",
+            border_style="cyan"
+        ))
+
+        # Check for existing README
+        readme_path = path / "README.md"
+        if readme_path.exists() and not force:
+            console.print(f"\n[yellow]README.md already exists at {readme_path}[/yellow]")
+            console.print("Use --force to overwrite")
+            raise typer.Exit(1)
+
+        # Create conversation manager
+        ollama_config = config.to_ollama_config()
+        ollama_client = OllamaClient(ollama_config)
+        conversation = ConversationManager(
+            client=ollama_client,
+            config=config,
+        )
+
+        # Create progressive orchestrator
+        orchestrator = ProgressiveReadmeOrchestrator(
+            conversation=conversation,
+            project_path=path,
+            console=console,
+        )
+
+        # Generate README
+        console.print()
+        readme_content = asyncio.run(orchestrator.generate())
+
+        if readme_content:
+            console.print(f"\n[green]README.md created at {readme_path}[/green]")
+            console.print("\nNext steps:")
+            console.print("1. Review the generated README.md")
+            console.print("2. Compare with old 'hrisa readme' output")
+            console.print("3. Verify project name and features are correct")
+        else:
+            console.print("[yellow]Warning: Progressive generation produced no content[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error in progressive README generation:[/red]", markup=True)
+        console.print(str(e), markup=False)
+        console.print("\n[yellow]Make sure Ollama is running:[/yellow]")
+        console.print("  ollama serve")
+        console.print(f"\nAnd that you have the model: [cyan]ollama pull {config.model.name}[/cyan]")
+        raise typer.Exit(1)
+
+
+@app.command()
 def api(
     path: Path = typer.Argument(
         Path.cwd(),
