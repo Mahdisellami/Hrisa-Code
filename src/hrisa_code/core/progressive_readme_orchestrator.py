@@ -1,7 +1,7 @@
 """Progressive context-building orchestrator for README generation.
 
 This orchestrator uses a fundamentally different approach from base orchestrator:
-- Extract ground-truth facts first
+- Extract ground-truth facts first (using static analysis, not LLM)
 - Build each section incrementally with validation
 - Assemble (don't synthesize) final document
 
@@ -10,11 +10,17 @@ This prevents hallucination by never allowing freeform "synthesis" thinking.
 
 import re
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from rich.console import Console
 from rich.panel import Panel
 
 from hrisa_code.core.conversation import ConversationManager
+from hrisa_code.tools.cli_introspection import (
+    extract_cli_commands_from_ast,
+    extract_pyproject_metadata,
+    extract_tool_definitions,
+    validate_content_quality,
+)
 
 
 class ProgressiveReadmeOrchestrator:
@@ -49,65 +55,35 @@ class ProgressiveReadmeOrchestrator:
         self.sections: Dict[str, str] = {}
 
     async def extract_facts(self) -> Dict[str, Any]:
-        """Phase 1: Extract ground-truth facts from pyproject.toml.
+        """Phase 1: Extract ground-truth facts from pyproject.toml using static analysis.
 
         Returns:
             Validated facts dictionary
         """
         self.console.print(Panel(
             "[bold cyan]Phase 1: Ground Truth Extraction[/bold cyan]\n"
-            "Reading pyproject.toml for authoritative facts...",
+            "Parsing pyproject.toml directly (no LLM)...",
             border_style="cyan"
         ))
 
-        prompt = f"""FACT EXTRACTION TASK (NO INTERPRETATION ALLOWED)
-
-Read {self.project_path}/pyproject.toml and extract these EXACT values:
-
-1. project.name → This is the AUTHORITATIVE project name
-2. project.description → This is the OFFICIAL description
-3. project.version → Current version
-4. project.requires-python → Python version requirement
-5. First 5 main dependencies
-
-CRITICAL RULES:
-- Report EXACT strings from the file (copy-paste, no paraphrasing)
-- Do NOT add your own descriptions
-- Do NOT invent missing information
-
-After reading the file, respond with ONLY this format (no markdown, no explanations):
-
-PROJECT_NAME: [exact name from file]
-PROJECT_DESC: [exact description from file]
-VERSION: [exact version]
-PYTHON_REQ: [exact python requirement]
-DEPS: [dep1, dep2, dep3, dep4, dep5]
-
-Start by reading the file."""
-
-        response = await self.conversation.process_message(prompt)
-
-        # Parse the structured response
-        import re
-
-        name_match = re.search(r'PROJECT_NAME:\s*(.+?)(?:\n|$)', response)
-        desc_match = re.search(r'PROJECT_DESC:\s*(.+?)(?:\n|$)', response)
-        version_match = re.search(r'VERSION:\s*(.+?)(?:\n|$)', response)
-        python_match = re.search(r'PYTHON_REQ:\s*(.+?)(?:\n|$)', response)
+        # Use static analysis instead of LLM
+        pyproject_path = self.project_path / "pyproject.toml"
+        metadata = extract_pyproject_metadata(pyproject_path)
 
         self.facts = {
-            "name": name_match.group(1).strip() if name_match else "UNKNOWN",
-            "description": desc_match.group(1).strip() if desc_match else "UNKNOWN",
-            "version": version_match.group(1).strip() if version_match else "0.0.0",
-            "python_requires": python_match.group(1).strip() if python_match else ">=3.10",
-            "raw_response": response,
+            "name": metadata.get("name", "UNKNOWN"),
+            "description": metadata.get("description", "UNKNOWN"),
+            "version": metadata.get("version", "0.0.0"),
+            "python_requires": metadata.get("python_requires", ">=3.10"),
+            "dependencies": metadata.get("dependencies", [])[:5],  # First 5
+            "license": metadata.get("license", ""),
         }
 
         # Validation
         if self.facts["name"] == "UNKNOWN":
             self.console.print("[red]✗ Could not extract project name![/red]")
         else:
-            self.console.print(f"[green]✓[/green] Facts extracted: {self.facts['name']}")
+            self.console.print(f"[green]✓[/green] Facts extracted: {self.facts['name']} v{self.facts['version']}")
 
         return self.facts
 
@@ -151,188 +127,180 @@ Start by reading the file."""
         return section
 
     async def build_features_section(self) -> str:
-        """Phase 3: Build features section from actual code.
+        """Phase 3: Build features section from actual code using static analysis.
 
         Returns:
             Features section markdown
         """
         self.console.print(Panel(
             "[bold cyan]Phase 3: Features Section[/bold cyan]\n"
-            "Discovering actual features from CLI commands...",
+            "Extracting CLI commands via AST parsing (no LLM)...",
             border_style="cyan"
         ))
 
-        prompt = f"""DISCOVER ACTUAL FEATURES (CODE-BASED ONLY)
+        # Use static analysis to extract commands
+        cli_file = self.project_path / "src" / "hrisa_code" / "cli.py"
+        if not cli_file.exists():
+            cli_file = self.project_path / "cli.py"
 
-Task: Find what this CLI actually DOES by reading the code.
+        commands = extract_cli_commands_from_ast(cli_file)
 
-Steps:
-1. Use find_files to locate cli.py: pattern="**/cli.py", directory="{self.project_path}"
-2. Read the cli.py file to find all @app.command() decorators
-3. For each command found, extract:
-   - Command name (function name)
-   - Help text/docstring (what it does)
+        # Build features section from actual commands
+        section = "## Features\n\n"
 
-CRITICAL RULES:
-- Only report features that correspond to ACTUAL commands found in cli.py
-- Do NOT invent features
-- Do NOT add generic features like "Easy to use" or "Fast performance"
-- Every feature must map to a real @app.command() you found
-- Output PURE MARKDOWN (no code fences, no explanations)
+        if commands:
+            for cmd in commands:
+                name = cmd["name"]
+                help_text = cmd["help"] or "No description available"
+                section += f"- **{name}**: {help_text}\n"
 
-Output format (EXACT):
-## Features
+            self.console.print(f"[green]✓[/green] Features extracted: {len(commands)} commands found")
+        else:
+            section += "- Interactive CLI interface\n- Local LLM integration\n"
+            self.console.print("[yellow]⚠[/yellow] No commands found, using defaults")
 
-- **Command Name**: Brief description from docstring
-- **Command Name**: Brief description from docstring
+        # Now ask LLM to write prose about these features (directive prompt)
+        prompt = f"""Write a 2-3 sentence introduction for the Features section.
 
-Start by finding and reading cli.py. Output ONLY the markdown (no ```markdown, no extra text)."""
+The project is: {self.facts.get('name', 'this project')}
+Description: {self.facts.get('description', '')}
 
-        section = await self.conversation.process_message(prompt)
+Available commands:
+{chr(10).join(f"- {cmd['name']}: {cmd['help']}" for cmd in commands)}
 
-        # Clean up markdown fences if present
-        section = section.strip()
-        if section.startswith("```markdown"):
-            section = section[len("```markdown"):].strip()
-        if section.startswith("```"):
-            section = section[3:].strip()
-        if section.endswith("```"):
-            section = section[:-3].strip()
+OUTPUT ONLY THE PROSE (no markdown headers, no bullet points).
+Example: "This tool provides a comprehensive CLI interface for..."
+
+Do NOT include conversational phrases like "Here is" or "I've written"."""
+
+        intro = await self.conversation.process_message(prompt)
+        intro = intro.strip()
+
+        # Combine intro + features list
+        section = f"## Features\n\n{intro}\n\n" + "\n".join(
+            f"- **{cmd['name']}**: {cmd['help']}" for cmd in commands
+        )
 
         self.sections["features"] = section
-
-        self.console.print("[green]✓[/green] Features section built from actual commands")
         return section
 
     async def build_installation_section(self) -> str:
-        """Phase 4: Build installation section from actual setup files.
+        """Phase 4: Build installation section using known facts.
 
         Returns:
             Installation section markdown
         """
         self.console.print(Panel(
             "[bold cyan]Phase 4: Installation Section[/bold cyan]\n"
-            "Finding actual installation methods...",
+            "Building installation instructions from facts...",
             border_style="cyan"
         ))
 
-        prompt = f"""DISCOVER INSTALLATION METHODS (FILE-BASED ONLY)
+        # Use facts we already extracted
+        python_req = self.facts.get("python_requires", ">=3.10")
+        name = self.facts.get("name", "this-package")
 
-Task: Find how users actually install this project.
+        # Build prerequisites
+        section = f"""## Prerequisites
 
-Steps:
-1. Check if {self.project_path}/pyproject.toml has [project.scripts] or [tool.setuptools]
-2. Check if {self.project_path}/README.md has installation instructions
-3. Check if {self.project_path}/Makefile has install targets
+- Python {python_req}
+- pip package manager
+"""
 
-Based on what you find, report ACTUAL installation methods (not generic ones).
+        # Check for additional prerequisites by asking LLM to read specific files
+        prompt = f"""Read {self.project_path}/README.md and look for the "Prerequisites" section.
 
-CRITICAL RULES:
-- Only report installation methods that EXIST in the project
-- If it's on PyPI, show: pip install [exact-package-name]
-- If it's source-only, show: git clone + pip install -e .
-- Show the ACTUAL python version requirement from pyproject.toml
+Extract ONLY the actual prerequisites listed (like Ollama, Docker, etc.).
+OUTPUT FORMAT:
+- Prerequisite 1
+- Prerequisite 2
 
-Output format:
-## Prerequisites
+If no prerequisites section exists, output: NONE"""
 
-- Python [exact version from pyproject.toml]
-- [other actual prerequisites]
+        prereqs_response = await self.conversation.process_message(prompt)
 
+        if "NONE" not in prereqs_response and prereqs_response.strip():
+            # Add additional prerequisites
+            for line in prereqs_response.strip().split('\n'):
+                if line.strip().startswith('-'):
+                    section += f"{line.strip()}\n"
+
+        # Build installation instructions
+        section += f"""
 ## Installation
 
-[Actual installation commands based on what you found]
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/{name}.git
+cd {name}
 
-Start by reading pyproject.toml and README.md."""
-
-        section = await self.conversation.process_message(prompt)
-
-        # Clean up markdown fences
-        section = section.strip()
-        if section.startswith("```markdown"):
-            section = section[len("```markdown"):].strip()
-        if section.startswith("```"):
-            section = section[3:].strip()
-        if section.endswith("```"):
-            section = section[:-3].strip()
+# Install dependencies
+pip install -e ".[dev]"
+```
+"""
 
         self.sections["installation"] = section
-
-        self.console.print("[green]✓[/green] Installation section built from actual files")
+        self.console.print("[green]✓[/green] Installation section built")
         return section
 
     async def build_usage_section(self) -> str:
-        """Phase 5: Build usage section from CLI help and examples.
+        """Phase 5: Build usage section using template + LLM prose.
 
         Returns:
             Usage section markdown
         """
         self.console.print(Panel(
             "[bold cyan]Phase 5: Usage Section[/bold cyan]\n"
-            "Extracting actual CLI usage examples...",
+            "Building usage examples from extracted commands...",
             border_style="cyan"
         ))
 
-        prompt = f"""CREATE USAGE EXAMPLES (COMMAND-BASED ONLY)
+        # Get commands we extracted in Phase 3
+        cli_file = self.project_path / "src" / "hrisa_code" / "cli.py"
+        if not cli_file.exists():
+            cli_file = self.project_path / "cli.py"
 
-Task: Show how to actually use the CLI commands you found earlier.
+        commands = extract_cli_commands_from_ast(cli_file)
+        name = self.facts.get("name", "this-tool")
 
-For each command you discovered in Phase 3:
-1. Show the basic command syntax
-2. Show a simple example
-3. Reference the command's help text
+        # Build usage section with template
+        section = "## Usage\n\n"
 
-CRITICAL RULES:
-- Only show commands that actually exist (from Phase 3)
-- Use real command names (not placeholder names)
-- Examples should be copy-pasteable
-- No fake examples
+        if commands:
+            # Ask LLM to write a brief usage introduction (directive)
+            prompt = f"""Write 1-2 sentences introducing how to use {name}.
 
-Output format:
-## Usage
+The tool has these commands: {', '.join(cmd['name'] for cmd in commands)}
 
-### Basic Usage
+OUTPUT ONLY THE PROSE (no headers, no code blocks).
+Example: "Start by running the chat command to interact with..."
 
-```bash
-[actual-command-name] [actual-subcommand]
-```
+Do NOT use conversational phrases."""
 
-### Examples
+            intro = await self.conversation.process_message(prompt)
+            section += f"{intro.strip()}\n\n"
 
-**[Actual feature]:**
-```bash
-[actual command example]
-```
+            # Add examples for each command
+            section += "### Commands\n\n"
+            for cmd in commands:
+                section += f"```bash\n# {cmd['help']}\n{name} {cmd['name']}\n```\n\n"
 
-[More examples based on actual commands]
-
-Generate usage section now."""
-
-        section = await self.conversation.process_message(prompt)
-
-        # Clean up markdown fences
-        section = section.strip()
-        if section.startswith("```markdown"):
-            section = section[len("```markdown"):].strip()
-        if section.startswith("```"):
-            section = section[3:].strip()
-        if section.endswith("```"):
-            section = section[:-3].strip()
+        else:
+            section += "See the documentation for usage examples.\n"
 
         self.sections["usage"] = section
-
-        self.console.print("[green]✓[/green] Usage section built from actual commands")
+        self.console.print("[green]✓[/green] Usage section built")
         return section
 
     async def assemble_readme(self) -> str:
-        """Phase 6: Assemble final README (no synthesis thinking).
+        """Phase 6: Assemble final README with quality validation.
 
         Returns:
             Complete README markdown
         """
         self.console.print(Panel(
-            "[bold cyan]Phase 6: Assembly[/bold cyan]\n"
-            "Combining validated sections...",
+            "[bold cyan]Phase 6: Assembly & Validation[/bold cyan]\n"
+            "Combining sections and validating quality...",
             border_style="cyan"
         ))
 
@@ -353,12 +321,21 @@ Generate usage section now."""
         readme = "\n".join(readme_parts)
         readme = re.sub(r'\n{3,}', '\n\n', readme)  # Max 2 consecutive newlines
 
-        # Final validation
+        # Content quality validation
+        is_valid, errors = validate_content_quality(readme)
+
+        if not is_valid:
+            self.console.print("[red]✗ Content quality validation FAILED:[/red]")
+            for error in errors:
+                self.console.print(f"  • {error}")
+            raise ValueError(f"Content quality validation failed: {len(errors)} issues found")
+
+        # Basic validation
         project_name = self.facts.get("name", "UNKNOWN")
         if project_name.lower() not in readme.lower():
             self.console.print(f"[red]✗ VALIDATION FAILED: Project name '{project_name}' not in final README[/red]")
         else:
-            self.console.print(f"[green]✓[/green] Final validation passed: {project_name}")
+            self.console.print(f"[green]✓[/green] Content validation passed: clean, accurate documentation")
 
         return readme
 
