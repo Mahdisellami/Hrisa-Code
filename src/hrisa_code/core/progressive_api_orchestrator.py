@@ -207,162 +207,106 @@ This document provides comprehensive API documentation for developers, integrato
         return section
 
     async def build_core_api_section(self) -> str:
-        """Phase 5: Build core API section from core/*.py files.
+        """Phase 5: Build core API section with template + directive LLM.
 
         Returns:
             Core API section markdown
         """
         self.console.print(Panel(
             "[bold cyan]Phase 5: Core API Section[/bold cyan]\n"
-            "Discovering core APIs from core/*.py files...",
+            "Building Core API reference...",
             border_style="cyan"
         ))
 
-        prompt = f"""DISCOVER CORE APIs (CODE-BASED ONLY)
+        # Template structure for core modules
+        section = "## Core API Reference\n\n"
+        section += "The core API consists of several key modules:\n\n"
 
-Task: Document public classes and methods in core modules.
+        # List core modules
+        core_modules = [
+            ("config", "Configuration management with Pydantic models"),
+            ("conversation", "Conversation orchestration and tool execution"),
+            ("ollama_client", "Async Ollama API client"),
+            ("agent", "Autonomous task execution"),
+            ("task_manager", "Background process management"),
+        ]
 
-Steps:
-1. Use list_directory on {self.project_path}/src/[package]/core/
-2. Read key files like config.py, conversation.py, agent.py
-3. For each public class:
-   - Extract class name
-   - Extract __init__ parameters
-   - Extract public methods (not starting with _)
-   - Extract docstrings and type hints
+        for module_name, description in core_modules:
+            section += f"### Module: `hrisa_code.core.{module_name}`\n\n"
+            section += f"{description}\n\n"
+            section += f"See source code at `src/hrisa_code/core/{module_name}.py` for complete API details.\n\n"
 
-CRITICAL RULES:
-- Only document public APIs (no _ prefixed)
-- Extract EXACT signatures from code
-- Include type hints if present
-- Output PURE MARKDOWN
+        # Ask LLM to write brief integration guidance (directive)
+        prompt = f"""Write 2-3 sentences about how developers can import and use the core modules.
 
-Output format (EXACT):
-## Core API Reference
+Project: {self.facts.get('name')}
+Core modules: config, conversation, ollama_client, agent, task_manager
 
-### Module: `module_name`
+OUTPUT ONLY THE PROSE (no headers, no code blocks).
+Example: "Import core classes directly from hrisa_code.core..."
 
-#### Class: `ClassName`
+Do NOT use conversational phrases."""
 
-**Description**: [From class docstring]
-
-**Constructor**:
-```python
-__init__(param1: Type, param2: Type = default)
-```
-
-**Parameters**:
-- `param1` (Type): Description
-- `param2` (Type, optional): Description. Default: value
-
-**Methods**:
-
-##### `method_name(param: Type) -> ReturnType`
-
-Description from docstring.
-
-**Parameters**:
-- `param` (Type): Description
-
-**Returns**: Description
-
-[Repeat for each class/method]
-
-Start by listing core directory. Output ONLY markdown."""
-
-        section = await self.conversation.process_message(prompt)
-
-        # Clean up markdown fences
-        section = section.strip()
-        if section.startswith("```markdown"):
-            section = section[len("```markdown"):].strip()
-        if section.startswith("```"):
-            section = section[3:].strip()
-        if section.endswith("```"):
-            section = section[:-3].strip()
+        guidance = await self.conversation.process_message(prompt)
+        section += f"\n### Usage\n\n{guidance.strip()}\n"
 
         self.sections["core_api"] = section
-
-        self.console.print("[green]✓[/green] Core API section built from actual code")
+        self.console.print("[green]✓[/green] Core API section built")
         return section
 
     async def build_configuration_section(self) -> str:
-        """Phase 6: Build configuration section from config.py.
+        """Phase 6: Build configuration section with template + example.
 
         Returns:
             Configuration section markdown
         """
         self.console.print(Panel(
             "[bold cyan]Phase 6: Configuration Section[/bold cyan]\n"
-            "Discovering configuration from config.py...",
+            "Building configuration reference...",
             border_style="cyan"
         ))
 
-        prompt = f"""DISCOVER CONFIGURATION (CODE-BASED ONLY)
+        # Template structure for configuration
+        section = "## Configuration Reference\n\n"
+        section += "### Configuration File Locations\n\n"
+        section += "Configuration is loaded from:\n"
+        section += "1. Project-specific: `.hrisa/config.yaml`\n"
+        section += "2. User-level: `~/.config/hrisa-code/config.yaml`\n"
+        section += "3. Default settings (built-in)\n\n"
 
-Task: Document all configuration options.
+        section += "### Configuration Sections\n\n"
+        section += "#### Model Configuration\n\n"
+        section += "- `name`: Model name (e.g., qwen2.5:72b)\n"
+        section += "- `temperature`: Temperature for generation (0.0-1.0)\n"
+        section += "- `top_p`: Top-p sampling parameter\n"
+        section += "- `top_k`: Top-k sampling parameter\n\n"
 
-Steps:
-1. Use find_files with pattern="**/config.py" from {self.project_path}
-2. Read config.py to find Pydantic models
-3. For each config model:
-   - Extract field names
-   - Extract types
-   - Extract defaults
-   - Extract descriptions from Field()
+        section += "#### Ollama Configuration\n\n"
+        section += "- `host`: Ollama server URL (default: http://localhost:11434)\n"
+        section += "- `timeout`: Request timeout in seconds\n\n"
 
-CRITICAL RULES:
-- Only document actual config fields from code
-- Extract EXACT defaults from code
-- Include validation rules if present
-- Output PURE MARKDOWN
+        section += "#### Tools Configuration\n\n"
+        section += "- `enable_file_operations`: Enable file read/write tools\n"
+        section += "- `enable_command_execution`: Enable shell command execution\n"
+        section += "- `enable_search`: Enable search operations\n\n"
 
-Output format (EXACT):
-## Configuration Reference
-
-### Configuration File Format
-
-YAML configuration file format and location.
-
-### Configuration Sections
-
-#### Model Configuration
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| field_name | type | value | Description |
-
-#### Ollama Configuration
-
-[Same table format]
-
-### Example Configuration
-
-```yaml
-model:
-  name: qwen2.5:72b
-  temperature: 0.7
-
-ollama:
-  host: http://localhost:11434
-```
-
-Start by finding config.py. Output ONLY markdown."""
-
-        section = await self.conversation.process_message(prompt)
-
-        # Clean up markdown fences
-        section = section.strip()
-        if section.startswith("```markdown"):
-            section = section[len("```markdown"):].strip()
-        if section.startswith("```"):
-            section = section[3:].strip()
-        if section.endswith("```"):
-            section = section[:-3].strip()
+        section += "### Example Configuration\n\n"
+        section += "```yaml\n"
+        section += "model:\n"
+        section += "  name: qwen2.5:72b\n"
+        section += "  temperature: 0.7\n"
+        section += "  top_p: 0.9\n"
+        section += "  top_k: 40\n\n"
+        section += "ollama:\n"
+        section += "  host: http://localhost:11434\n"
+        section += "  timeout: 300\n\n"
+        section += "tools:\n"
+        section += "  enable_file_operations: true\n"
+        section += "  enable_command_execution: true\n"
+        section += "```\n"
 
         self.sections["configuration"] = section
-
-        self.console.print("[green]✓[/green] Configuration section built from actual code")
+        self.console.print("[green]✓[/green] Configuration section built")
         return section
 
     async def assemble_api_doc(self) -> str:
