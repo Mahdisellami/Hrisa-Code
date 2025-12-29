@@ -1,7 +1,7 @@
 """Progressive context-building orchestrator for API documentation generation.
 
 This orchestrator uses the proven progressive approach:
-- Extract ground-truth facts first
+- Extract ground-truth facts first (using static analysis, not LLM)
 - Build each section incrementally with validation
 - Assemble (don't synthesize) final document
 
@@ -11,11 +11,17 @@ Focus: Complete API reference with CLI commands, tools, core APIs, configuration
 
 import re
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from rich.console import Console
 from rich.panel import Panel
 
 from hrisa_code.core.conversation import ConversationManager
+from hrisa_code.tools.cli_introspection import (
+    extract_cli_commands_from_ast,
+    extract_pyproject_metadata,
+    extract_tool_definitions,
+    validate_content_quality,
+)
 
 
 class ProgressiveApiOrchestrator:
@@ -51,61 +57,33 @@ class ProgressiveApiOrchestrator:
         self.sections: Dict[str, str] = {}
 
     async def extract_facts(self) -> Dict[str, Any]:
-        """Phase 1: Extract ground-truth facts from pyproject.toml.
+        """Phase 1: Extract ground-truth facts using static analysis.
 
         Returns:
             Validated facts dictionary
         """
         self.console.print(Panel(
             "[bold cyan]Phase 1: Ground Truth Extraction[/bold cyan]\n"
-            "Reading pyproject.toml for authoritative facts...",
+            "Parsing pyproject.toml directly (no LLM)...",
             border_style="cyan"
         ))
 
-        prompt = f"""FACT EXTRACTION TASK (NO INTERPRETATION ALLOWED)
-
-Read {self.project_path}/pyproject.toml and extract these EXACT values:
-
-1. project.name → This is the AUTHORITATIVE project name
-2. project.description → This is the OFFICIAL description
-3. project.version → Current version
-4. project.scripts → Entry point commands (e.g., "hrisa = hrisa_code.cli:app")
-
-CRITICAL RULES:
-- Report EXACT strings from the file (copy-paste, no paraphrasing)
-- Do NOT add your own descriptions
-- Do NOT invent missing information
-
-After reading the file, respond with ONLY this format (no markdown, no explanations):
-
-PROJECT_NAME: [exact name from file]
-PROJECT_DESC: [exact description from file]
-VERSION: [exact version]
-ENTRY_POINT: [exact entry point like "hrisa = hrisa_code.cli:app"]
-
-Start by reading the file."""
-
-        response = await self.conversation.process_message(prompt)
-
-        # Parse the structured response
-        name_match = re.search(r'PROJECT_NAME:\s*(.+?)(?:\n|$)', response)
-        desc_match = re.search(r'PROJECT_DESC:\s*(.+?)(?:\n|$)', response)
-        version_match = re.search(r'VERSION:\s*(.+?)(?:\n|$)', response)
-        entry_match = re.search(r'ENTRY_POINT:\s*(.+?)(?:\n|$)', response)
+        # Use static analysis instead of LLM
+        pyproject_path = self.project_path / "pyproject.toml"
+        metadata = extract_pyproject_metadata(pyproject_path)
 
         self.facts = {
-            "name": name_match.group(1).strip() if name_match else "UNKNOWN",
-            "description": desc_match.group(1).strip() if desc_match else "UNKNOWN",
-            "version": version_match.group(1).strip() if version_match else "0.0.0",
-            "entry_point": entry_match.group(1).strip() if entry_match else "UNKNOWN",
-            "raw_response": response,
+            "name": metadata.get("name", "UNKNOWN"),
+            "description": metadata.get("description", "UNKNOWN"),
+            "version": metadata.get("version", "0.0.0"),
+            "python_requires": metadata.get("python_requires", ">=3.10"),
         }
 
         # Validation
         if self.facts["name"] == "UNKNOWN":
             self.console.print("[red]✗ Could not extract project name![/red]")
         else:
-            self.console.print(f"[green]✓[/green] Facts extracted: {self.facts['name']}")
+            self.console.print(f"[green]✓[/green] Facts extracted: {self.facts['name']} v{self.facts['version']}")
 
         return self.facts
 
@@ -152,158 +130,80 @@ This document provides comprehensive API documentation for developers, integrato
         return section
 
     async def build_cli_commands_section(self) -> str:
-        """Phase 3: Build CLI commands section from actual code.
+        """Phase 3: Build CLI commands section using static analysis + LLM prose.
 
         Returns:
             CLI commands section markdown
         """
         self.console.print(Panel(
             "[bold cyan]Phase 3: CLI Commands Section[/bold cyan]\n"
-            "Discovering actual CLI commands from @app.command() decorators...",
+            "Extracting CLI commands via AST parsing (no LLM)...",
             border_style="cyan"
         ))
 
-        prompt = f"""DISCOVER CLI COMMANDS (CODE-BASED ONLY)
+        # Use static analysis to extract commands
+        cli_file = self.project_path / "src" / "hrisa_code" / "cli.py"
+        if not cli_file.exists():
+            cli_file = self.project_path / "cli.py"
 
-Task: Document every CLI command found in the codebase.
+        commands = extract_cli_commands_from_ast(cli_file)
 
-Steps:
-1. Use find_files to locate cli.py: pattern="**/cli.py", directory="{self.project_path}"
-2. Read the cli.py file
-3. For each @app.command() decorator:
-   - Extract function name (this is the command name)
-   - Extract docstring (command description)
-   - Extract parameters (arguments and options)
-   - Extract type hints and defaults
+        # Build CLI reference section
+        section = "## CLI Reference\n\n"
 
-CRITICAL RULES:
-- Only document ACTUAL commands with @app.command() decorator
-- Do NOT invent commands
-- Extract EXACT parameter names, types, defaults from function signatures
-- Output PURE MARKDOWN (no code fences, no explanations)
+        if commands:
+            self.console.print(f"[green]✓[/green] CLI commands extracted: {len(commands)} commands found")
 
-Output format (EXACT):
-## CLI Reference
-
-### Command: `command-name`
-
-**Description**: [Exact docstring text]
-
-**Usage**:
-```bash
-command-name [OPTIONS] [ARGUMENTS]
-```
-
-**Arguments**:
-- `arg_name` (type): Description from docstring
-
-**Options**:
-- `--option-name, -o` (type, default: value): Description
-
-**Examples**:
-```bash
-# Example from docstring or inferred usage
-command-name --option value
-```
-
-[Repeat for each command found]
-
-Start by finding and reading cli.py. Output ONLY markdown."""
-
-        section = await self.conversation.process_message(prompt)
-
-        # Clean up markdown fences
-        section = section.strip()
-        if section.startswith("```markdown"):
-            section = section[len("```markdown"):].strip()
-        if section.startswith("```"):
-            section = section[3:].strip()
-        if section.endswith("```"):
-            section = section[:-3].strip()
+            # Template structure for each command
+            for cmd in commands:
+                section += f"### Command: `{cmd['name']}`\n\n"
+                section += f"**Description**: {cmd['help'] or 'No description available'}\n\n"
+                section += f"**Usage**:\n```bash\n{self.facts.get('name', 'hrisa')} {cmd['name']} [OPTIONS]\n```\n\n"
+        else:
+            section += "No CLI commands found.\n"
+            self.console.print("[yellow]⚠[/yellow] No commands found")
 
         self.sections["cli_commands"] = section
-
-        self.console.print("[green]✓[/green] CLI commands section built from actual code")
         return section
 
     async def build_tools_section(self) -> str:
-        """Phase 4: Build tools section from tools/*.py files.
+        """Phase 4: Build tools section using static analysis + LLM prose.
 
         Returns:
             Tools section markdown
         """
         self.console.print(Panel(
             "[bold cyan]Phase 4: Tools Section[/bold cyan]\n"
-            "Discovering tools from tools/*.py files...",
+            "Extracting tools via static analysis (no LLM)...",
             border_style="cyan"
         ))
 
-        prompt = f"""DISCOVER TOOLS (CODE-BASED ONLY)
+        # Use static analysis to extract tools
+        tools_dir = self.project_path / "src" / "hrisa_code" / "tools"
+        if not tools_dir.exists():
+            tools_dir = self.project_path / "tools"
 
-Task: Document all tools available to the LLM.
+        tools = extract_tool_definitions(tools_dir)
 
-Steps:
-1. Use find_files with pattern="**/tools/*.py" from {self.project_path}
-2. Read each tool file (e.g., file_operations.py, git_operations.py)
-3. For each class with get_definition() method:
-   - Extract tool name (from schema)
-   - Extract description
-   - Extract parameters from schema
-   - Extract return format
+        # Build tools section
+        section = "## Tools Reference\n\n"
 
-CRITICAL RULES:
-- Only document tools with get_definition() method
-- Extract EXACT schema from code
-- Do NOT invent tools or parameters
-- Output PURE MARKDOWN
+        if tools:
+            self.console.print(f"[green]✓[/green] Tools extracted: {len(tools)} tools found")
 
-Output format (EXACT):
-## Tools Reference
+            section += "### Available Tools\n\n"
+            section += "The system provides the following tools for file operations, git integration, and command execution:\n\n"
 
-### Tool System Overview
-[Brief explanation of how tools work]
-
-### File Operations Tools
-
-#### Tool: `tool_name`
-
-**Description**: [Exact description from schema]
-
-**Parameters**:
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| param_name | type | Yes/No | Description |
-
-**Returns**: Description of return format
-
-**Example**:
-```json
-{{
-  "tool": "tool_name",
-  "parameters": {{
-    "param": "value"
-  }}
-}}
-```
-
-[Repeat for each tool, grouped by category]
-
-Start by finding tool files. Output ONLY markdown."""
-
-        section = await self.conversation.process_message(prompt)
-
-        # Clean up markdown fences
-        section = section.strip()
-        if section.startswith("```markdown"):
-            section = section[len("```markdown"):].strip()
-        if section.startswith("```"):
-            section = section[3:].strip()
-        if section.endswith("```"):
-            section = section[:-3].strip()
+            for tool in tools:
+                section += f"#### `{tool['name']}`\n\n"
+                section += f"**Source**: `{tool['file']}`\n\n"
+                if tool['description']:
+                    section += f"**Description**: {tool['description']}\n\n"
+        else:
+            section += "No tools found.\n"
+            self.console.print("[yellow]⚠[/yellow] No tools found")
 
         self.sections["tools"] = section
-
-        self.console.print("[green]✓[/green] Tools section built from actual code")
         return section
 
     async def build_core_api_section(self) -> str:
@@ -466,14 +366,14 @@ Start by finding config.py. Output ONLY markdown."""
         return section
 
     async def assemble_api_doc(self) -> str:
-        """Phase 7: Assemble final API.md (no synthesis thinking).
+        """Phase 7: Assemble final API.md with quality validation.
 
         Returns:
             Complete API.md markdown
         """
         self.console.print(Panel(
-            "[bold cyan]Phase 7: Assembly[/bold cyan]\n"
-            "Combining validated sections...",
+            "[bold cyan]Phase 7: Assembly & Validation[/bold cyan]\n"
+            "Combining sections and validating quality...",
             border_style="cyan"
         ))
 
@@ -496,12 +396,21 @@ Start by finding config.py. Output ONLY markdown."""
         api_doc = "\n".join(api_parts)
         api_doc = re.sub(r'\n{3,}', '\n\n', api_doc)
 
-        # Final validation
+        # Content quality validation
+        is_valid, errors = validate_content_quality(api_doc)
+
+        if not is_valid:
+            self.console.print("[red]✗ Content quality validation FAILED:[/red]")
+            for error in errors:
+                self.console.print(f"  • {error}")
+            raise ValueError(f"Content quality validation failed: {len(errors)} issues found")
+
+        # Basic validation
         project_name = self.facts.get("name", "UNKNOWN")
         if project_name.lower() not in api_doc.lower():
             self.console.print(f"[red]✗ VALIDATION FAILED: Project name '{project_name}' not in final API.md[/red]")
         else:
-            self.console.print(f"[green]✓[/green] Final validation passed: {project_name}")
+            self.console.print(f"[green]✓[/green] Content validation passed: clean, accurate documentation")
 
         return api_doc
 
