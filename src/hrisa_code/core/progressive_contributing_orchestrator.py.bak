@@ -16,12 +16,6 @@ from rich.console import Console
 from rich.panel import Panel
 
 from hrisa_code.core.conversation import ConversationManager
-from hrisa_code.tools.cli_introspection import (
-    extract_cli_commands_from_ast,
-    extract_pyproject_metadata,
-    extract_tool_definitions,
-    validate_content_quality,
-)
 
 
 class ProgressiveContributingOrchestrator:
