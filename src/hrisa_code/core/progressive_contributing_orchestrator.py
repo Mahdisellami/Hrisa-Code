@@ -57,17 +57,41 @@ class ProgressiveContributingOrchestrator:
         self.sections: Dict[str, str] = {}
 
     async def extract_facts(self) -> Dict[str, Any]:
-        """Phase 1: Extract ground-truth facts from pyproject.toml.
+        """Phase 1: Extract ground-truth facts using static analysis.
 
         Returns:
             Validated facts dictionary
         """
         self.console.print(Panel(
             "[bold cyan]Phase 1: Ground Truth Extraction[/bold cyan]\n"
-            "Reading pyproject.toml for authoritative facts...",
+            "Parsing pyproject.toml directly (no LLM)...",
             border_style="cyan"
         ))
 
+        # Use static analysis
+        pyproject_path = self.project_path / "pyproject.toml"
+        metadata = extract_pyproject_metadata(pyproject_path)
+
+        self.facts = {
+            "name": metadata.get("name", "UNKNOWN"),
+            "description": metadata.get("description", "UNKNOWN"),
+            "python_requires": metadata.get("python_requires", ">=3.10"),
+        }
+
+        # Validation
+        if self.facts["name"] == "UNKNOWN":
+            self.console.print("[red]✗ Could not extract project name![/red]")
+        else:
+            self.console.print(f"[green]✓[/green] Facts extracted: {self.facts['name']}")
+
+        return self.facts
+
+    async def _old_extract_facts(self) -> Dict[str, Any]:
+        """OLD VERSION - kept for reference, not used.
+
+        Returns:
+            Validated facts dictionary
+        """
         prompt = f"""FACT EXTRACTION TASK (NO INTERPRETATION ALLOWED)
 
 Read {self.project_path}/pyproject.toml and extract these EXACT values:
@@ -430,14 +454,14 @@ Output ONLY markdown."""
         return section
 
     async def assemble_contributing(self) -> str:
-        """Phase 7: Assemble final CONTRIBUTING.md (no synthesis thinking).
+        """Phase 7: Assemble final CONTRIBUTING.md with quality validation.
 
         Returns:
             Complete CONTRIBUTING.md markdown
         """
         self.console.print(Panel(
-            "[bold cyan]Phase 7: Assembly[/bold cyan]\n"
-            "Combining validated sections...",
+            "[bold cyan]Phase 7: Assembly & Validation[/bold cyan]\n"
+            "Combining sections and validating quality...",
             border_style="cyan"
         ))
 
@@ -459,12 +483,21 @@ Output ONLY markdown."""
         contributing = "\n".join(contributing_parts)
         contributing = re.sub(r'\n{3,}', '\n\n', contributing)
 
-        # Final validation
+        # Content quality validation
+        is_valid, errors = validate_content_quality(contributing)
+
+        if not is_valid:
+            self.console.print("[red]✗ Content quality validation FAILED:[/red]")
+            for error in errors:
+                self.console.print(f"  • {error}")
+            raise ValueError(f"Content quality validation failed: {len(errors)} issues found")
+
+        # Basic validation
         project_name = self.facts.get("name", "UNKNOWN")
         if project_name.lower() not in contributing.lower():
             self.console.print(f"[red]✗ VALIDATION FAILED: Project name '{project_name}' not in final CONTRIBUTING.md[/red]")
         else:
-            self.console.print(f"[green]✓[/green] Final validation passed: {project_name}")
+            self.console.print(f"[green]✓[/green] Content validation passed: clean, accurate documentation")
 
         return contributing
 

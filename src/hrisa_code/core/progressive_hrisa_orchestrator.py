@@ -64,51 +64,18 @@ class ProgressiveHrisaOrchestrator:
         """
         self.console.print(Panel(
             "[bold cyan]Phase 1: Ground Truth Extraction[/bold cyan]\n"
-            "Reading pyproject.toml for authoritative facts...",
+            "Parsing pyproject.toml directly (no LLM)...",
             border_style="cyan"
         ))
 
-        prompt = f"""FACT EXTRACTION TASK (NO INTERPRETATION ALLOWED)
-
-Read {self.project_path}/pyproject.toml and extract these EXACT values:
-
-1. project.name → This is the AUTHORITATIVE project name
-2. project.description → This is the OFFICIAL description
-3. project.version → Current version
-4. project.requires-python → Python version requirement
-5. Main CLI entry point from project.scripts
-
-CRITICAL RULES:
-- Report EXACT strings from the file (copy-paste, no paraphrasing)
-- Do NOT add your own descriptions
-- Do NOT invent missing information
-
-After reading the file, respond with ONLY this format (no markdown, no explanations):
-
-PROJECT_NAME: [exact name from file]
-PROJECT_DESC: [exact description from file]
-VERSION: [exact version]
-PYTHON_REQ: [exact python requirement]
-CLI_ENTRY: [exact entry point like "hrisa = hrisa_code.cli:app"]
-
-Start by reading the file."""
-
-        response = await self.conversation.process_message(prompt)
-
-        # Parse the structured response
-        name_match = re.search(r'PROJECT_NAME:\s*(.+?)(?:\n|$)', response)
-        desc_match = re.search(r'PROJECT_DESC:\s*(.+?)(?:\n|$)', response)
-        version_match = re.search(r'VERSION:\s*(.+?)(?:\n|$)', response)
-        python_match = re.search(r'PYTHON_REQ:\s*(.+?)(?:\n|$)', response)
-        cli_match = re.search(r'CLI_ENTRY:\s*(.+?)(?:\n|$)', response)
+        # Use static analysis
+        pyproject_path = self.project_path / "pyproject.toml"
+        metadata = extract_pyproject_metadata(pyproject_path)
 
         self.facts = {
-            "name": name_match.group(1).strip() if name_match else "UNKNOWN",
-            "description": desc_match.group(1).strip() if desc_match else "UNKNOWN",
-            "version": version_match.group(1).strip() if version_match else "0.0.0",
-            "python_requires": python_match.group(1).strip() if python_match else ">=3.10",
-            "cli_entry": cli_match.group(1).strip() if cli_match else "UNKNOWN",
-            "raw_response": response,
+            "name": metadata.get("name", "UNKNOWN"),
+            "description": metadata.get("description", "UNKNOWN"),
+            "python_requires": metadata.get("python_requires", ">=3.10"),
         }
 
         # Validation
@@ -477,8 +444,8 @@ Output ONLY markdown."""
             Complete HRISA.md markdown
         """
         self.console.print(Panel(
-            "[bold cyan]Phase 7: Assembly[/bold cyan]\n"
-            "Combining validated sections...",
+            "[bold cyan]Phase 7: Assembly & Validation[/bold cyan]\n"
+            "Combining sections and validating quality...",
             border_style="cyan"
         ))
 
@@ -506,12 +473,22 @@ Output ONLY markdown."""
         hrisa = "\n".join(hrisa_parts)
         hrisa = re.sub(r'\n{3,}', '\n\n', hrisa)
 
+        # Content quality validation
+        is_valid, errors = validate_content_quality(hrisa)
+
+        if not is_valid:
+            self.console.print("[red]✗ Content quality validation FAILED:[/red]")
+            for error in errors:
+                self.console.print(f"  • {error}")
+            raise ValueError(f"Content quality validation failed: {len(errors)} issues found")
+
+
         # Final validation
         project_name = self.facts.get("name", "UNKNOWN")
         if project_name.lower() not in hrisa.lower():
             self.console.print(f"[red]✗ VALIDATION FAILED: Project name '{project_name}' not in final HRISA.md[/red]")
         else:
-            self.console.print(f"[green]✓[/green] Final validation passed: {project_name}")
+            self.console.print(f"[green]✓[/green] Content validation passed: clean, accurate documentation")
 
         return hrisa
 
