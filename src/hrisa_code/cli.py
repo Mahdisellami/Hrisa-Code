@@ -721,6 +721,285 @@ def readme_progressive(
 
 
 @app.command()
+def api_progressive(
+    path: Path = typer.Argument(
+        Path.cwd(),
+        help="Project directory to generate API.md for",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Ollama model to use for API.md generation",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force overwrite without confirmation",
+    ),
+) -> None:
+    """Generate API.md using progressive context-building (NEW APPROACH).
+
+    This command uses the proven progressive strategy:
+    - Extract ground-truth facts first (validated)
+    - Build each section incrementally (validated)
+    - Assemble final document (no synthesis hallucination)
+
+    Prevents the model from inventing project names or API endpoints.
+    """
+    from hrisa_code.core.progressive_api_orchestrator import ProgressiveApiOrchestrator
+
+    try:
+        config = Config.load_with_fallback(project_dir=path)
+        if model:
+            config.model.name = model
+
+        console.print(Panel(
+            f"[bold]Progressive API Documentation Generation[/bold]\n\n"
+            f"Project: {path}\n"
+            f"Model: {config.model.name}\n"
+            f"Strategy: Extract → Build → Validate → Assemble",
+            border_style="cyan"
+        ))
+
+        # Check for existing API.md
+        api_path = path / "API.md"
+        if api_path.exists() and not force:
+            console.print(f"\n[yellow]API.md already exists at {api_path}[/yellow]")
+            console.print("Use --force to overwrite")
+            raise typer.Exit(1)
+
+        # Create conversation manager
+        ollama_config = OllamaConfig(
+            model=config.model.name,
+            host=config.ollama.host,
+            temperature=config.model.temperature,
+            top_p=config.model.top_p,
+            top_k=config.model.top_k,
+        )
+        conversation = ConversationManager(
+            ollama_config=ollama_config,
+            working_directory=path,
+            enable_tools=True,
+        )
+
+        # Create progressive orchestrator
+        orchestrator = ProgressiveApiOrchestrator(
+            conversation=conversation,
+            project_path=path,
+            console=console,
+        )
+
+        # Generate API.md
+        console.print()
+        api_content = asyncio.run(orchestrator.generate())
+
+        if api_content:
+            console.print(f"\n[green]API.md created at {api_path}[/green]")
+            console.print("\nNext steps:")
+            console.print("1. Review the generated API.md")
+            console.print("2. Verify CLI commands and tools are documented")
+            console.print("3. Check that all sections are complete")
+        else:
+            console.print("[yellow]Warning: Progressive generation produced no content[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error in progressive API generation:[/red]", markup=True)
+        console.print(str(e), markup=False)
+        console.print("\n[yellow]Make sure Ollama is running:[/yellow]")
+        console.print("  ollama serve")
+        console.print(f"\nAnd that you have the model: [cyan]ollama pull {config.model.name}[/cyan]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def contributing_progressive(
+    path: Path = typer.Argument(
+        Path.cwd(),
+        help="Project directory to generate CONTRIBUTING.md for",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Ollama model to use for CONTRIBUTING.md generation",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force overwrite without confirmation",
+    ),
+) -> None:
+    """Generate CONTRIBUTING.md using progressive context-building (NEW APPROACH).
+
+    This command uses the proven progressive strategy:
+    - Extract ground-truth facts first (validated)
+    - Build each section incrementally (validated)
+    - Assemble final document (no synthesis hallucination)
+
+    Prevents the model from inventing project names or workflows.
+    """
+    from hrisa_code.core.progressive_contributing_orchestrator import ProgressiveContributingOrchestrator
+
+    try:
+        config = Config.load_with_fallback(project_dir=path)
+        if model:
+            config.model.name = model
+
+        console.print(Panel(
+            f"[bold]Progressive CONTRIBUTING Documentation Generation[/bold]\n\n"
+            f"Project: {path}\n"
+            f"Model: {config.model.name}\n"
+            f"Strategy: Extract → Build → Validate → Assemble",
+            border_style="cyan"
+        ))
+
+        # Check for existing CONTRIBUTING.md
+        contributing_path = path / "CONTRIBUTING.md"
+        if contributing_path.exists() and not force:
+            console.print(f"\n[yellow]CONTRIBUTING.md already exists at {contributing_path}[/yellow]")
+            console.print("Use --force to overwrite")
+            raise typer.Exit(1)
+
+        # Create conversation manager
+        ollama_config = OllamaConfig(
+            model=config.model.name,
+            host=config.ollama.host,
+            temperature=config.model.temperature,
+            top_p=config.model.top_p,
+            top_k=config.model.top_k,
+        )
+        conversation = ConversationManager(
+            ollama_config=ollama_config,
+            working_directory=path,
+            enable_tools=True,
+        )
+
+        # Create progressive orchestrator
+        orchestrator = ProgressiveContributingOrchestrator(
+            conversation=conversation,
+            project_path=path,
+            console=console,
+        )
+
+        # Generate CONTRIBUTING.md
+        console.print()
+        contributing_content = asyncio.run(orchestrator.generate())
+
+        if contributing_content:
+            console.print(f"\n[green]CONTRIBUTING.md created at {contributing_path}[/green]")
+            console.print("\nNext steps:")
+            console.print("1. Review the generated CONTRIBUTING.md")
+            console.print("2. Verify setup instructions and workflow are correct")
+            console.print("3. Check that all sections are complete")
+        else:
+            console.print("[yellow]Warning: Progressive generation produced no content[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error in progressive CONTRIBUTING generation:[/red]", markup=True)
+        console.print(str(e), markup=False)
+        console.print("\n[yellow]Make sure Ollama is running:[/yellow]")
+        console.print("  ollama serve")
+        console.print(f"\nAnd that you have the model: [cyan]ollama pull {config.model.name}[/cyan]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def hrisa_progressive(
+    path: Path = typer.Argument(
+        Path.cwd(),
+        help="Project directory to generate HRISA.md for",
+    ),
+    model: Optional[str] = typer.Option(
+        None,
+        "--model",
+        "-m",
+        help="Ollama model to use for HRISA.md generation",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force overwrite without confirmation",
+    ),
+) -> None:
+    """Generate HRISA.md using progressive context-building (NEW APPROACH).
+
+    This command uses the proven progressive strategy:
+    - Extract ground-truth facts first (validated)
+    - Build each section incrementally (validated)
+    - Assemble final document (no synthesis hallucination)
+
+    Prevents the model from inventing project names or architecture details.
+    """
+    from hrisa_code.core.progressive_hrisa_orchestrator import ProgressiveHrisaOrchestrator
+
+    try:
+        config = Config.load_with_fallback(project_dir=path)
+        if model:
+            config.model.name = model
+
+        console.print(Panel(
+            f"[bold]Progressive HRISA Documentation Generation[/bold]\n\n"
+            f"Project: {path}\n"
+            f"Model: {config.model.name}\n"
+            f"Strategy: Extract → Build → Validate → Assemble",
+            border_style="cyan"
+        ))
+
+        # Check for existing HRISA.md
+        hrisa_path = path / "HRISA.md"
+        if hrisa_path.exists() and not force:
+            console.print(f"\n[yellow]HRISA.md already exists at {hrisa_path}[/yellow]")
+            console.print("Use --force to overwrite")
+            raise typer.Exit(1)
+
+        # Create conversation manager
+        ollama_config = OllamaConfig(
+            model=config.model.name,
+            host=config.ollama.host,
+            temperature=config.model.temperature,
+            top_p=config.model.top_p,
+            top_k=config.model.top_k,
+        )
+        conversation = ConversationManager(
+            ollama_config=ollama_config,
+            working_directory=path,
+            enable_tools=True,
+        )
+
+        # Create progressive orchestrator
+        orchestrator = ProgressiveHrisaOrchestrator(
+            conversation=conversation,
+            project_path=path,
+            console=console,
+        )
+
+        # Generate HRISA.md
+        console.print()
+        hrisa_content = asyncio.run(orchestrator.generate())
+
+        if hrisa_content:
+            console.print(f"\n[green]HRISA.md created at {hrisa_path}[/green]")
+            console.print("\nNext steps:")
+            console.print("1. Review the generated HRISA.md")
+            console.print("2. Verify architecture and components are documented")
+            console.print("3. Check that all sections are complete")
+        else:
+            console.print("[yellow]Warning: Progressive generation produced no content[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]Error in progressive HRISA generation:[/red]", markup=True)
+        console.print(str(e), markup=False)
+        console.print("\n[yellow]Make sure Ollama is running:[/yellow]")
+        console.print("  ollama serve")
+        console.print(f"\nAnd that you have the model: [cyan]ollama pull {config.model.name}[/cyan]")
+        raise typer.Exit(1)
+
+
+@app.command()
 def api(
     path: Path = typer.Argument(
         Path.cwd(),
@@ -744,10 +1023,12 @@ def api(
         help="Use multiple specialized models for different steps",
     ),
 ) -> None:
-    """Generate comprehensive API.md reference documentation.
+    """Generate comprehensive API.md reference documentation (OLD APPROACH).
 
     Uses multi-step orchestration to analyze the project and generate
     complete API reference covering CLI commands, tools, core APIs, and configuration.
+
+    NOTE: Consider using 'api-progressive' for better accuracy.
 
     The orchestrator will:
     1. Discover all CLI commands and their usage
