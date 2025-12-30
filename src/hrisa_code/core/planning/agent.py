@@ -12,6 +12,9 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 if TYPE_CHECKING:
     from hrisa_code.core.conversation import ConversationManager
 
+from hrisa_code.core.planning.complexity_detector import ComplexityDetector
+from hrisa_code.core.planning.dynamic_planner import DynamicPlanner, ExecutionPlan
+
 
 class AgentLoop:
     """Autonomous agent that can execute multi-step tasks.
@@ -36,6 +39,7 @@ class AgentLoop:
         conversation_manager: ConversationManager,
         max_iterations: int = 10,
         enable_reflection: bool = True,
+        enable_planning: bool = True,
     ):
         """Initialize the agent loop.
 
@@ -43,16 +47,29 @@ class AgentLoop:
             conversation_manager: The conversation manager for LLM interactions
             max_iterations: Maximum number of reasoning iterations
             enable_reflection: Whether to add reflection prompts
+            enable_planning: Whether to use dynamic planning for complex tasks
         """
         self.conversation = conversation_manager
         self.max_iterations = max_iterations
         self.enable_reflection = enable_reflection
+        self.enable_planning = enable_planning
         self.console = Console()
+
+        # Planning components
+        self.complexity_detector = ComplexityDetector(
+            ollama_client=conversation_manager.ollama_client,
+            evaluation_model=conversation_manager.ollama_config.model
+        )
+        self.dynamic_planner = DynamicPlanner(
+            ollama_client=conversation_manager.ollama_client,
+            planning_model=conversation_manager.ollama_config.model
+        )
 
         # State tracking
         self.current_iteration = 0
         self.task_complete = False
         self.error_count = 0
+        self.current_plan: Optional[ExecutionPlan] = None
 
     def _get_agentic_system_prompt_additions(self) -> str:
         """Get additional system prompt instructions for agentic behavior.

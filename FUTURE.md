@@ -605,10 +605,11 @@ Assistant: *executes write*
 ### Q3 2025: Intelligence & Generalization
 - ✅ Multi-model orchestration
 - ✅ Complexity detection (heuristic + LLM-based analysis with visual feedback)
-- ⏳ Basic plan generation
-- ⏳ Adaptive execution
-- ⏳ Dynamic planning
-- ⏳ Error recovery
+- ✅ Dynamic planning (LLM-based plan generation with heuristic fallback)
+- ✅ AgentLoop integration (complexity + planning components)
+- ⏳ Adaptive execution (plan-driven step execution)
+- ⏳ Plan refinement (based on discoveries)
+- ⏳ Error recovery with replanning
 
 ### Q4 2025: Optimization & Scale
 - ⏳ Performance tuning
