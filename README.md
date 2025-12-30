@@ -12,7 +12,7 @@ A CLI coding assistant powered by local LLMs via Ollama
 
 ## Features
 
-This tool provides a comprehensive CLI interface for interacting with local LLMs via Ollama, offering commands to initialize configurations, generate documentation, and manage models. It supports both traditional and progressive context-building approaches for generating detailed README, API, and contributor guidelines documents.
+This tool offers a robust CLI interface for interacting with local LLMs via Ollama, enabling users to generate various documentation files and manage configurations efficiently. It includes commands for initializing the project, generating READMEs, API references, and contributor guidelines using both traditional and progressive context-building approaches.
 
 - **chat**: Start an interactive chat session with the coding assistant.
 - **models**: List available Ollama models.
@@ -29,25 +29,6 @@ This tool provides a comprehensive CLI interface for interacting with local LLMs
 
 - Python >=3.10
 - pip package manager
-- Runs entirely on your local machine using Ollama.
-- No cloud-based costs or privacy concerns.
-- Supports a variety of open-source models like qwen2.5, deepseek-coder, and codellama.
-- Multi-model orchestration for optimized task performance.
-- Basic CLI interface for running the assistant.
-- Interactive chat sessions with multi-turn tool calling.
-- Comprehensive set of tools for file operations (read, write, list, search).
-- Git integration for repository management (status, diff, log, branch).
-- Generates HRISA.md, README.md, CONTRIBUTING.md, and API.md with multi-step orchestration.
-- Supports multi-model orchestration for better quality documentation.
-- Autonomous task execution with background task support.
-- Loop detection and goal tracking for efficient workflow management.
-- Easy setup using Make or manual commands.
-- Comprehensive testing, linting, and type-checking tools.
-- **Ollama Connection Issues**:
-- **Model Not Found**:
-- Licensed under the MIT License.
-- Inspired by Claude Code from Anthropic.
-- Uses Ollama for LLM inference, Typer for CLI, and Rich for UI.
 
 ## Installation
 
@@ -62,7 +43,7 @@ pip install -e ".[dev]"
 
 ## Usage
 
-Start by running the `chat` command to interact with Hrisa Code for coding assistance. Use the `init` command to generate essential project documentation such as README.md and CONTRIBUTING.md.
+Start by running the `chat` command to interact with the coding assistant, or use the `models` command to list available Ollama models. For initialization and documentation generation, commands like `init`, `readme`, and `contributing` provide a streamlined setup process.
 
 ### Commands
 

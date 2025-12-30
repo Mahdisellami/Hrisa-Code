@@ -6,6 +6,7 @@ This module contains components for agentic behavior:
 - User approval management
 - Goal tracking and completion detection
 - Loop detection and prevention
+- Result verification and relevance checking
 
 FUTURE: This will be expanded with:
 - Multi-step planning
@@ -28,6 +29,12 @@ from .approval_manager import (
 )
 from .goal_tracker import GoalTracker, GoalStatus, ToolResult
 from .loop_detector import LoopDetector, LoopStatus, ToolCall
+from .result_verifier import (
+    ResultVerifier,
+    VerificationResult,
+    RelevanceScore,
+    InformationGap,
+)
 
 __all__ = [
     # Agent
@@ -50,4 +57,9 @@ __all__ = [
     "LoopDetector",
     "LoopStatus",
     "ToolCall",
+    # Result verification
+    "ResultVerifier",
+    "VerificationResult",
+    "RelevanceScore",
+    "InformationGap",
 ]

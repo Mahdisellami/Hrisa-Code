@@ -15,6 +15,7 @@ from rich.spinner import Spinner
 from .ollama_client import OllamaClient, OllamaConfig
 from hrisa_code.core.planning import LoopDetector, LoopStatus
 from hrisa_code.core.planning import GoalTracker, GoalStatus
+from hrisa_code.core.planning import ResultVerifier, RelevanceScore
 from hrisa_code.core.planning import (
     ApprovalManager,
     ApprovalType,
@@ -74,6 +75,13 @@ class ConversationManager:
             ollama_client=self.ollama_client,
             evaluation_model=ollama_config.model,  # Use main model
             check_frequency=3  # Check every 3 rounds
+        )
+
+        # Result verification to evaluate tool output relevance
+        self.result_verifier = ResultVerifier(
+            ollama_client=self.ollama_client,
+            evaluation_model=ollama_config.model,  # Use main model for consistency
+            enable_verification=True  # Enable by default
         )
 
         # Approval manager for write operations
@@ -796,6 +804,10 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         self.goal_tracker.reset()
         self.goal_tracker.set_user_question(user_message)
 
+        # Reset result verifier and set user question
+        self.result_verifier.reset()
+        self.result_verifier.set_user_question(user_message)
+
         # Get initial response from LLM
         start_time = time.time()
         with self.console.status("[bold blue]Thinking...[/bold blue]", spinner="dots"):
@@ -977,6 +989,24 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                     result=result,
                     had_error=tool_result_data["had_error"]
                 )
+
+                # Verify result relevance immediately after execution
+                verification = await self.result_verifier.verify_result(
+                    tool_name=tool_name,
+                    tool_arguments=arguments,
+                    tool_result=result,
+                    had_error=tool_result_data["had_error"]
+                )
+
+                # Display verification feedback if result is not relevant
+                if verification.relevance == RelevanceScore.NOT_RELEVANT:
+                    self.console.print(
+                        f"[yellow]⚠ Result Verification: This result may not be relevant to your question.[/yellow]"
+                    )
+                elif verification.relevance == RelevanceScore.HIGHLY_RELEVANT and verification.can_answer_now:
+                    self.console.print(
+                        f"[green]✓ Result Verification: Sufficient information gathered to answer.[/green]"
+                    )
 
                 # Evaluate denial impact if user denied this operation
                 await self.goal_tracker.evaluate_denial_if_needed()
