@@ -333,6 +333,242 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
 
         return final_response
 
+    async def execute_with_plan(self, task: str, plan: Optional[ExecutionPlan] = None) -> str:
+        """Execute a task using a generated execution plan.
+
+        This method implements adaptive execution:
+        1. Generate plan if not provided
+        2. Execute steps sequentially
+        3. Track progress
+        4. Adapt plan based on discoveries
+        5. Handle errors with recovery
+
+        Args:
+            task: The task to execute
+            plan: Optional pre-generated plan (will generate if not provided)
+
+        Returns:
+            Final response after plan execution
+        """
+        # Generate plan if not provided
+        if not plan:
+            # Analyze complexity first
+            complexity_analysis = self.complexity_detector.analyze(task)
+
+            # Generate plan
+            plan = await self.dynamic_planner.generate_plan(
+                task=task,
+                complexity=complexity_analysis.complexity.value.upper(),
+                context=None  # TODO: Add codebase context
+            )
+
+            # Validate plan
+            if not self.dynamic_planner.validate_plan(plan):
+                # Fall back to regular execution
+                return await self.execute_task(task)
+
+        self.current_plan = plan
+
+        # Display plan
+        self._display_plan(plan)
+
+        # Augment system prompt with agentic instructions
+        self._augment_system_prompt()
+
+        final_response = ""
+
+        # Execute plan step by step
+        while not plan.is_complete():
+            next_step = plan.get_next_step()
+
+            if not next_step:
+                # No available steps (dependencies not met or all complete)
+                break
+
+            # Display current step
+            self._display_step_start(next_step, plan)
+
+            # Execute the step
+            try:
+                step_result = await self._execute_step(next_step, task)
+
+                # Mark step complete
+                plan.mark_step_complete(next_step.step_number, step_result)
+
+                # Display completion
+                self._display_step_complete(next_step, plan)
+
+                final_response = step_result
+
+                # Check if plan needs refinement based on discoveries
+                if self.enable_planning and "unexpected" in step_result.lower():
+                    refined_plan = await self.dynamic_planner.refine_plan(
+                        plan, step_result
+                    )
+                    if refined_plan.status.value == "refined":
+                        self.console.print("[yellow]📋 Plan refined based on discoveries[/yellow]")
+                        plan = refined_plan
+                        self.current_plan = plan
+
+            except Exception as e:
+                # Handle step failure
+                error_msg = f"Step {next_step.step_number} failed: {str(e)}"
+                self.console.print(f"[red]✗ {error_msg}[/red]")
+
+                # Mark step as failed but continue
+                plan.mark_step_complete(next_step.step_number, f"FAILED: {error_msg}")
+
+                # Try to recover or replan
+                self.error_count += 1
+                if self.error_count > 3:
+                    break
+
+        # Display final status
+        self._display_plan_completion(plan)
+
+        return final_response
+
+    def _display_plan(self, plan: ExecutionPlan) -> None:
+        """Display the execution plan to the user.
+
+        Args:
+            plan: The execution plan to display
+        """
+        from rich.table import Table
+
+        table = Table(title=f"📋 Execution Plan: {plan.task}", show_header=True, header_style="bold cyan")
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Step", style="cyan")
+        table.add_column("Type", style="magenta")
+        table.add_column("Dependencies", style="yellow", width=12)
+
+        for step in plan.steps:
+            deps = ", ".join(str(d) for d in step.dependencies) if step.dependencies else "none"
+            table.add_row(
+                str(step.step_number),
+                step.description[:50] + "..." if len(step.description) > 50 else step.description,
+                step.type.value,
+                deps
+            )
+
+        self.console.print()
+        self.console.print(table)
+        self.console.print()
+
+        # Display plan metadata
+        self.console.print(f"[dim]Complexity: {plan.complexity} | Steps: {plan.total_steps} | Confidence: {plan.confidence:.0%}[/dim]")
+
+        if plan.risks:
+            self.console.print(f"[yellow]⚠ Risks: {', '.join(plan.risks)}[/yellow]")
+
+        self.console.print()
+
+    def _display_step_start(self, step: "PlanStep", plan: ExecutionPlan) -> None:
+        """Display step start message.
+
+        Args:
+            step: The step being started
+            plan: The execution plan
+        """
+        progress = plan.get_progress()
+        self.console.print(
+            f"[bold cyan]► Step {step.step_number}/{plan.total_steps}[/bold cyan] "
+            f"[dim]({progress:.0f}% complete)[/dim]"
+        )
+        self.console.print(f"   {step.description}")
+        self.console.print(f"   [dim]Type: {step.type.value}[/dim]")
+        self.console.print()
+
+    def _display_step_complete(self, step: "PlanStep", plan: ExecutionPlan) -> None:
+        """Display step completion message.
+
+        Args:
+            step: The completed step
+            plan: The execution plan
+        """
+        progress = plan.get_progress()
+        self.console.print(
+            f"[green]✓ Step {step.step_number} complete[/green] "
+            f"[dim]({progress:.0f}% complete)[/dim]"
+        )
+        self.console.print()
+
+    def _display_plan_completion(self, plan: ExecutionPlan) -> None:
+        """Display plan completion status.
+
+        Args:
+            plan: The execution plan
+        """
+        if plan.is_complete():
+            self.console.print()
+            self.console.print(
+                Panel(
+                    "[bold green]✓ Plan Completed Successfully[/bold green]\n\n"
+                    f"All {plan.total_steps} steps executed.\n\n"
+                    "[dim]Task finished.[/dim]",
+                    title="► Complete",
+                    border_style="green",
+                )
+            )
+        else:
+            completed = sum(1 for s in plan.steps if s.completed)
+            self.console.print()
+            self.console.print(
+                Panel(
+                    "[yellow]⚠ Plan Incomplete[/yellow]\n\n"
+                    f"Completed {completed}/{plan.total_steps} steps.\n"
+                    "Some steps could not be finished.\n\n"
+                    "[dim]Partial progress made.[/dim]",
+                    title="► Incomplete",
+                    border_style="yellow",
+                )
+            )
+
+    async def _execute_step(self, step: "PlanStep", original_task: str) -> str:
+        """Execute a single plan step.
+
+        Args:
+            step: The step to execute
+            original_task: The original task description
+
+        Returns:
+            Result of step execution
+        """
+        # Build prompt for this step
+        prompt = self._build_step_prompt(step, original_task)
+
+        # Execute via conversation manager
+        response = await self.conversation.process_message(prompt)
+
+        return response or "Step completed"
+
+    def _build_step_prompt(self, step: "PlanStep", original_task: str) -> str:
+        """Build prompt for executing a specific step.
+
+        Args:
+            step: The step to execute
+            original_task: The original task
+
+        Returns:
+            Formatted prompt
+        """
+        prompt = f"""Execute this step from the plan:
+
+Original Task: {original_task}
+
+Current Step ({step.step_number}):
+{step.description}
+
+Rationale: {step.rationale}
+
+Expected Tools: {', '.join(step.expected_tools) if step.expected_tools else 'Any appropriate tools'}
+
+Success Criteria: {step.success_criteria}
+
+Execute this step now. Be thorough and use the expected tools. Report what you did.
+"""
+        return prompt
+
     async def execute_task_stream(self, task: str) -> None:
         """Execute a task with streaming output.
 

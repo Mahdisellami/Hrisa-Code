@@ -607,9 +607,11 @@ Assistant: *executes write*
 - ✅ Complexity detection (heuristic + LLM-based analysis with visual feedback)
 - ✅ Dynamic planning (LLM-based plan generation with heuristic fallback)
 - ✅ AgentLoop integration (complexity + planning components)
-- ⏳ Adaptive execution (plan-driven step execution)
-- ⏳ Plan refinement (based on discoveries)
-- ⏳ Error recovery with replanning
+- ✅ Adaptive execution (plan-driven step-by-step execution with progress tracking)
+- ✅ Plan refinement (adapts plans based on discoveries during execution)
+- ✅ Error recovery (handles step failures, stops after max errors)
+- ⏳ ConversationManager integration (expose via CLI)
+- ⏳ Full end-to-end workflow
 
 ### Q4 2025: Optimization & Scale
 - ⏳ Performance tuning
