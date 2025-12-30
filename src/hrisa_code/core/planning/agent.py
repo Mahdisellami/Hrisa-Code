@@ -1,13 +1,16 @@
 """Agentic loop for autonomous multi-step task execution."""
 
+from __future__ import annotations
+
 import asyncio
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from hrisa_code.core.conversation import ConversationManager
+if TYPE_CHECKING:
+    from hrisa_code.core.conversation import ConversationManager
 
 
 class AgentLoop:

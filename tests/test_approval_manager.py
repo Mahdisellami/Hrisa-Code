@@ -14,7 +14,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock, AsyncMock
 from pathlib import Path
 
-from hrisa_code.core.approval_manager import (
+from hrisa_code.core.planning import (
     ApprovalType,
     ApprovalDecision,
     ApprovalRequest,

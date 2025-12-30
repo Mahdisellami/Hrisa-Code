@@ -18,7 +18,7 @@ import subprocess
 import time
 from datetime import datetime
 
-from hrisa_code.core.task_manager import BackgroundTask, TaskManager
+from hrisa_code.core.memory import BackgroundTask, TaskManager
 
 
 class TestBackgroundTask:

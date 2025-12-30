@@ -11,9 +11,8 @@ from pathlib import Path
 
 from hrisa_code import __version__
 from hrisa_code.core.config import Config
-from hrisa_code.core.interactive import InteractiveSession
-from hrisa_code.core.ollama_client import OllamaClient, OllamaConfig
-from hrisa_code.core.conversation import ConversationManager
+from hrisa_code.core.interface import InteractiveSession
+from hrisa_code.core.conversation import OllamaClient, OllamaConfig, ConversationManager
 
 app = typer.Typer(
     name="hrisa",
@@ -212,8 +211,8 @@ def init(
         try:
             # Generate HRISA.md
             from hrisa_code.core.conversation import ConversationManager
-            from hrisa_code.core.ollama_client import OllamaConfig
-            from hrisa_code.core.hrisa_orchestrator import HrisaOrchestrator
+            from hrisa_code.core.conversation import OllamaConfig
+            from hrisa_code.core.orchestrators import HrisaOrchestrator
 
             # Create OllamaConfig from Config
             ollama_config = OllamaConfig(
@@ -244,7 +243,7 @@ def init(
                 model_router = None
                 if multi_model:
                     from hrisa_code.core.model_router import ModelRouter, ModelSelectionStrategy
-                    from hrisa_code.core.ollama_client import OllamaClient
+                    from hrisa_code.core.conversation import OllamaClient
 
                     # Create Ollama client to query available models
                     temp_client = OllamaClient(ollama_config)
@@ -405,8 +404,8 @@ def readme(
 
         # Create necessary components
         from hrisa_code.core.conversation import ConversationManager
-        from hrisa_code.core.ollama_client import OllamaConfig
-        from hrisa_code.core.readme_orchestrator import ReadmeOrchestrator
+        from hrisa_code.core.conversation import OllamaConfig
+        from hrisa_code.core.orchestrators import ReadmeOrchestrator
 
         # Create OllamaConfig
         ollama_config = OllamaConfig(
@@ -429,7 +428,7 @@ def readme(
         model_router = None
         if multi_model:
             from hrisa_code.core.model_router import ModelRouter, ModelSelectionStrategy
-            from hrisa_code.core.ollama_client import OllamaClient
+            from hrisa_code.core.conversation import OllamaClient
 
             # Create Ollama client to query available models
             temp_client = OllamaClient(ollama_config)
@@ -553,8 +552,8 @@ def contributing(
 
         # Create necessary components
         from hrisa_code.core.conversation import ConversationManager
-        from hrisa_code.core.ollama_client import OllamaConfig
-        from hrisa_code.core.contributing_orchestrator import ContributingOrchestrator
+        from hrisa_code.core.conversation import OllamaConfig
+        from hrisa_code.core.orchestrators import ContributingOrchestrator
 
         # Create OllamaConfig
         ollama_config = OllamaConfig(
@@ -577,7 +576,7 @@ def contributing(
         model_router = None
         if multi_model:
             from hrisa_code.core.model_router import ModelRouter, ModelSelectionStrategy
-            from hrisa_code.core.ollama_client import OllamaClient
+            from hrisa_code.core.conversation import OllamaClient
 
             # Create Ollama client to query available models
             temp_client = OllamaClient(ollama_config)
@@ -655,7 +654,7 @@ def readme_progressive(
 
     This approach prevents the model from inventing project names or features.
     """
-    from hrisa_code.core.progressive_readme_orchestrator import ProgressiveReadmeOrchestrator
+    from hrisa_code.core.orchestrators import ProgressiveReadmeOrchestrator
 
     try:
         config = Config.load_with_fallback(project_dir=path)
@@ -748,7 +747,7 @@ def api_progressive(
 
     Prevents the model from inventing project names or API endpoints.
     """
-    from hrisa_code.core.progressive_api_orchestrator import ProgressiveApiOrchestrator
+    from hrisa_code.core.orchestrators import ProgressiveApiOrchestrator
 
     try:
         config = Config.load_with_fallback(project_dir=path)
@@ -841,7 +840,7 @@ def contributing_progressive(
 
     Prevents the model from inventing project names or workflows.
     """
-    from hrisa_code.core.progressive_contributing_orchestrator import ProgressiveContributingOrchestrator
+    from hrisa_code.core.orchestrators import ProgressiveContributingOrchestrator
 
     try:
         config = Config.load_with_fallback(project_dir=path)
@@ -934,7 +933,7 @@ def hrisa_progressive(
 
     Prevents the model from inventing project names or architecture details.
     """
-    from hrisa_code.core.progressive_hrisa_orchestrator import ProgressiveHrisaOrchestrator
+    from hrisa_code.core.orchestrators import ProgressiveHrisaOrchestrator
 
     try:
         config = Config.load_with_fallback(project_dir=path)
@@ -1076,8 +1075,8 @@ def api(
 
         # Create necessary components
         from hrisa_code.core.conversation import ConversationManager
-        from hrisa_code.core.ollama_client import OllamaConfig
-        from hrisa_code.core.api_orchestrator import ApiOrchestrator
+        from hrisa_code.core.conversation import OllamaConfig
+        from hrisa_code.core.orchestrators import ApiOrchestrator
 
         # Create OllamaConfig
         ollama_config = OllamaConfig(
@@ -1100,7 +1099,7 @@ def api(
         model_router = None
         if multi_model:
             from hrisa_code.core.model_router import ModelRouter, ModelSelectionStrategy
-            from hrisa_code.core.ollama_client import OllamaClient
+            from hrisa_code.core.conversation import OllamaClient
 
             # Create Ollama client to query available models
             temp_client = OllamaClient(ollama_config)

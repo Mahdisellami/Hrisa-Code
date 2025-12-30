@@ -10,11 +10,11 @@ from rich.console import Console
 from rich.panel import Panel
 
 from hrisa_code.core.conversation import ConversationManager
-from hrisa_code.core.ollama_client import OllamaConfig
+from hrisa_code.core.conversation import OllamaConfig
 from hrisa_code.core.config import Config
-from hrisa_code.core.repo_context import RepoContext
-from hrisa_code.core.task_manager import TaskManager
-from hrisa_code.core.agent import AgentLoop
+from hrisa_code.core.memory import RepoContext
+from hrisa_code.core.memory import TaskManager
+from hrisa_code.core.planning import AgentLoop
 from rich.columns import Columns
 
 

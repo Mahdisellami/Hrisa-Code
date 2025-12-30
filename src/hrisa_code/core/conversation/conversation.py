@@ -12,10 +12,10 @@ from rich.syntax import Syntax
 from rich.text import Text
 from rich.spinner import Spinner
 
-from hrisa_code.core.ollama_client import OllamaClient, OllamaConfig
-from hrisa_code.core.loop_detector import LoopDetector, LoopStatus
-from hrisa_code.core.goal_tracker import GoalTracker, GoalStatus
-from hrisa_code.core.approval_manager import (
+from .ollama_client import OllamaClient, OllamaConfig
+from hrisa_code.core.planning import LoopDetector, LoopStatus
+from hrisa_code.core.planning import GoalTracker, GoalStatus
+from hrisa_code.core.planning import (
     ApprovalManager,
     ApprovalType,
     create_file_write_request,
@@ -321,7 +321,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             directory = arguments.get("directory", str(self.working_directory))
 
             # Create approval request using ApprovalRequest directly
-            from hrisa_code.core.approval_manager import ApprovalRequest
+            from hrisa_code.core.planning import ApprovalRequest
             request = ApprovalRequest(
                 operation_type=ApprovalType.GIT_PULL,
                 description=f"Pull changes from {remote}",
@@ -342,7 +342,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
             # Only require approval for write operations (not list)
             if action != "list":
-                from hrisa_code.core.approval_manager import ApprovalRequest
+                from hrisa_code.core.planning import ApprovalRequest
 
                 if action == "save":
                     message = arguments.get("message", "")

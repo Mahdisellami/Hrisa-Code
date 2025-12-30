@@ -18,7 +18,7 @@ from pathlib import Path
 import json
 
 from hrisa_code.core.conversation import ConversationManager
-from hrisa_code.core.ollama_client import OllamaConfig
+from hrisa_code.core.conversation import OllamaConfig
 from hrisa_code.core.loop_detector import LoopStatus
 from hrisa_code.core.goal_tracker import GoalStatus
 

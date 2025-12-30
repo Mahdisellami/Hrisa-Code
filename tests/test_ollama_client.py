@@ -1,7 +1,7 @@
 """Tests for Ollama client."""
 
 import pytest
-from hrisa_code.core.ollama_client import OllamaClient, OllamaConfig, Message
+from hrisa_code.core.conversation import OllamaClient, OllamaConfig, Message
 
 
 def test_ollama_config_defaults():

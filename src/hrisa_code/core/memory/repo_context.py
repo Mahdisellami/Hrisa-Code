@@ -7,7 +7,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 if TYPE_CHECKING:
-    from hrisa_code.core.ollama_client import OllamaClient
+    from hrisa_code.core.conversation import OllamaClient
 
 
 class RepoContext:
