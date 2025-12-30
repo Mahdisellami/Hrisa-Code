@@ -15,10 +15,9 @@ echo "1. Testing Python imports..."
 python3 << 'EOF'
 try:
     from hrisa_code.core.config import Config
-    from hrisa_code.core.ollama_client import OllamaClient, OllamaConfig
-    from hrisa_code.core.conversation import ConversationManager
-    from hrisa_code.core.interactive import InteractiveSession
-    from hrisa_code.core.hrisa_orchestrator import HrisaOrchestrator
+    from hrisa_code.core.conversation import OllamaClient, OllamaConfig, ConversationManager
+    from hrisa_code.core.interface import InteractiveSession
+    from hrisa_code.core.orchestrators import HrisaOrchestrator
     from hrisa_code.core.model_catalog import ModelCatalog, ModelProfile, ModelCapability
     from hrisa_code.core.model_router import ModelRouter, ModelSelectionStrategy
     from hrisa_code.tools.file_operations import AVAILABLE_TOOLS
@@ -77,7 +76,7 @@ echo ""
 echo "5. Testing model switching..."
 python3 << 'EOF'
 try:
-    from hrisa_code.core.ollama_client import OllamaClient, OllamaConfig
+    from hrisa_code.core.conversation import OllamaClient, OllamaConfig
     config = OllamaConfig(model="model1")
     client = OllamaClient(config)
 
@@ -138,9 +137,8 @@ echo ""
 echo "9. Testing orchestrator..."
 python3 << 'EOF'
 try:
-    from hrisa_code.core.hrisa_orchestrator import HrisaOrchestrator
-    from hrisa_code.core.conversation import ConversationManager
-    from hrisa_code.core.ollama_client import OllamaConfig
+    from hrisa_code.core.orchestrators import HrisaOrchestrator
+    from hrisa_code.core.conversation import ConversationManager, OllamaConfig
     from hrisa_code.core.model_router import ModelRouter
     from pathlib import Path
 
@@ -181,8 +179,7 @@ echo "10. Testing backward compatibility..."
 python3 << 'EOF'
 try:
     # Old code should still work without changes
-    from hrisa_code.core.ollama_client import OllamaConfig
-    from hrisa_code.core.conversation import ConversationManager
+    from hrisa_code.core.conversation import OllamaConfig, ConversationManager
     from pathlib import Path
 
     # This is how old code created conversation managers

@@ -14,9 +14,10 @@ FUTURE: This will be expanded with:
 """
 
 from .repo_context import RepoContext
-from .task_manager import TaskManager
+from .task_manager import TaskManager, BackgroundTask
 
 __all__ = [
     "RepoContext",
     "TaskManager",
+    "BackgroundTask",
 ]

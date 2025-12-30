@@ -19,8 +19,8 @@ import json
 
 from hrisa_code.core.conversation import ConversationManager
 from hrisa_code.core.conversation import OllamaConfig
-from hrisa_code.core.loop_detector import LoopStatus
-from hrisa_code.core.goal_tracker import GoalStatus
+from hrisa_code.core.planning import LoopStatus
+from hrisa_code.core.planning import GoalStatus
 
 
 class TestConversationManagerInitialization:

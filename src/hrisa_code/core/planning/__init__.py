@@ -19,14 +19,15 @@ from .approval_manager import (
     ApprovalManager,
     ApprovalType,
     ApprovalRequest,
+    ApprovalDecision,
     create_file_write_request,
     create_file_delete_request,
     create_command_request,
     create_git_commit_request,
     create_git_push_request,
 )
-from .goal_tracker import GoalTracker, GoalStatus
-from .loop_detector import LoopDetector, LoopStatus
+from .goal_tracker import GoalTracker, GoalStatus, ToolResult
+from .loop_detector import LoopDetector, LoopStatus, ToolCall
 
 __all__ = [
     # Agent
@@ -35,6 +36,7 @@ __all__ = [
     "ApprovalManager",
     "ApprovalType",
     "ApprovalRequest",
+    "ApprovalDecision",
     "create_file_write_request",
     "create_file_delete_request",
     "create_command_request",
@@ -43,7 +45,9 @@ __all__ = [
     # Goal tracking
     "GoalTracker",
     "GoalStatus",
+    "ToolResult",
     # Loop detection
     "LoopDetector",
     "LoopStatus",
+    "ToolCall",
 ]

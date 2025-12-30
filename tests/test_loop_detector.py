@@ -1,7 +1,7 @@
 """Unit tests for loop detection system."""
 
 import pytest
-from src.hrisa_code.core.loop_detector import LoopDetector, LoopStatus, ToolCall
+from hrisa_code.core.planning import LoopDetector, LoopStatus, ToolCall
 
 
 class TestToolCall:

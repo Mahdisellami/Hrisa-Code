@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import Mock, AsyncMock
-from src.hrisa_code.core.goal_tracker import GoalTracker, GoalStatus, ToolResult
+from hrisa_code.core.planning import GoalTracker, GoalStatus, ToolResult
 
 
 class TestToolResult:

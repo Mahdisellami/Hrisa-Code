@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 from rich.console import Console
 
-from hrisa_code.core.base_orchestrator import (
+from hrisa_code.core.orchestrators.base_orchestrator import (
     BaseOrchestrator,
     WorkflowDefinition,
     WorkflowStep,

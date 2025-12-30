@@ -8,10 +8,11 @@ This module handles:
 """
 
 from .conversation import ConversationManager
-from .ollama_client import OllamaClient, OllamaConfig
+from .ollama_client import OllamaClient, OllamaConfig, Message
 
 __all__ = [
     "ConversationManager",
     "OllamaClient",
     "OllamaConfig",
+    "Message",
 ]
