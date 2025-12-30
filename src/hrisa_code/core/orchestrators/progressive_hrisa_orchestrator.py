@@ -6,83 +6,97 @@ This orchestrator uses the proven progressive approach:
 - Assemble (don't synthesize) final document
 
 Target: AI coding assistants (like Claude Code)
-Focus: Technical architecture, tool usage, development patterns
+Focus: Complete technical internals, architecture, development guide
 """
 
 import re
 from pathlib import Path
-from typing import Optional, Dict, Any
-from rich.console import Console
-from rich.panel import Panel
-
+from typing import Dict, Any
 from hrisa_code.core.conversation import ConversationManager
+from hrisa_code.core.orchestrators.progressive_base import (
+    ProgressiveBaseOrchestrator,
+    PhaseDefinition,
+    ProgressiveWorkflow,
+)
 from hrisa_code.tools.cli_introspection import (
-    extract_cli_commands_from_ast,
-    extract_pyproject_metadata,
     extract_tool_definitions,
     validate_content_quality,
 )
 
 
-class ProgressiveHrisaOrchestrator:
+class ProgressiveHrisaOrchestrator(ProgressiveBaseOrchestrator):
     """Progressive HRISA.md generation with validation at each step.
 
     Strategy:
     1. Extract Facts: Read pyproject.toml, validate extraction
     2. Build Title Section: Use extracted facts, validate project name
-    3. Build Architecture Section: From actual src/ layout
-    4. Build Components Section: From core/*.py files
-    5. Build Tools Section: From tools/*.py definitions
-    6. Build Development Section: From testing/config infrastructure
+    3. Build Architecture Section: Technical internals for AI assistants
+    4. Build Components Section: Core classes and their responsibilities
+    5. Build Tools Section: Available tools with signatures
+    6. Build Development Section: Contribution guide for AI assistants
     7. Assemble: Combine sections (no synthesis thinking)
     """
 
-    def __init__(
-        self,
-        conversation: ConversationManager,
-        project_path: Path,
-        console: Optional[Console] = None,
-    ):
-        """Initialize progressive HRISA orchestrator.
+    @property
+    def workflow_definition(self) -> ProgressiveWorkflow:
+        """Define the HRISA.md generation workflow.
 
-        Args:
-            conversation: Conversation manager for LLM interactions
-            project_path: Path to the project root
-            console: Rich console for output
+        Returns:
+            Progressive workflow with all phases
         """
-        self.conversation = conversation
-        self.project_path = project_path
-        self.console = console or Console()
-        self.facts: Dict[str, Any] = {}
-        self.sections: Dict[str, str] = {}
+        return ProgressiveWorkflow(
+            name="HRISA",
+            description="Generate comprehensive HRISA.md documentation progressively for AI assistants",
+            output_filename="HRISA.md",
+            phases=[
+                PhaseDefinition(
+                    name="title",
+                    display_name="Title Section",
+                    description="Building title with validated project name...",
+                    uses_llm=False,
+                ),
+                PhaseDefinition(
+                    name="architecture",
+                    display_name="Architecture Section",
+                    description="Documenting technical architecture...",
+                    uses_llm=True,  # Uses LLM for architecture analysis
+                ),
+                PhaseDefinition(
+                    name="components",
+                    display_name="Components Section",
+                    description="Mapping core components...",
+                    uses_llm=True,  # Uses LLM for component discovery
+                ),
+                PhaseDefinition(
+                    name="tools",
+                    display_name="Tools Section",
+                    description="Extracting tool definitions...",
+                    uses_llm=False,  # Static analysis
+                ),
+                PhaseDefinition(
+                    name="development",
+                    display_name="Development Section",
+                    description="Documenting development practices...",
+                    uses_llm=True,  # Uses LLM for workflow documentation
+                ),
+            ],
+            audience="AI coding assistants",
+        )
 
     async def extract_facts(self) -> Dict[str, Any]:
-        """Phase 1: Extract ground-truth facts from pyproject.toml.
+        """Phase 1: Extract ground-truth facts using static analysis.
 
         Returns:
             Validated facts dictionary
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 1: Ground Truth Extraction[/bold cyan]\n"
-            "Parsing pyproject.toml directly (no LLM)...",
-            border_style="cyan"
-        ))
-
-        # Use static analysis
-        pyproject_path = self.project_path / "pyproject.toml"
-        metadata = extract_pyproject_metadata(pyproject_path)
+        metadata = self.extract_project_metadata()
 
         self.facts = {
             "name": metadata.get("name", "UNKNOWN"),
             "description": metadata.get("description", "UNKNOWN"),
+            "version": metadata.get("version", "0.0.0"),
             "python_requires": metadata.get("python_requires", ">=3.10"),
         }
-
-        # Validation
-        if self.facts["name"] == "UNKNOWN":
-            self.console.print("[red]✗ Could not extract project name![/red]")
-        else:
-            self.console.print(f"[green]✓[/green] Facts extracted: {self.facts['name']}")
 
         return self.facts
 
@@ -92,388 +106,218 @@ class ProgressiveHrisaOrchestrator:
         Returns:
             Title section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 2: Title Section[/bold cyan]\n"
-            "Building title with validated project name...",
-            border_style="cyan"
-        ))
-
-        # Direct assembly - no LLM needed!
         name = self.facts.get("name", "UNKNOWN")
         description = self.facts.get("description", "UNKNOWN")
 
-        section = f"""# {name} - Project Guide for AI Assistants
+        section = f"""# {name} - HRISA Documentation
 
-This document provides context and guidelines for AI coding assistants (like Claude Code) working on this project.
+> **Human-Readable Instructions for Software Assistants**
 
-## Project Overview
+{description}
 
-**{name}** - {description}
+## Purpose
 
-### Quick Links
+This document provides comprehensive technical documentation specifically designed for AI coding assistants (like Claude Code). It includes:
+
+- Complete architecture overview
+- Core component details
+- Available tools and APIs
+- Development practices
+- File structure and conventions
+
+## Quick Reference
+
+- **Language**: Python {self.facts.get('python_requires', '3.10+')}
+- **Version**: {self.facts.get('version', '0.1.0')}
+- **Package**: `{name}`
+
+## Table of Contents
+
 - [Architecture](#architecture)
-- [Key Components](#key-components)
-- [Available Tools](#available-tools)
-- [Development Practices](#development-practices)
-- [Common Tasks](#common-tasks)
+- [Core Components](#core-components)
+- [Tools](#tools)
+- [Development Guide](#development-guide)
 """
-
-        self.sections["title"] = section
-
-        # Validation
-        if name.lower() in section.lower():
-            self.console.print(f"[green]✓[/green] Title section built: {name}")
-        else:
-            self.console.print(f"[red]✗[/red] Validation failed for title")
 
         return section
 
     async def build_architecture_section(self) -> str:
-        """Phase 3: Build architecture section from actual directory structure.
+        """Phase 3: Build architecture section with technical details.
 
         Returns:
             Architecture section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 3: Architecture Section[/bold cyan]\n"
-            "Discovering actual project structure...",
-            border_style="cyan"
-        ))
+        prompt = f"""DOCUMENT TECHNICAL ARCHITECTURE
 
-        prompt = f"""DISCOVER PROJECT ARCHITECTURE (DIRECTORY-BASED ONLY)
-
-Task: Document the actual project architecture from directory structure.
+Task: Explain the technical architecture for an AI coding assistant.
 
 Steps:
-1. Use list_directory on {self.project_path}/src/
-2. Identify the main package name and subdirectories
-3. List key files in core/, tools/, and other directories
-4. Check for tests/, docs/, examples/ directories
+1. Read src/{self.facts.get('name', 'project')}/core/ to understand core modules
+2. Identify main architectural patterns (async, event-driven, etc.)
+3. Map data flow and component relationships
+4. Document key design decisions
 
-CRITICAL RULES:
-- Only document directories and files that ACTUALLY EXIST
-- Show the real structure, not an idealized one
-- Group files by their purpose (core logic, tools, etc.)
-- Output PURE MARKDOWN
-
-Output format (EXACT):
+OUTPUT FORMAT (markdown):
 ## Architecture
 
-### Project Structure
+### High-Level Design
+[Describe overall architecture: CLI → Core → LLM integration → Tools]
 
-```
-project-name/
-├── src/
-│   └── package_name/
-│       ├── core/          # [What's actually here]
-│       │   ├── file1.py
-│       │   └── file2.py
-│       ├── tools/         # [If it exists]
-│       │   └── file.py
-│       └── cli.py         # [Main entry point]
-├── tests/                 # [If it exists]
-├── docs/                  # [If it exists]
-└── pyproject.toml
-```
+### Core Modules
+- **Module Name**: Brief description and responsibility
+- **Module Name**: Brief description and responsibility
 
-### Key Directories
+### Design Patterns
+- Pattern: Usage and rationale
+- Pattern: Usage and rationale
 
-- `src/package/core/`: [What's actually in this directory]
-- `src/package/tools/`: [If it exists, what's here]
-- `tests/`: [Testing infrastructure]
+### Data Flow
+[Describe how data flows through the system]
 
-[etc.]
+CRITICAL: Focus on technical details useful for an AI assistant modifying code."""
 
-Output ONLY markdown."""
-
-        section = await self.conversation.process_message(prompt)
-
-        # Clean up markdown fences
-        section = section.strip()
-        if section.startswith("```markdown"):
-            section = section[len("```markdown"):].strip()
-        if section.startswith("```"):
-            section = section[3:].strip()
-        if section.endswith("```"):
-            section = section[:-3].strip()
-
-        self.sections["architecture"] = section
-
-        self.console.print("[green]✓[/green] Architecture section built from actual directories")
-        return section
+        response = await self.conversation.process_message(prompt)
+        return response.strip()
 
     async def build_components_section(self) -> str:
-        """Phase 4: Build components section from core/*.py files.
+        """Phase 4: Build components section with class details.
 
         Returns:
             Components section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 4: Key Components Section[/bold cyan]\n"
-            "Discovering core components from actual code...",
-            border_style="cyan"
-        ))
+        prompt = f"""DOCUMENT CORE COMPONENTS
 
-        prompt = f"""DISCOVER KEY COMPONENTS (CODE-BASED ONLY)
-
-Task: Document the purpose and responsibilities of key components.
+Task: Document key classes and their responsibilities for an AI assistant.
 
 Steps:
-1. Use list_directory on {self.project_path}/src/[package]/core/
-2. Read key files like cli.py, config.py, conversation.py, interactive.py
-3. For each file:
-   - Extract main classes
-   - Extract key functions
-   - Note what the module does (from docstrings)
+1. Read src/{self.facts.get('name')}/core/*.py files
+2. Identify main classes (ConversationManager, OllamaClient, TaskManager, etc.)
+3. Document their public APIs and responsibilities
+4. Note important methods and their signatures
 
-CRITICAL RULES:
-- Only document files that ACTUALLY EXIST
-- Extract EXACT information from code and docstrings
-- Focus on what each component DOES, not implementation details
-- Output PURE MARKDOWN
+OUTPUT FORMAT (markdown):
+## Core Components
 
-Output format (EXACT):
-## Key Components
+### Class: ComponentName (`module.py`)
 
-### CLI Entry Point (`cli.py`)
+**Purpose**: Brief description
 
-Main entry point with Typer commands.
+**Key Methods**:
+- `method_name(args) -> return_type`: Description
+- `method_name(args) -> return_type`: Description
 
-**Key Commands**:
-- `chat` - [What it does]
-- `models` - [What it does]
-[etc.]
+**Usage**:
+```python
+# Example usage
+```
 
-### Core Modules
+[Repeat for each major component]
 
-#### `config.py`
+CRITICAL: Include method signatures for AI assistant reference."""
 
-[What this module does - from docstring]
-
-**Key Classes**:
-- `Config` - [Purpose]
-- `ModelConfig` - [Purpose]
-
-#### `conversation.py`
-
-[What this module does]
-
-**Key Classes**:
-- `ConversationManager` - [Purpose and responsibilities]
-
-[Repeat for each core module found]
-
-Output ONLY markdown."""
-
-        section = await self.conversation.process_message(prompt)
-
-        # Clean up markdown fences
-        section = section.strip()
-        if section.startswith("```markdown"):
-            section = section[len("```markdown"):].strip()
-        if section.startswith("```"):
-            section = section[3:].strip()
-        if section.endswith("```"):
-            section = section[:-3].strip()
-
-        self.sections["components"] = section
-
-        self.console.print("[green]✓[/green] Components section built from actual code")
-        return section
+        response = await self.conversation.process_message(prompt)
+        return response.strip()
 
     async def build_tools_section(self) -> str:
-        """Phase 5: Build tools section from tools/*.py files.
+        """Phase 5: Build tools section using static analysis.
 
         Returns:
             Tools section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 5: Available Tools Section[/bold cyan]\n"
-            "Discovering tools from tools/*.py files...",
-            border_style="cyan"
-        ))
+        tools_dir = self.project_path / "src" / "hrisa_code" / "tools"
+        if not tools_dir.exists():
+            tools_dir = self.project_path / "tools"
 
-        prompt = f"""DISCOVER AVAILABLE TOOLS (CODE-BASED ONLY)
+        tools = extract_tool_definitions(tools_dir)
 
-Task: Document all tools available to the LLM.
+        section = "## Tools\n\n"
+        section += "The system provides these tools for file operations, git integration, and execution:\n\n"
 
-Steps:
-1. Use find_files with pattern="**/tools/*.py" from {self.project_path}
-2. Read each tool file (e.g., file_operations.py, git_operations.py)
-3. For each tool class with get_definition() method:
-   - Extract tool name (from schema)
-   - Extract description
-   - Extract key parameters
-   - Note what the tool does
+        if tools:
+            for tool in tools:
+                section += f"### `{tool['name']}`\n\n"
+                section += f"**Source**: `{tool['file']}`\n\n"
+                if tool["description"]:
+                    section += f"**Description**: {tool['description']}\n\n"
+                section += "**Tool Definition**: Available via `get_definition()` method\n\n"
+        else:
+            section += "No tools found.\n"
 
-CRITICAL RULES:
-- Only document tools with get_definition() method
-- Extract EXACT descriptions from code
-- Group tools by category (File Operations, Git Operations, etc.)
-- Output PURE MARKDOWN
-
-Output format (EXACT):
-## Available Tools
-
-### Tool System Overview
-
-[Brief explanation of how tools work in this project]
-
-### File Operations Tools
-
-#### `read_file`
-
-**Purpose**: [Exact description from tool definition]
-
-**Key Parameters**:
-- `file_path` (str): Path to file
-- `offset` (int, optional): Line offset
-[etc.]
-
-#### `write_file`
-
-[Same format]
-
-### Git Operations Tools
-
-[Same structure]
-
-Output ONLY markdown."""
-
-        section = await self.conversation.process_message(prompt)
-
-        # Clean up markdown fences
-        section = section.strip()
-        if section.startswith("```markdown"):
-            section = section[len("```markdown"):].strip()
-        if section.startswith("```"):
-            section = section[3:].strip()
-        if section.endswith("```"):
-            section = section[:-3].strip()
-
-        self.sections["tools"] = section
-
-        self.console.print("[green]✓[/green] Tools section built from actual code")
         return section
 
     async def build_development_section(self) -> str:
-        """Phase 6: Build development practices section.
+        """Phase 6: Build development guide section.
 
         Returns:
             Development section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 6: Development Practices Section[/bold cyan]\n"
-            "Discovering development practices from configs and tests...",
-            border_style="cyan"
-        ))
+        prompt = f"""DOCUMENT DEVELOPMENT PRACTICES
 
-        prompt = f"""DISCOVER DEVELOPMENT PRACTICES (CONFIG-BASED ONLY)
-
-Task: Document development practices from actual configuration.
+Task: Document development practices for an AI assistant contributing code.
 
 Steps:
-1. Read {self.project_path}/pyproject.toml for tool configs:
-   - [tool.black], [tool.ruff], [tool.mypy], [tool.pytest]
-2. Check if {self.project_path}/Makefile exists and read it
-3. Identify testing infrastructure in tests/ directory
-4. Check for pre-commit hooks or CI configuration
+1. Read pyproject.toml for code quality tools
+2. Check for testing framework and conventions
+3. Identify file naming patterns
+4. Document code style requirements
 
-CRITICAL RULES:
-- Only document tools/practices that ARE CONFIGURED
-- Extract EXACT settings from config files
-- Include actual commands from Makefile
-- Output PURE MARKDOWN
+OUTPUT FORMAT (markdown):
+## Development Guide
 
-Output format (EXACT):
-## Development Practices
+### Code Standards
+- **Formatter**: [tool and config]
+- **Linter**: [tool and config]
+- **Type Checking**: [tool and config]
+- **Testing**: [framework and location]
 
-### Code Style
-
-This project uses [tools found in config]:
-
-**Formatting**: [Tool name and key settings]
-**Linting**: [Tool name and key settings]
-**Type Checking**: [If configured]
-
-### Testing
-
-**Framework**: [pytest or other]
-**Location**: [Where tests live]
-**Run Tests**:
-```bash
-[actual command from Makefile or docs]
+### File Organization
+```
+src/
+├── core/       [purpose]
+├── tools/      [purpose]
+└── ...
 ```
 
-### Git Workflow
+### Adding New Features
+1. [Where to add code]
+2. [How to test]
+3. [Conventions to follow]
 
-**Branch Naming**: [From actual commits or docs]
-**Commit Style**: [Conventional commits? From git log]
+### Common Tasks
+- Adding a new tool: [steps]
+- Adding a CLI command: [steps]
+- Modifying orchestrators: [steps]
 
-### Common Commands
+CRITICAL: Be specific and actionable for an AI assistant."""
 
-From Makefile:
-```bash
-make setup     # [What it does]
-make test      # [What it does]
-[etc.]
-```
+        response = await self.conversation.process_message(prompt)
+        return response.strip()
 
-Output ONLY markdown."""
-
-        section = await self.conversation.process_message(prompt)
-
-        # Clean up markdown fences
-        section = section.strip()
-        if section.startswith("```markdown"):
-            section = section[len("```markdown"):].strip()
-        if section.startswith("```"):
-            section = section[3:].strip()
-        if section.endswith("```"):
-            section = section[:-3].strip()
-
-        self.sections["development"] = section
-
-        self.console.print("[green]✓[/green] Development section built from actual configs")
-        return section
-
-    async def assemble_hrisa(self) -> str:
-        """Phase 7: Assemble final HRISA.md (no synthesis thinking).
+    async def assemble_document(self) -> str:
+        """Phase 7: Assemble final HRISA.md with quality validation.
 
         Returns:
             Complete HRISA.md markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 7: Assembly & Validation[/bold cyan]\n"
-            "Combining sections and validating quality...",
-            border_style="cyan"
-        ))
-
-        # Simple string concatenation - no LLM needed!
         hrisa_parts = [
-            self.sections.get("title", "# Project Guide\\n"),
+            self.sections.get("title", "# HRISA Documentation\n"),
             "\n",
-            self.sections.get("architecture", "## Architecture\\n\\nTODO\\n"),
+            self.sections.get("architecture", "## Architecture\n\nTODO\n"),
             "\n",
-            self.sections.get("components", "## Key Components\\n\\nTODO\\n"),
+            self.sections.get("components", "## Core Components\n\nTODO\n"),
             "\n",
-            self.sections.get("tools", "## Available Tools\\n\\nTODO\\n"),
+            self.sections.get("tools", "## Tools\n\nTODO\n"),
             "\n",
-            self.sections.get("development", "## Development Practices\\n\\nTODO\\n"),
-            "\n## Common Tasks\\n\\n"
-            "[This section would be populated with common coding tasks and examples]\\n",
-            "\n## Notes for AI Assistants\\n\\n"
-            "- Be careful with file operations (this is a CLI tool)\\n"
-            "- Always run tests after making changes\\n"
-            "- Keep documentation in sync with code\\n"
-            "- Respect the modular architecture\\n",
+            self.sections.get("development", "## Development Guide\n\nTODO\n"),
+            "\n## Additional Resources\n\n"
+            "- README.md: User-facing documentation\n"
+            "- API.md: API reference\n"
+            "- CONTRIBUTING.md: Contributor guide\n",
         ]
 
-        # Join and clean up extra newlines
         hrisa = "\n".join(hrisa_parts)
-        hrisa = re.sub(r'\n{3,}', '\n\n', hrisa)
+        hrisa = re.sub(r"\n{3,}", "\n\n", hrisa)
 
-        # Content quality validation
         is_valid, errors = validate_content_quality(hrisa)
 
         if not is_valid:
@@ -482,59 +326,17 @@ Output ONLY markdown."""
                 self.console.print(f"  • {error}")
             raise ValueError(f"Content quality validation failed: {len(errors)} issues found")
 
-
-        # Final validation
         project_name = self.facts.get("name", "UNKNOWN")
         if project_name.lower() not in hrisa.lower():
-            self.console.print(f"[red]✗ VALIDATION FAILED: Project name '{project_name}' not in final HRISA.md[/red]")
+            self.console.print(
+                f"[red]✗ VALIDATION FAILED: Project name '{project_name}' not in final HRISA.md[/red]"
+            )
         else:
-            self.console.print(f"[green]✓[/green] Content validation passed: clean, accurate documentation")
+            self.console.print(
+                f"[green]✓[/green] Content validation passed: clean, accurate documentation"
+            )
+
+        output_path = self.project_path / "HRISA.md"
+        output_path.write_text(hrisa)
 
         return hrisa
-
-    async def generate(self) -> str:
-        """Execute progressive HRISA.md generation workflow.
-
-        Returns:
-            Generated HRISA.md content
-        """
-        self.console.print(Panel(
-            "[bold]Progressive HRISA.md Generation[/bold]\\n"
-            f"Project: {self.project_path}\\n"
-            "Strategy: Extract → Build → Validate → Assemble",
-            title="► Starting Progressive Orchestration",
-            border_style="bold cyan"
-        ))
-
-        try:
-            # Phase 1: Extract facts
-            await self.extract_facts()
-
-            # Phase 2-6: Build sections incrementally
-            await self.build_title_section()
-            await self.build_architecture_section()
-            await self.build_components_section()
-            await self.build_tools_section()
-            await self.build_development_section()
-
-            # Phase 7: Assemble (no synthesis)
-            hrisa = await self.assemble_hrisa()
-
-            # Write to file
-            output_path = self.project_path / "HRISA.md"
-            output_path.write_text(hrisa)
-
-            self.console.print(Panel(
-                f"[green]✓ HRISA.md generated successfully![/green]\\n\\n"
-                f"Output: {output_path}\\n"
-                f"Sections: {len(self.sections)}\\n"
-                f"Validated: ✓",
-                title="► Complete",
-                border_style="bold green"
-            ))
-
-            return hrisa
-
-        except Exception as e:
-            self.console.print(f"[red]✗ Error during progressive generation: {e}[/red]")
-            raise
