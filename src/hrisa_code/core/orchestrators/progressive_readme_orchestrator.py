@@ -10,20 +10,22 @@ This prevents hallucination by never allowing freeform "synthesis" thinking.
 
 import re
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from rich.console import Console
-from rich.panel import Panel
 
 from hrisa_code.core.conversation import ConversationManager
+from hrisa_code.core.orchestrators.progressive_base import (
+    ProgressiveBaseOrchestrator,
+    PhaseDefinition,
+    ProgressiveWorkflow,
+)
 from hrisa_code.tools.cli_introspection import (
     extract_cli_commands_from_ast,
-    extract_pyproject_metadata,
-    extract_tool_definitions,
     validate_content_quality,
 )
 
 
-class ProgressiveReadmeOrchestrator:
+class ProgressiveReadmeOrchestrator(ProgressiveBaseOrchestrator):
     """Progressive README generation with validation at each step.
 
     Strategy:
@@ -35,24 +37,45 @@ class ProgressiveReadmeOrchestrator:
     6. Assemble: Combine sections (no synthesis thinking)
     """
 
-    def __init__(
-        self,
-        conversation: ConversationManager,
-        project_path: Path,
-        console: Optional[Console] = None,
-    ):
-        """Initialize progressive orchestrator.
+    @property
+    def workflow_definition(self) -> ProgressiveWorkflow:
+        """Define the README generation workflow.
 
-        Args:
-            conversation: Conversation manager for LLM interactions
-            project_path: Path to the project root
-            console: Rich console for output
+        Returns:
+            Progressive workflow with all phases
         """
-        self.conversation = conversation
-        self.project_path = project_path
-        self.console = console or Console()
-        self.facts: Dict[str, Any] = {}
-        self.sections: Dict[str, str] = {}
+        return ProgressiveWorkflow(
+            name="README",
+            description="Generate user-friendly README.md documentation progressively",
+            output_filename="README.md",
+            phases=[
+                PhaseDefinition(
+                    name="title",
+                    display_name="Title Section",
+                    description="Building title with validated project name...",
+                    uses_llm=False,
+                ),
+                PhaseDefinition(
+                    name="features",
+                    display_name="Features Section",
+                    description="Extracting CLI commands via AST parsing (no LLM)...",
+                    uses_llm=True,  # Uses LLM for prose generation
+                ),
+                PhaseDefinition(
+                    name="installation",
+                    display_name="Installation Section",
+                    description="Building installation instructions from facts...",
+                    uses_llm=True,  # Uses LLM to read existing README
+                ),
+                PhaseDefinition(
+                    name="usage",
+                    display_name="Usage Section",
+                    description="Building usage examples from extracted commands...",
+                    uses_llm=True,  # Uses LLM for intro prose
+                ),
+            ],
+            audience="end users and developers",
+        )
 
     async def extract_facts(self) -> Dict[str, Any]:
         """Phase 1: Extract ground-truth facts from pyproject.toml using static analysis.
@@ -60,15 +83,8 @@ class ProgressiveReadmeOrchestrator:
         Returns:
             Validated facts dictionary
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 1: Ground Truth Extraction[/bold cyan]\n"
-            "Parsing pyproject.toml directly (no LLM)...",
-            border_style="cyan"
-        ))
-
         # Use static analysis instead of LLM
-        pyproject_path = self.project_path / "pyproject.toml"
-        metadata = extract_pyproject_metadata(pyproject_path)
+        metadata = self.extract_project_metadata()
 
         self.facts = {
             "name": metadata.get("name", "UNKNOWN"),
@@ -79,12 +95,6 @@ class ProgressiveReadmeOrchestrator:
             "license": metadata.get("license", ""),
         }
 
-        # Validation
-        if self.facts["name"] == "UNKNOWN":
-            self.console.print("[red]✗ Could not extract project name![/red]")
-        else:
-            self.console.print(f"[green]✓[/green] Facts extracted: {self.facts['name']} v{self.facts['version']}")
-
         return self.facts
 
     async def build_title_section(self) -> str:
@@ -93,12 +103,6 @@ class ProgressiveReadmeOrchestrator:
         Returns:
             Title section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 2: Title Section[/bold cyan]\n"
-            "Building title with validated project name...",
-            border_style="cyan"
-        ))
-
         # Direct assembly - no LLM needed for simple template!
         name = self.facts.get("name", "UNKNOWN")
         description = self.facts.get("description", "UNKNOWN")
@@ -116,14 +120,6 @@ class ProgressiveReadmeOrchestrator:
 - [License](#license)
 """
 
-        self.sections["title"] = section
-
-        # Validation
-        if name.lower() in section.lower():
-            self.console.print(f"[green]✓[/green] Title section built: {name}")
-        else:
-            self.console.print(f"[red]✗[/red] Validation failed for title")
-
         return section
 
     async def build_features_section(self) -> str:
@@ -132,12 +128,6 @@ class ProgressiveReadmeOrchestrator:
         Returns:
             Features section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 3: Features Section[/bold cyan]\n"
-            "Extracting CLI commands via AST parsing (no LLM)...",
-            border_style="cyan"
-        ))
-
         # Use static analysis to extract commands
         cli_file = self.project_path / "src" / "hrisa_code" / "cli.py"
         if not cli_file.exists():
@@ -149,18 +139,8 @@ class ProgressiveReadmeOrchestrator:
         section = "## Features\n\n"
 
         if commands:
-            for cmd in commands:
-                name = cmd["name"]
-                help_text = cmd["help"] or "No description available"
-                section += f"- **{name}**: {help_text}\n"
-
-            self.console.print(f"[green]✓[/green] Features extracted: {len(commands)} commands found")
-        else:
-            section += "- Interactive CLI interface\n- Local LLM integration\n"
-            self.console.print("[yellow]⚠[/yellow] No commands found, using defaults")
-
-        # Now ask LLM to write prose about these features (directive prompt)
-        prompt = f"""Write a 2-3 sentence introduction for the Features section.
+            # Ask LLM to write prose about these features (directive prompt)
+            prompt = f"""Write a 2-3 sentence introduction for the Features section.
 
 The project is: {self.facts.get('name', 'this project')}
 Description: {self.facts.get('description', '')}
@@ -173,15 +153,16 @@ Example: "This tool provides a comprehensive CLI interface for..."
 
 Do NOT include conversational phrases like "Here is" or "I've written"."""
 
-        intro = await self.conversation.process_message(prompt)
-        intro = intro.strip()
+            intro = await self.conversation.process_message(prompt)
+            intro = intro.strip()
 
-        # Combine intro + features list
-        section = f"## Features\n\n{intro}\n\n" + "\n".join(
-            f"- **{cmd['name']}**: {cmd['help']}" for cmd in commands
-        )
+            # Combine intro + features list
+            section = f"## Features\n\n{intro}\n\n" + "\n".join(
+                f"- **{cmd['name']}**: {cmd['help']}" for cmd in commands
+            )
+        else:
+            section += "- Interactive CLI interface\n- Local LLM integration\n"
 
-        self.sections["features"] = section
         return section
 
     async def build_installation_section(self) -> str:
@@ -190,12 +171,6 @@ Do NOT include conversational phrases like "Here is" or "I've written"."""
         Returns:
             Installation section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 4: Installation Section[/bold cyan]\n"
-            "Building installation instructions from facts...",
-            border_style="cyan"
-        ))
-
         # Use facts we already extracted
         python_req = self.facts.get("python_requires", ">=3.10")
         name = self.facts.get("name", "this-package")
@@ -221,8 +196,8 @@ If no prerequisites section exists, output: NONE"""
 
         if "NONE" not in prereqs_response and prereqs_response.strip():
             # Add additional prerequisites
-            for line in prereqs_response.strip().split('\n'):
-                if line.strip().startswith('-'):
+            for line in prereqs_response.strip().split("\n"):
+                if line.strip().startswith("-"):
                     section += f"{line.strip()}\n"
 
         # Build installation instructions
@@ -239,8 +214,6 @@ pip install -e ".[dev]"
 ```
 """
 
-        self.sections["installation"] = section
-        self.console.print("[green]✓[/green] Installation section built")
         return section
 
     async def build_usage_section(self) -> str:
@@ -249,12 +222,6 @@ pip install -e ".[dev]"
         Returns:
             Usage section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 5: Usage Section[/bold cyan]\n"
-            "Building usage examples from extracted commands...",
-            border_style="cyan"
-        ))
-
         # Get commands we extracted in Phase 3
         cli_file = self.project_path / "src" / "hrisa_code" / "cli.py"
         if not cli_file.exists():
@@ -288,22 +255,14 @@ Do NOT use conversational phrases."""
         else:
             section += "See the documentation for usage examples.\n"
 
-        self.sections["usage"] = section
-        self.console.print("[green]✓[/green] Usage section built")
         return section
 
-    async def assemble_readme(self) -> str:
+    async def assemble_document(self) -> str:
         """Phase 6: Assemble final README with quality validation.
 
         Returns:
             Complete README markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 6: Assembly & Validation[/bold cyan]\n"
-            "Combining sections and validating quality...",
-            border_style="cyan"
-        ))
-
         # Simple string concatenation - no LLM needed!
         readme_parts = [
             self.sections.get("title", "# README\n"),
@@ -319,7 +278,7 @@ Do NOT use conversational phrases."""
 
         # Join and clean up extra newlines
         readme = "\n".join(readme_parts)
-        readme = re.sub(r'\n{3,}', '\n\n', readme)  # Max 2 consecutive newlines
+        readme = re.sub(r"\n{3,}", "\n\n", readme)  # Max 2 consecutive newlines
 
         # Content quality validation
         is_valid, errors = validate_content_quality(readme)
@@ -333,54 +292,16 @@ Do NOT use conversational phrases."""
         # Basic validation
         project_name = self.facts.get("name", "UNKNOWN")
         if project_name.lower() not in readme.lower():
-            self.console.print(f"[red]✗ VALIDATION FAILED: Project name '{project_name}' not in final README[/red]")
+            self.console.print(
+                f"[red]✗ VALIDATION FAILED: Project name '{project_name}' not in final README[/red]"
+            )
         else:
-            self.console.print(f"[green]✓[/green] Content validation passed: clean, accurate documentation")
+            self.console.print(
+                f"[green]✓[/green] Content validation passed: clean, accurate documentation"
+            )
+
+        # Write to file
+        output_path = self.project_path / "README.md"
+        output_path.write_text(readme)
 
         return readme
-
-    async def generate(self) -> str:
-        """Execute progressive README generation workflow.
-
-        Returns:
-            Generated README content
-        """
-        self.console.print(Panel(
-            "[bold]Progressive README Generation[/bold]\n"
-            f"Project: {self.project_path}\n"
-            "Strategy: Extract → Build → Validate → Assemble",
-            title="► Starting Progressive Orchestration",
-            border_style="bold cyan"
-        ))
-
-        try:
-            # Phase 1: Extract facts
-            await self.extract_facts()
-
-            # Phase 2-5: Build sections incrementally
-            await self.build_title_section()
-            await self.build_features_section()
-            await self.build_installation_section()
-            await self.build_usage_section()
-
-            # Phase 6: Assemble (no synthesis)
-            readme = await self.assemble_readme()
-
-            # Write to file
-            output_path = self.project_path / "README.md"
-            output_path.write_text(readme)
-
-            self.console.print(Panel(
-                f"[green]✓ README.md generated successfully![/green]\n\n"
-                f"Output: {output_path}\n"
-                f"Sections: {len(self.sections)}\n"
-                f"Validated: ✓",
-                title="► Complete",
-                border_style="bold green"
-            ))
-
-            return readme
-
-        except Exception as e:
-            self.console.print(f"[red]✗ Error during progressive generation: {e}[/red]")
-            raise

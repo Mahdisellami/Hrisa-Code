@@ -11,20 +11,21 @@ Focus: Complete API reference with CLI commands, tools, core APIs, configuration
 
 import re
 from pathlib import Path
-from typing import Optional, Dict, Any, List
-from rich.console import Console
-from rich.panel import Panel
-
+from typing import Dict, Any
 from hrisa_code.core.conversation import ConversationManager
+from hrisa_code.core.orchestrators.progressive_base import (
+    ProgressiveBaseOrchestrator,
+    PhaseDefinition,
+    ProgressiveWorkflow,
+)
 from hrisa_code.tools.cli_introspection import (
     extract_cli_commands_from_ast,
-    extract_pyproject_metadata,
     extract_tool_definitions,
     validate_content_quality,
 )
 
 
-class ProgressiveApiOrchestrator:
+class ProgressiveApiOrchestrator(ProgressiveBaseOrchestrator):
     """Progressive API.md generation with validation at each step.
 
     Strategy:
@@ -37,24 +38,51 @@ class ProgressiveApiOrchestrator:
     7. Assemble: Combine sections (no synthesis thinking)
     """
 
-    def __init__(
-        self,
-        conversation: ConversationManager,
-        project_path: Path,
-        console: Optional[Console] = None,
-    ):
-        """Initialize progressive API orchestrator.
+    @property
+    def workflow_definition(self) -> ProgressiveWorkflow:
+        """Define the API documentation generation workflow.
 
-        Args:
-            conversation: Conversation manager for LLM interactions
-            project_path: Path to the project root
-            console: Rich console for output
+        Returns:
+            Progressive workflow with all phases
         """
-        self.conversation = conversation
-        self.project_path = project_path
-        self.console = console or Console()
-        self.facts: Dict[str, Any] = {}
-        self.sections: Dict[str, str] = {}
+        return ProgressiveWorkflow(
+            name="API",
+            description="Generate comprehensive API.md documentation progressively",
+            output_filename="API.md",
+            phases=[
+                PhaseDefinition(
+                    name="title",
+                    display_name="Title Section",
+                    description="Building title with validated project name...",
+                    uses_llm=False,
+                ),
+                PhaseDefinition(
+                    name="cli_commands",
+                    display_name="CLI Commands Section",
+                    description="Extracting CLI commands via AST parsing (no LLM)...",
+                    uses_llm=False,
+                ),
+                PhaseDefinition(
+                    name="tools",
+                    display_name="Tools Section",
+                    description="Extracting tools via static analysis (no LLM)...",
+                    uses_llm=False,
+                ),
+                PhaseDefinition(
+                    name="core_api",
+                    display_name="Core API Section",
+                    description="Building Core API reference...",
+                    uses_llm=True,  # Uses LLM for integration guidance
+                ),
+                PhaseDefinition(
+                    name="configuration",
+                    display_name="Configuration Section",
+                    description="Building configuration reference...",
+                    uses_llm=False,
+                ),
+            ],
+            audience="developers and integrators",
+        )
 
     async def extract_facts(self) -> Dict[str, Any]:
         """Phase 1: Extract ground-truth facts using static analysis.
@@ -62,15 +90,7 @@ class ProgressiveApiOrchestrator:
         Returns:
             Validated facts dictionary
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 1: Ground Truth Extraction[/bold cyan]\n"
-            "Parsing pyproject.toml directly (no LLM)...",
-            border_style="cyan"
-        ))
-
-        # Use static analysis instead of LLM
-        pyproject_path = self.project_path / "pyproject.toml"
-        metadata = extract_pyproject_metadata(pyproject_path)
+        metadata = self.extract_project_metadata()
 
         self.facts = {
             "name": metadata.get("name", "UNKNOWN"),
@@ -78,12 +98,6 @@ class ProgressiveApiOrchestrator:
             "version": metadata.get("version", "0.0.0"),
             "python_requires": metadata.get("python_requires", ">=3.10"),
         }
-
-        # Validation
-        if self.facts["name"] == "UNKNOWN":
-            self.console.print("[red]✗ Could not extract project name![/red]")
-        else:
-            self.console.print(f"[green]✓[/green] Facts extracted: {self.facts['name']} v{self.facts['version']}")
 
         return self.facts
 
@@ -93,13 +107,6 @@ class ProgressiveApiOrchestrator:
         Returns:
             Title section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 2: Title Section[/bold cyan]\n"
-            "Building title with validated project name...",
-            border_style="cyan"
-        ))
-
-        # Direct assembly - no LLM needed!
         name = self.facts.get("name", "UNKNOWN")
         description = self.facts.get("description", "UNKNOWN")
 
@@ -119,14 +126,6 @@ This document provides comprehensive API documentation for developers, integrato
 - [Extension Guide](#extension-guide)
 """
 
-        self.sections["title"] = section
-
-        # Validation
-        if name.lower() in section.lower():
-            self.console.print(f"[green]✓[/green] Title section built: {name}")
-        else:
-            self.console.print(f"[red]✗[/red] Validation failed for title")
-
         return section
 
     async def build_cli_commands_section(self) -> str:
@@ -135,35 +134,22 @@ This document provides comprehensive API documentation for developers, integrato
         Returns:
             CLI commands section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 3: CLI Commands Section[/bold cyan]\n"
-            "Extracting CLI commands via AST parsing (no LLM)...",
-            border_style="cyan"
-        ))
-
-        # Use static analysis to extract commands
         cli_file = self.project_path / "src" / "hrisa_code" / "cli.py"
         if not cli_file.exists():
             cli_file = self.project_path / "cli.py"
 
         commands = extract_cli_commands_from_ast(cli_file)
 
-        # Build CLI reference section
         section = "## CLI Reference\n\n"
 
         if commands:
-            self.console.print(f"[green]✓[/green] CLI commands extracted: {len(commands)} commands found")
-
-            # Template structure for each command
             for cmd in commands:
                 section += f"### Command: `{cmd['name']}`\n\n"
                 section += f"**Description**: {cmd['help'] or 'No description available'}\n\n"
                 section += f"**Usage**:\n```bash\n{self.facts.get('name', 'hrisa')} {cmd['name']} [OPTIONS]\n```\n\n"
         else:
             section += "No CLI commands found.\n"
-            self.console.print("[yellow]⚠[/yellow] No commands found")
 
-        self.sections["cli_commands"] = section
         return section
 
     async def build_tools_section(self) -> str:
@@ -172,38 +158,26 @@ This document provides comprehensive API documentation for developers, integrato
         Returns:
             Tools section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 4: Tools Section[/bold cyan]\n"
-            "Extracting tools via static analysis (no LLM)...",
-            border_style="cyan"
-        ))
-
-        # Use static analysis to extract tools
         tools_dir = self.project_path / "src" / "hrisa_code" / "tools"
         if not tools_dir.exists():
             tools_dir = self.project_path / "tools"
 
         tools = extract_tool_definitions(tools_dir)
 
-        # Build tools section
         section = "## Tools Reference\n\n"
 
         if tools:
-            self.console.print(f"[green]✓[/green] Tools extracted: {len(tools)} tools found")
-
             section += "### Available Tools\n\n"
             section += "The system provides the following tools for file operations, git integration, and command execution:\n\n"
 
             for tool in tools:
                 section += f"#### `{tool['name']}`\n\n"
                 section += f"**Source**: `{tool['file']}`\n\n"
-                if tool['description']:
+                if tool["description"]:
                     section += f"**Description**: {tool['description']}\n\n"
         else:
             section += "No tools found.\n"
-            self.console.print("[yellow]⚠[/yellow] No tools found")
 
-        self.sections["tools"] = section
         return section
 
     async def build_core_api_section(self) -> str:
@@ -212,17 +186,9 @@ This document provides comprehensive API documentation for developers, integrato
         Returns:
             Core API section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 5: Core API Section[/bold cyan]\n"
-            "Building Core API reference...",
-            border_style="cyan"
-        ))
-
-        # Template structure for core modules
         section = "## Core API Reference\n\n"
         section += "The core API consists of several key modules:\n\n"
 
-        # List core modules
         core_modules = [
             ("config", "Configuration management with Pydantic models"),
             ("conversation", "Conversation orchestration and tool execution"),
@@ -236,7 +202,6 @@ This document provides comprehensive API documentation for developers, integrato
             section += f"{description}\n\n"
             section += f"See source code at `src/hrisa_code/core/{module_name}.py` for complete API details.\n\n"
 
-        # Ask LLM to write brief integration guidance (directive)
         prompt = f"""Write 2-3 sentences about how developers can import and use the core modules.
 
 Project: {self.facts.get('name')}
@@ -250,8 +215,6 @@ Do NOT use conversational phrases."""
         guidance = await self.conversation.process_message(prompt)
         section += f"\n### Usage\n\n{guidance.strip()}\n"
 
-        self.sections["core_api"] = section
-        self.console.print("[green]✓[/green] Core API section built")
         return section
 
     async def build_configuration_section(self) -> str:
@@ -260,13 +223,6 @@ Do NOT use conversational phrases."""
         Returns:
             Configuration section markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 6: Configuration Section[/bold cyan]\n"
-            "Building configuration reference...",
-            border_style="cyan"
-        ))
-
-        # Template structure for configuration
         section = "## Configuration Reference\n\n"
         section += "### Configuration File Locations\n\n"
         section += "Configuration is loaded from:\n"
@@ -305,23 +261,14 @@ Do NOT use conversational phrases."""
         section += "  enable_command_execution: true\n"
         section += "```\n"
 
-        self.sections["configuration"] = section
-        self.console.print("[green]✓[/green] Configuration section built")
         return section
 
-    async def assemble_api_doc(self) -> str:
+    async def assemble_document(self) -> str:
         """Phase 7: Assemble final API.md with quality validation.
 
         Returns:
             Complete API.md markdown
         """
-        self.console.print(Panel(
-            "[bold cyan]Phase 7: Assembly & Validation[/bold cyan]\n"
-            "Combining sections and validating quality...",
-            border_style="cyan"
-        ))
-
-        # Simple string concatenation - no LLM needed!
         api_parts = [
             self.sections.get("title", "# API Reference\n"),
             "\n",
@@ -336,11 +283,9 @@ Do NOT use conversational phrases."""
             "\n## Error Handling\n\nCommon exceptions and error codes will be documented here.\n",
         ]
 
-        # Join and clean up extra newlines
         api_doc = "\n".join(api_parts)
-        api_doc = re.sub(r'\n{3,}', '\n\n', api_doc)
+        api_doc = re.sub(r"\n{3,}", "\n\n", api_doc)
 
-        # Content quality validation
         is_valid, errors = validate_content_quality(api_doc)
 
         if not is_valid:
@@ -349,58 +294,17 @@ Do NOT use conversational phrases."""
                 self.console.print(f"  • {error}")
             raise ValueError(f"Content quality validation failed: {len(errors)} issues found")
 
-        # Basic validation
         project_name = self.facts.get("name", "UNKNOWN")
         if project_name.lower() not in api_doc.lower():
-            self.console.print(f"[red]✗ VALIDATION FAILED: Project name '{project_name}' not in final API.md[/red]")
+            self.console.print(
+                f"[red]✗ VALIDATION FAILED: Project name '{project_name}' not in final API.md[/red]"
+            )
         else:
-            self.console.print(f"[green]✓[/green] Content validation passed: clean, accurate documentation")
+            self.console.print(
+                f"[green]✓[/green] Content validation passed: clean, accurate documentation"
+            )
+
+        output_path = self.project_path / "API.md"
+        output_path.write_text(api_doc)
 
         return api_doc
-
-    async def generate(self) -> str:
-        """Execute progressive API.md generation workflow.
-
-        Returns:
-            Generated API.md content
-        """
-        self.console.print(Panel(
-            "[bold]Progressive API Documentation Generation[/bold]\n"
-            f"Project: {self.project_path}\n"
-            "Strategy: Extract → Build → Validate → Assemble",
-            title="► Starting Progressive Orchestration",
-            border_style="bold cyan"
-        ))
-
-        try:
-            # Phase 1: Extract facts
-            await self.extract_facts()
-
-            # Phase 2-6: Build sections incrementally
-            await self.build_title_section()
-            await self.build_cli_commands_section()
-            await self.build_tools_section()
-            await self.build_core_api_section()
-            await self.build_configuration_section()
-
-            # Phase 7: Assemble (no synthesis)
-            api_doc = await self.assemble_api_doc()
-
-            # Write to file
-            output_path = self.project_path / "API.md"
-            output_path.write_text(api_doc)
-
-            self.console.print(Panel(
-                f"[green]✓ API.md generated successfully![/green]\n\n"
-                f"Output: {output_path}\n"
-                f"Sections: {len(self.sections)}\n"
-                f"Validated: ✓",
-                title="► Complete",
-                border_style="bold green"
-            ))
-
-            return api_doc
-
-        except Exception as e:
-            self.console.print(f"[red]✗ Error during progressive generation: {e}[/red]")
-            raise
