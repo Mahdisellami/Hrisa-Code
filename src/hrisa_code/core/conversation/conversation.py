@@ -16,6 +16,7 @@ from .ollama_client import OllamaClient, OllamaConfig
 from hrisa_code.core.planning import LoopDetector, LoopStatus
 from hrisa_code.core.planning import GoalTracker, GoalStatus
 from hrisa_code.core.planning import ResultVerifier, RelevanceScore
+from hrisa_code.core.planning import ToolAdvisor, ValidationStatus
 from hrisa_code.core.planning import (
     ApprovalManager,
     ApprovalType,
@@ -84,6 +85,9 @@ class ConversationManager:
             enable_verification=True  # Enable by default
         )
 
+        # Tool selection guidance for parameter validation and suggestions
+        self.tool_advisor = ToolAdvisor(available_tools=AVAILABLE_TOOLS) if enable_tools else None
+
         # Approval manager for write operations
         self.approval_manager = ApprovalManager(auto_approve=auto_approve)
 
@@ -134,6 +138,34 @@ class ConversationManager:
                 continue
 
         return tool_calls
+
+    def _get_tool_selection_hints(self, user_message: str) -> str:
+        """Generate tool selection hints based on user's message.
+
+        Args:
+            user_message: The user's question or request
+
+        Returns:
+            Tool selection hints for the LLM
+        """
+        if not self.tool_advisor:
+            return ""
+
+        # Get tool suggestions
+        suggested_tools = self.tool_advisor.suggest_tool_for_task(user_message)
+        if not suggested_tools:
+            return ""
+
+        hints = "\n\n[TOOL SELECTION HINTS]"
+        hints += "\nBased on your request, consider using:"
+        for tool_name in suggested_tools[:3]:  # Limit to top 3
+            capability = self.tool_advisor.get_tool_guidance(tool_name)
+            if capability:
+                hints += f"\n• {tool_name}: {capability.use_cases[0]}"
+                if capability.common_mistakes:
+                    hints += f"\n  ⚠ Avoid: {capability.common_mistakes[0]}"
+
+        return hints
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt.
@@ -552,6 +584,23 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         if tool_name not in AVAILABLE_TOOLS:
             return f"Error: Unknown tool '{tool_name}'"
 
+        # Normalize background parameter before validation (handle both boolean and string values)
+        # Some models output "true"/"false" strings instead of booleans
+        if "background" in arguments and isinstance(arguments["background"], str):
+            background_str = arguments["background"].lower()
+            arguments["background"] = background_str in ("true", "1", "yes")
+
+        # Validate tool call parameters if advisor is available
+        if self.tool_advisor:
+            validation_result = self.tool_advisor.validate_tool_call(tool_name, arguments)
+            if not validation_result.is_valid:
+                # Format validation error with helpful suggestions
+                error_message = self.tool_advisor.format_validation_error_message(
+                    validation_result, tool_name
+                )
+                self.console.print(f"[yellow]⚠ Tool validation failed[/yellow]")
+                return error_message
+
         # Validate path arguments
         validation_error = self._validate_path_arguments(tool_name, arguments)
         if validation_error:
@@ -563,10 +612,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             return approval_result  # Return denial message if not approved
 
         # Handle background execution for execute_command
-        # Parse background parameter properly (handle both boolean and string values)
         background = arguments.get("background", False)
-        if isinstance(background, str):
-            background = background.lower() in ("true", "1", "yes")
 
         if tool_name == "execute_command" and background:
             if not self.task_manager:

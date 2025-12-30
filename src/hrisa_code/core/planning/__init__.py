@@ -35,6 +35,13 @@ from .result_verifier import (
     RelevanceScore,
     InformationGap,
 )
+from .tool_advisor import (
+    ToolAdvisor,
+    ToolCapability,
+    ToolValidationResult,
+    ParameterSuggestion,
+    ValidationStatus,
+)
 
 __all__ = [
     # Agent
@@ -62,4 +69,10 @@ __all__ = [
     "VerificationResult",
     "RelevanceScore",
     "InformationGap",
+    # Tool selection guidance
+    "ToolAdvisor",
+    "ToolCapability",
+    "ToolValidationResult",
+    "ParameterSuggestion",
+    "ValidationStatus",
 ]
