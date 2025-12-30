@@ -47,6 +47,13 @@ from .complexity_detector import (
     TaskComplexity,
     ComplexityAnalysis,
 )
+from .dynamic_planner import (
+    DynamicPlanner,
+    ExecutionPlan,
+    PlanStep,
+    PlanStepType,
+    PlanStatus,
+)
 
 __all__ = [
     # Agent
@@ -84,4 +91,10 @@ __all__ = [
     "ComplexityDetector",
     "TaskComplexity",
     "ComplexityAnalysis",
+    # Dynamic planning
+    "DynamicPlanner",
+    "ExecutionPlan",
+    "PlanStep",
+    "PlanStepType",
+    "PlanStatus",
 ]
