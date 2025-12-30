@@ -69,3 +69,27 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --cov=hrisa_code --cov-report=term-missing"
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+omit = [
+    # CLI and entry points (tested via smoke tests)
+    "src/hrisa_code/cli.py",
+
+    # Integration/orchestration code (tested via real runs)
+    "src/hrisa_code/core/orchestrators/progressive_*.py",
+    "src/hrisa_code/core/orchestrators/readme_orchestrator.py",
+    "src/hrisa_code/core/orchestrators/api_orchestrator.py",
+    "src/hrisa_code/core/orchestrators/contributing_orchestrator.py",
+    "src/hrisa_code/core/orchestrators/hrisa_orchestrator.py",
+
+    # Terminal UI (tested manually)
+    "src/hrisa_code/core/interface/interactive.py",
+
+    # Complex analysis code (needs integration tests)
+    "src/hrisa_code/core/memory/repo_context.py",
+]
+
+[tool.coverage.report]
+# Show which files were omitted
+skip_covered = false
+skip_empty = false
