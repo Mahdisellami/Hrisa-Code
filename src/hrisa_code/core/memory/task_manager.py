@@ -118,11 +118,11 @@ class TaskManager:
         self.working_directory = working_directory
         self.console = Console()
 
-        # Setup task storage
-        self.task_dir = Path.home() / ".hrisa" / "tasks"
+        # Setup task storage (project-local)
+        self.task_dir = working_directory / ".hrisa" / "tasks"
         self.log_dir = self.task_dir / "logs"
         self.task_dir.mkdir(parents=True, exist_ok=True)
-        self.log_dir.mkdir(exist_ok=True)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # Active tasks
         self.tasks: Dict[str, BackgroundTask] = {}

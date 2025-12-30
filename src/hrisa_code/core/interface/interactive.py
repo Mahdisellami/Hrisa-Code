@@ -129,9 +129,9 @@ class InteractiveSession:
             else:
                 self.conversation.system_prompt = f"## Repository Context\n\n{hrisa_content}"
 
-        # Set up prompt session with history
-        history_file = Path.home() / ".hrisa" / "history.txt"
-        history_file.parent.mkdir(exist_ok=True)
+        # Set up prompt session with history (project-local)
+        history_file = working_directory / ".hrisa" / "history.txt"
+        history_file.parent.mkdir(parents=True, exist_ok=True)
 
         self.prompt_session: PromptSession[str] = PromptSession(
             history=FileHistory(str(history_file)),
