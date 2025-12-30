@@ -42,6 +42,11 @@ from .tool_advisor import (
     ParameterSuggestion,
     ValidationStatus,
 )
+from .complexity_detector import (
+    ComplexityDetector,
+    TaskComplexity,
+    ComplexityAnalysis,
+)
 
 __all__ = [
     # Agent
@@ -75,4 +80,8 @@ __all__ = [
     "ToolValidationResult",
     "ParameterSuggestion",
     "ValidationStatus",
+    # Complexity detection
+    "ComplexityDetector",
+    "TaskComplexity",
+    "ComplexityAnalysis",
 ]
