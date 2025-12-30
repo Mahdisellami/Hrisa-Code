@@ -17,6 +17,7 @@ from hrisa_code.core.planning import LoopDetector, LoopStatus
 from hrisa_code.core.planning import GoalTracker, GoalStatus
 from hrisa_code.core.planning import ResultVerifier, RelevanceScore
 from hrisa_code.core.planning import ToolAdvisor, ValidationStatus
+from hrisa_code.core.planning import ComplexityDetector, TaskComplexity
 from hrisa_code.core.planning import (
     ApprovalManager,
     ApprovalType,
@@ -87,6 +88,12 @@ class ConversationManager:
 
         # Tool selection guidance for parameter validation and suggestions
         self.tool_advisor = ToolAdvisor(available_tools=AVAILABLE_TOOLS) if enable_tools else None
+
+        # Complexity detection for intelligent task routing
+        self.complexity_detector = ComplexityDetector(
+            ollama_client=self.ollama_client,
+            evaluation_model=ollama_config.model
+        )
 
         # Approval manager for write operations
         self.approval_manager = ApprovalManager(auto_approve=auto_approve)
@@ -166,6 +173,34 @@ class ConversationManager:
                     hints += f"\n  ⚠ Avoid: {capability.common_mistakes[0]}"
 
         return hints
+
+    def _display_complexity_analysis(self, analysis) -> None:
+        """Display complexity analysis to user.
+
+        Args:
+            analysis: ComplexityAnalysis result
+        """
+        # Choose color based on complexity
+        color_map = {
+            TaskComplexity.SIMPLE: "green",
+            TaskComplexity.MODERATE: "yellow",
+            TaskComplexity.COMPLEX: "red",
+        }
+        color = color_map.get(analysis.complexity, "white")
+
+        # Choose icon based on complexity
+        icon_map = {
+            TaskComplexity.SIMPLE: "✓",
+            TaskComplexity.MODERATE: "◆",
+            TaskComplexity.COMPLEX: "★",
+        }
+        icon = icon_map.get(analysis.complexity, "•")
+
+        # Display concise complexity info
+        self.console.print(
+            f"[dim]{icon} Task Complexity: [{color}]{analysis.complexity.value.upper()}[/{color}] "
+            f"({analysis.estimated_steps} step{'s' if analysis.estimated_steps > 1 else ''})[/dim]"
+        )
 
     def _get_default_system_prompt(self) -> str:
         """Get the default system prompt.
@@ -839,6 +874,10 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
         Returns:
             The assistant's response
         """
+        # Analyze task complexity for intelligent routing
+        complexity_analysis = self.complexity_detector.analyze(user_message)
+        self._display_complexity_analysis(complexity_analysis)
+
         # Reset tool tracking
         self.last_tool_results = []
         self.last_tools_had_errors = False

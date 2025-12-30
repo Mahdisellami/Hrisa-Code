@@ -604,7 +604,7 @@ Assistant: *executes write*
 
 ### Q3 2025: Intelligence & Generalization
 - ✅ Multi-model orchestration
-- ⏳ Complexity detection
+- ✅ Complexity detection (heuristic + LLM-based analysis with visual feedback)
 - ⏳ Basic plan generation
 - ⏳ Adaptive execution
 - ⏳ Dynamic planning
