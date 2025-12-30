@@ -376,18 +376,30 @@ Be concise and specific."""
             ComplexityAnalysis
         """
         # Simple parsing (can be enhanced)
+        import re
         response_upper = response.upper()
 
-        # Extract complexity
-        if "SIMPLE" in response_upper:
-            complexity = TaskComplexity.SIMPLE
-        elif "COMPLEX" in response_upper:
-            complexity = TaskComplexity.COMPLEX
+        # Extract complexity with exact match after COMPLEXITY: label
+        complexity_match = re.search(r'COMPLEXITY[:\s]+(SIMPLE|MODERATE|COMPLEX)', response_upper)
+        if complexity_match:
+            keyword = complexity_match.group(1)
+            if keyword == "SIMPLE":
+                complexity = TaskComplexity.SIMPLE
+            elif keyword == "MODERATE":
+                complexity = TaskComplexity.MODERATE
+            else:  # COMPLEX
+                complexity = TaskComplexity.COMPLEX
         else:
-            complexity = TaskComplexity.MODERATE
+            # Fallback: check for keywords in any order (for malformed responses)
+            # Use word boundaries to avoid substring matches
+            if re.search(r'\bSIMPLE\b', response_upper) and not re.search(r'\bCOMPLEX\b', response_upper):
+                complexity = TaskComplexity.SIMPLE
+            elif re.search(r'\bCOMPLEX\b', response_upper):
+                complexity = TaskComplexity.COMPLEX
+            else:
+                complexity = TaskComplexity.MODERATE
 
         # Extract confidence (look for decimal number)
-        import re
         confidence_match = re.search(r'CONFIDENCE[:\s]+([0-9.]+)', response_upper)
         confidence = float(confidence_match.group(1)) if confidence_match else 0.7
 
