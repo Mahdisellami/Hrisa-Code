@@ -628,6 +628,23 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
 5. If previous steps provided results, USE THEM instead of repeating the same searches
 6. Report what you accomplished in THIS step when done
 
+=== TOOL PARAMETER CHECKLIST ===
+Before calling any tool, verify:
+✓ All REQUIRED parameters are provided (check tool definition)
+✓ Parameter values are correct (not placeholder/example values)
+✓ For search_files: directory (required), pattern (required), use_regex (false for literal strings like 'TODO')
+✓ For write_file: file_path (required), content (required)
+✓ For read_file: file_path (required)
+
+=== UNDERSTANDING STEP TYPES ===
+- exploration: Find and locate information (use search_files, find_files, read_file)
+- analysis: Review and understand what was found (use read_file on results from exploration)
+- documentation: "Compile and summarize findings" means:
+  * Review results from previous steps (already provided above)
+  * Organize information into categories/structure
+  * Create a clear written summary
+  * Do NOT search for new information - synthesize what you already have
+
 IMPORTANT: This is step {step.step_number} of a multi-step plan. Do not try to complete steps that come later.
 Just complete THIS step, then report your findings.
 
