@@ -97,6 +97,37 @@ hrisa-code hrisa_progressive
 hrisa-code api
 ```
 
+### Execution Modes
+
+The interactive chat session supports three execution modes that you can cycle through using SHIFT+TAB or the `/agent` command:
+
+#### Normal Mode (Default)
+Standard conversation with the LLM. Tools are available but no autonomous behavior. The assistant responds to each message individually.
+
+#### Agent Mode
+Autonomous multi-step execution. The agent will:
+- Break down complex tasks automatically
+- Explore the codebase proactively
+- Execute multiple steps until completion
+- Self-reflect and adapt its approach
+
+Use this mode for tasks requiring multiple independent actions.
+
+#### Plan Mode
+Plan-driven execution with intelligent progress tracking. The system will:
+- Analyze task complexity automatically
+- Generate a step-by-step execution plan
+- Execute steps with visual progress feedback
+- Adapt the plan based on discoveries during execution
+- Handle errors with recovery strategies
+
+Use this mode for complex tasks that benefit from upfront planning and structured execution.
+
+To switch modes:
+1. Press SHIFT+TAB in the chat interface
+2. Or type `/agent` to cycle: normal → agent → plan → normal
+3. Each mode automatically resets to normal after completing a task
+
 ## Development
 
 See CONTRIBUTING.md for development guidelines.

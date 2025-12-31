@@ -602,7 +602,7 @@ Assistant: *executes write*
 7. ✅ Result verification system - COMPLETE (immediate relevance checking)
 8. ✅ Tool selection guidance - COMPLETE (validation + capability hints)
 
-### Q3 2025: Intelligence & Generalization
+### Q3 2025: Intelligence & Generalization ✅ COMPLETE
 - ✅ Multi-model orchestration
 - ✅ Complexity detection (heuristic + LLM-based analysis with visual feedback)
 - ✅ Dynamic planning (LLM-based plan generation with heuristic fallback)
@@ -610,8 +610,8 @@ Assistant: *executes write*
 - ✅ Adaptive execution (plan-driven step-by-step execution with progress tracking)
 - ✅ Plan refinement (adapts plans based on discoveries during execution)
 - ✅ Error recovery (handles step failures, stops after max errors)
-- ⏳ ConversationManager integration (expose via CLI)
-- ⏳ Full end-to-end workflow
+- ✅ ConversationManager integration (plan mode accessible via /agent command cycling)
+- ✅ Full end-to-end workflow (normal → agent → plan mode cycling with visual feedback)
 
 ### Q4 2025: Optimization & Scale
 - ⏳ Performance tuning

@@ -118,8 +118,11 @@ class InteractiveSession:
             conversation_manager=self.conversation,
             max_iterations=10,
             enable_reflection=True,
+            enable_planning=True,
         )
-        self.agent_mode_enabled = False
+
+        # Execution mode: "normal", "agent", "plan"
+        self.execution_mode = "normal"
 
         # Load HRISA.md if it exists and augment system prompt
         hrisa_content = self.repo_context.load()
@@ -158,16 +161,22 @@ class InteractiveSession:
      [dim]Local AI Coding Assistant[/dim]
 """
 
-        agent_status = "[green]enabled[/green]" if self.agent_mode_enabled else "[dim]disabled[/dim]"
+        # Mode display with color coding
+        mode_display = {
+            "normal": "[dim]normal[/dim]",
+            "agent": "[cyan]agent[/cyan]",
+            "plan": "[magenta]plan[/magenta]"
+        }
+
         info_text = (
             f"\n[bold]Configuration[/bold]\n"
             f"  Model: [green]{self.config.model.name}[/green]\n"
             f"  Directory: [cyan]{self.working_directory.name}/[/cyan]\n"
             f"  Context: {hrisa_status}\n"
-            f"  Agent: {agent_status}\n\n"
+            f"  Mode: {mode_display[self.execution_mode]}\n\n"
             f"[bold]Quick Commands[/bold]\n"
             f"  [yellow]/help[/yellow]    - Show all commands\n"
-            f"  [yellow]/agent[/yellow]   - Toggle agent mode\n"
+            f"  [yellow]/agent[/yellow]   - Cycle mode (normal → agent → plan)\n"
             f"  [yellow]/init[/yellow]    - Initialize repo context\n"
             f"  [yellow]/clear[/yellow]   - Clear history\n"
             f"  [yellow]/exit[/yellow]    - Exit (or Ctrl+D)\n"
@@ -196,14 +205,21 @@ class InteractiveSession:
             return False
 
         elif command_lower == "/help":
-            agent_status = "[green]enabled[/green]" if self.agent_mode_enabled else "[dim]disabled[/dim]"
+            mode_display = {
+                "normal": "[yellow]normal[/yellow]",
+                "agent": "[cyan]agent[/cyan]",
+                "plan": "[magenta]plan[/magenta]"
+            }
+            current_mode_display = mode_display[self.execution_mode]
+
             self.console.print(
                 Panel(
                     "[bold]Available Commands:[/bold]\n\n"
                     "[yellow]/help[/yellow]      - Show this help message\n"
                     "[yellow]/init[/yellow]      - Initialize or update HRISA.md (repo context)\n"
-                    "[yellow]/agent[/yellow]     - Toggle agent mode (autonomous multi-step execution)\n"
-                    f"                Current: {agent_status}\n"
+                    "[yellow]/agent[/yellow]     - Cycle execution mode (normal → agent → plan)\n"
+                    f"                Current mode: {current_mode_display}\n"
+                    "                [dim]normal: standard chat | agent: autonomous | plan: intelligent planning[/dim]\n"
                     "[yellow]/clear[/yellow]     - Clear conversation history\n"
                     "[yellow]/save[/yellow]      - Save conversation to file\n"
                     "[yellow]/load[/yellow]      - Load conversation from file\n"
@@ -223,26 +239,52 @@ class InteractiveSession:
             await self.repo_context.inspect_and_generate(force=force)
 
         elif command_lower == "/agent":
-            # Toggle agent mode
-            self.agent_mode_enabled = not self.agent_mode_enabled
-            status = "[green]enabled[/green]" if self.agent_mode_enabled else "[dim]disabled[/dim]"
+            # Cycle through execution modes: normal → agent → plan → normal
+            mode_cycle = {"normal": "agent", "agent": "plan", "plan": "normal"}
+            self.execution_mode = mode_cycle[self.execution_mode]
+
+            # Mode-specific descriptions
+            mode_info = {
+                "normal": {
+                    "title": "Normal Mode",
+                    "color": "yellow",
+                    "description": "[yellow]Standard interactive mode[/yellow]\n\n"
+                                 "Standard conversation with the LLM.\n"
+                                 "Tools are available but no autonomous behavior.\n\n"
+                                 "[dim]Use /agent to switch to agent mode[/dim]"
+                },
+                "agent": {
+                    "title": "Agent Mode",
+                    "color": "cyan",
+                    "description": "[cyan]Autonomous multi-step execution[/cyan]\n\n"
+                                 "Your next message will be executed autonomously.\n"
+                                 "The agent will:\n"
+                                 "  • Break down complex tasks automatically\n"
+                                 "  • Explore the codebase proactively\n"
+                                 "  • Execute multiple steps until completion\n"
+                                 "  • Self-reflect and adapt\n\n"
+                                 "[dim]Use /agent to switch to plan mode[/dim]"
+                },
+                "plan": {
+                    "title": "Plan Mode",
+                    "color": "magenta",
+                    "description": "[magenta]Plan-driven execution with progress tracking[/magenta]\n\n"
+                                 "Your next message will use intelligent planning.\n"
+                                 "The system will:\n"
+                                 "  • Analyze task complexity\n"
+                                 "  • Generate a step-by-step execution plan\n"
+                                 "  • Execute steps with progress feedback\n"
+                                 "  • Adapt plan based on discoveries\n\n"
+                                 "[dim]Use /agent to return to normal mode[/dim]"
+                }
+            }
+
+            info = mode_info[self.execution_mode]
             self.console.print(
                 Panel(
-                    f"[bold]Agent Mode:[/bold] {status}\n\n"
-                    + (
-                        "[green]Agent mode is now active![/green]\n\n"
-                        "Your next message will be executed with autonomous multi-step reasoning.\n"
-                        "The agent will:\n"
-                        "  • Break down complex tasks automatically\n"
-                        "  • Explore the codebase proactively\n"
-                        "  • Execute multiple steps until completion\n"
-                        "  • Self-reflect and adapt\n\n"
-                        "[dim]Use /agent again to disable[/dim]"
-                        if self.agent_mode_enabled
-                        else "[yellow]Agent mode disabled[/yellow]\n\nBack to standard interactive mode."
-                    ),
-                    title="Agent Mode",
-                    border_style="cyan" if self.agent_mode_enabled else "yellow",
+                    info["description"],
+                    title=f"► {info['title']}",
+                    border_style=info["color"],
                 )
             )
 
@@ -323,12 +365,17 @@ class InteractiveSession:
                 # Process message
                 self.console.print()
 
-                # Use agent mode if enabled
-                if self.agent_mode_enabled:
+                # Execute based on current mode
+                if self.execution_mode == "agent":
                     await self.agent.execute_task(user_input)
-                    # Disable agent mode after execution (one-shot)
-                    self.agent_mode_enabled = False
+                    # Reset to normal after execution (one-shot)
+                    self.execution_mode = "normal"
+                elif self.execution_mode == "plan":
+                    await self.agent.execute_with_plan(user_input)
+                    # Reset to normal after execution (one-shot)
+                    self.execution_mode = "normal"
                 else:
+                    # Normal mode - standard conversation
                     await self.conversation.process_message_stream(user_input)
 
             except (EOFError, KeyboardInterrupt):

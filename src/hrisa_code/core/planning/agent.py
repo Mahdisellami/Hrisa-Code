@@ -58,11 +58,11 @@ class AgentLoop:
         # Planning components
         self.complexity_detector = ComplexityDetector(
             ollama_client=conversation_manager.ollama_client,
-            evaluation_model=conversation_manager.ollama_config.model
+            evaluation_model=conversation_manager.ollama_client.config.model
         )
         self.dynamic_planner = DynamicPlanner(
             ollama_client=conversation_manager.ollama_client,
-            planning_model=conversation_manager.ollama_config.model
+            planning_model=conversation_manager.ollama_client.config.model
         )
 
         # State tracking
