@@ -162,7 +162,10 @@ class DynamicPlanner:
         try:
             # Generate plan using LLM
             return await self._generate_llm_plan(task, complexity, context)
-        except Exception:
+        except Exception as e:
+            # Log the error for debugging
+            import logging
+            logging.warning(f"LLM plan generation failed, falling back to heuristic: {e}")
             # Fallback to heuristic
             return self._generate_heuristic_plan(task, complexity, context)
 
@@ -250,6 +253,37 @@ class DynamicPlanner:
                     expected_tools=["write_file", "execute_command"],
                     dependencies=[impl_step],
                     success_criteria="Tests pass"
+                ))
+
+        elif any(word in task_lower for word in ["find", "search", "locate", "list"]):
+            # Search/find task
+            steps.append(PlanStep(
+                step_number=1,
+                type=PlanStepType.EXPLORATION,
+                description=f"Use search_files to locate files matching the search criteria",
+                rationale="Identify all files that contain the target pattern",
+                expected_tools=["search_files", "find_files"],
+                success_criteria="All matching files identified"
+            ))
+
+            if complexity in ["MODERATE", "COMPLEX"] and any(word in task_lower for word in ["summarize", "analyze", "extract"]):
+                steps.append(PlanStep(
+                    step_number=2,
+                    type=PlanStepType.ANALYSIS,
+                    description="Extract and analyze the found content",
+                    rationale="Gather detailed information from the located files",
+                    expected_tools=["read_file", "search_files"],
+                    dependencies=[1],
+                    success_criteria="Content extracted and analyzed"
+                ))
+
+                steps.append(PlanStep(
+                    step_number=3,
+                    type=PlanStepType.DOCUMENTATION,
+                    description="Compile and summarize findings",
+                    rationale="Organize results into a clear summary",
+                    dependencies=[2],
+                    success_criteria="Summary completed"
                 ))
 
         elif any(word in task_lower for word in ["fix", "debug", "resolve"]):
