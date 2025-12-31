@@ -161,13 +161,49 @@ class DynamicPlanner:
 
         try:
             # Generate plan using LLM
-            return await self._generate_llm_plan(task, complexity, context)
+            llm_plan = await self._generate_llm_plan(task, complexity, context)
+
+            # Validate plan quality - reject poor quality plans
+            import logging
+            if self._is_poor_quality_plan(llm_plan, complexity):
+                logging.warning(
+                    f"LLM generated poor quality plan ({llm_plan.total_steps} steps for {complexity} task), "
+                    f"falling back to heuristic"
+                )
+                return self._generate_heuristic_plan(task, complexity, context)
+
+            return llm_plan
         except Exception as e:
             # Log the error for debugging
             import logging
             logging.warning(f"LLM plan generation failed, falling back to heuristic: {e}")
             # Fallback to heuristic
             return self._generate_heuristic_plan(task, complexity, context)
+
+    def _is_poor_quality_plan(self, plan: ExecutionPlan, complexity: str) -> bool:
+        """Check if an LLM-generated plan is poor quality.
+
+        A plan is considered poor quality if:
+        - It has only 1 step for MODERATE/COMPLEX tasks
+        - The single step description just repeats the entire task
+
+        Args:
+            plan: The plan to validate
+            complexity: Task complexity level
+
+        Returns:
+            True if plan is poor quality and should be rejected
+        """
+        # Single-step plans for MODERATE/COMPLEX tasks are usually poor quality
+        if complexity in ["MODERATE", "COMPLEX"] and plan.total_steps == 1:
+            return True
+
+        # TODO: Could add more quality checks:
+        # - Check if step description is too similar to original task
+        # - Check if steps have proper dependencies
+        # - Check if expected_tools are reasonable
+
+        return False
 
     def _generate_heuristic_plan(
         self,
