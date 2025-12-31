@@ -125,6 +125,13 @@ class InteractiveSession:
         # Execution mode: "normal", "agent", "plan"
         self.execution_mode = "normal"
 
+        # Mode display names and colors
+        self.mode_styles = {
+            "normal": ("normal", "dim"),
+            "agent": ("agent", "cyan"),
+            "plan": ("plan", "magenta"),
+        }
+
         # Load HRISA.md if it exists and augment system prompt
         hrisa_content = self.repo_context.load()
         if hrisa_content:
@@ -164,6 +171,28 @@ class InteractiveSession:
             auto_suggest=AutoSuggestFromHistory(),
             key_bindings=kb,
         )
+
+    def _get_prompt(self) -> str:
+        """Get the prompt string with mode indicator.
+
+        Returns:
+            Formatted prompt string with mode indicator
+        """
+        mode_name, mode_color = self.mode_styles[self.execution_mode]
+        if self.execution_mode == "normal":
+            # Normal mode: simple prompt
+            return "\n> "
+        else:
+            # Agent/Plan mode: show mode in brackets with color
+            # Using ANSI color codes directly for prompt_toolkit compatibility
+            color_codes = {
+                "cyan": "\033[36m",
+                "magenta": "\033[35m",
+                "reset": "\033[0m"
+            }
+            color = color_codes.get(mode_color, "")
+            reset = color_codes["reset"]
+            return f"\n{color}[{mode_name}]{reset} > "
 
     def _display_welcome(self) -> None:
         """Display welcome message with ASCII art."""
@@ -366,10 +395,11 @@ class InteractiveSession:
 
         while True:
             try:
-                # Get user input
+                # Get user input with mode-aware prompt
+                prompt_str = self._get_prompt()
                 user_input = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda: self.prompt_session.prompt("\n> ")
+                    lambda p=prompt_str: self.prompt_session.prompt(p)
                 )
 
                 if not user_input.strip():
@@ -392,12 +422,10 @@ class InteractiveSession:
                 # Execute based on current mode
                 if self.execution_mode == "agent":
                     await self.agent.execute_task(user_input)
-                    # Reset to normal after execution (one-shot)
-                    self.execution_mode = "normal"
+                    # Mode persists - stays in agent mode until user switches
                 elif self.execution_mode == "plan":
                     await self.agent.execute_with_plan(user_input)
-                    # Reset to normal after execution (one-shot)
-                    self.execution_mode = "normal"
+                    # Mode persists - stays in plan mode until user switches
                 else:
                     # Normal mode - standard conversation
                     await self.conversation.process_message_stream(user_input)
