@@ -71,8 +71,19 @@ elif any(word in task_lower for word in ["find", "search", "locate", "list"]):
     # Step 3: Compile and summarize findings
 ```
 
+**Solution C: Plan Quality Validation**
+Added validation to reject poor quality LLM plans:
+```python
+def _is_poor_quality_plan(self, plan: ExecutionPlan, complexity: str) -> bool:
+    # Single-step plans for MODERATE/COMPLEX tasks are usually poor quality
+    if complexity in ["MODERATE", "COMPLEX"] and plan.total_steps == 1:
+        return True
+    return False
+```
+
 **Commit:** `689d0a0` - feat: Improve plan generation, step execution, and tool definitions
 **Commit:** `2502087` - fix: Add heuristic fallback for 'Find' tasks and error logging
+**Commit:** `4bd5768` - fix: Add plan quality validation to reject single-step plans
 
 ---
 
@@ -204,7 +215,7 @@ Detailed documentation of all three improvements:
 
 ## Commits Summary
 
-Total: **7 commits**
+Total: **8 commits**
 
 1. `876cf5d` - fix: Disable goal tracker during plan step execution
 2. `689d0a0` - feat: Improve plan generation, step execution, and tool definitions
@@ -213,6 +224,7 @@ Total: **7 commits**
 5. `9b58eec` - feat: Add persistent mode indicator in prompt (initial attempt)
 6. `d6c4c0c` - fix: Use prompt_toolkit HTML formatting for persistent mode indicator
 7. `2329aa5` - feat: Add persistent bottom toolbar showing current mode
+8. `4bd5768` - fix: Add plan quality validation to reject single-step plans
 
 ---
 
@@ -282,10 +294,11 @@ Total: **7 commits**
 **Manual Testing** - Verify all improvements work end-to-end
 
 ### Follow-Up Items
-1. **Investigate LLM Plan Generation Failure**
-   - Why is heuristic fallback being used?
-   - Check logs for error messages
-   - Fix so improved LLM prompt is actually used
+1. **~~Investigate LLM Plan Generation Failure~~** ✅ FIXED
+   - ~~Why is heuristic fallback being used?~~ → LLM was generating poor quality 1-step plans
+   - ~~Check logs for error messages~~ → Added validation to detect poor quality
+   - ~~Fix so improved LLM prompt is actually used~~ → Now falls back to heuristic when LLM fails
+   - **Result:** Added `_is_poor_quality_plan()` validation (commit 4bd5768)
 
 2. **Add 3-Step Plan to Heuristic for More Task Types**
    - Currently: find, analyze, implement, fix
