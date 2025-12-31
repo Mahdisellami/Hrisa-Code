@@ -640,50 +640,89 @@ However, users might:
 
 ### Proposed Solution
 
-#### 2.1 Mid-Execution Detection
-Monitor task complexity during execution and detect mismatches:
+#### 2.1 Leverage Existing Infrastructure
+
+**Important:** We already have these components - reuse them!
+- ✅ `ComplexityDetector` - analyzes task complexity (SIMPLE/MODERATE/COMPLEX)
+- ✅ `DynamicPlanner` - generates execution plans
+- ✅ `GoalTracker` - monitors task progress and completion
+- ✅ `LoopDetector` - detects when agent is stuck
+
+**Adaptive mode switching should USE these, not duplicate them!**
 
 ```python
 class AdaptiveModeManager:
-    """Detects when current mode is suboptimal and suggests alternatives."""
+    """Suggests mode switches based on existing detection systems."""
+
+    def __init__(
+        self,
+        complexity_detector: ComplexityDetector,  # REUSE existing
+        goal_tracker: GoalTracker,                # REUSE existing
+        loop_detector: LoopDetector               # REUSE existing
+    ):
+        self.complexity_detector = complexity_detector
+        self.goal_tracker = goal_tracker
+        self.loop_detector = loop_detector
 
     async def evaluate_mode_fit(
         self,
         current_mode: str,
         task: str,
-        execution_history: List[str]
+        execution_context: ExecutionContext
     ) -> ModeSuggestion:
         """
         Evaluate if current mode matches task complexity.
 
-        Returns:
-            - ModeSuggestion with:
-              - should_switch: bool
-              - suggested_mode: str
-              - reason: str
-              - confidence: float
+        Uses EXISTING detection systems:
+        - ComplexityDetector for task analysis
+        - GoalTracker for progress monitoring
+        - LoopDetector for stuck detection
         """
-        pass
+        # Use existing complexity detector
+        complexity = self.complexity_detector.analyze(task)
+
+        # Check if mode matches complexity
+        mode_complexity_map = {
+            "normal": TaskComplexity.SIMPLE,
+            "agent": TaskComplexity.MODERATE,
+            "plan": TaskComplexity.COMPLEX
+        }
+
+        expected_mode = self._map_complexity_to_mode(complexity)
+
+        if current_mode != expected_mode:
+            return ModeSuggestion(
+                should_switch=True,
+                suggested_mode=expected_mode,
+                reason=self._get_reason(complexity, current_mode),
+                confidence=complexity.confidence
+            )
+
+        return ModeSuggestion(should_switch=False)
 ```
 
-#### 2.2 Detection Triggers
+#### 2.2 Detection Triggers (Using Existing Systems)
+
+**Important:** Triggers leverage existing detection capabilities:
 
 **Switch to Plan Mode** (from normal/agent):
-- User's task requires 5+ tool calls
-- Multiple failed attempts at same subtask
-- Task involves multiple file modifications
-- Clear multi-phase structure detected
+- **ComplexityDetector** returns `COMPLEX` (5+ indicators, dependencies detected)
+- **LoopDetector** fires (multiple failed attempts at same subtask)
+- **GoalTracker** shows no progress after 5+ tool rounds
 - Example: In normal mode, user asks to "refactor the entire auth system"
+  - ComplexityDetector finds: 12 files, dependencies, architectural changes
 
 **Switch to Agent Mode** (from normal):
+- **ComplexityDetector** returns `MODERATE` (2-4 indicators, no dependencies)
 - Task requires 2-3 autonomous steps
-- User asks follow-up questions indicating multi-step intent
 - Example: In normal mode, user asks to "add error logging and test it"
+  - ComplexityDetector finds: 2 steps, no dependencies
 
 **Switch to Normal Mode** (from agent/plan):
-- Task is actually simple (1-2 tool calls would suffice)
-- User asks a simple informational question
+- **ComplexityDetector** returns `SIMPLE` (1 indicator, single action)
+- **GoalTracker** shows task achievable in 1-2 tool calls
 - Example: In plan mode, user asks "what's in this file?"
+  - ComplexityDetector finds: 1 file read, no complexity indicators
 
 #### 2.3 User Confirmation Flow
 
@@ -715,86 +754,126 @@ class AdaptiveModeManager:
 - **n** - Stay in current mode
 - **never** - Disable adaptive suggestions for this session
 
-#### 2.4 Implementation Details
+#### 2.4 Implementation Details (Thin Orchestration Layer)
+
+**Important:** AdaptiveModeManager is a thin orchestration layer that USES existing systems, not a reimplementation.
 
 **Detection Points:**
-1. **After initial task analysis** (before first action)
-2. **After 3rd tool call** (pattern emerging)
-3. **After tool errors** (current approach not working)
-4. **On explicit complexity markers** ("comprehensive", "entire", "all")
+1. **After initial task analysis** (uses `ComplexityDetector.analyze()`)
+2. **After 3rd tool call** (checks `LoopDetector` status)
+3. **After tool errors** (checks `GoalTracker.check_progress()`)
+4. **On explicit complexity markers** (already in `ComplexityDetector.COMPLEXITY_INDICATORS`)
 
-**Thresholds:**
+**Thresholds (from ComplexityDetector):**
 ```python
-SIMPLE_TASK_INDICATORS = {
-    "tool_calls": 1,
-    "files_accessed": 1,
-    "execution_time": "< 30s"
+# REUSE existing thresholds from ComplexityDetector
+# These are already defined in src/hrisa_code/core/planning/complexity_detector.py
+
+COMPLEXITY_INDICATORS = {
+    "file_system_ops": ["multiple files", "directory", "recursive", "all files", "entire codebase"],
+    "architectural": ["refactor", "restructure", "migrate", "architecture"],
+    "multi_phase": ["implement", "test", "deploy", "first", "then", "after"],
+    "dependencies": ["depends on", "requires", "after", "before"],
+    "iterations": ["all", "each", "every", "throughout"]
 }
 
-MODERATE_TASK_INDICATORS = {
-    "tool_calls": "2-5",
-    "files_accessed": "2-5",
-    "execution_time": "30s - 2min"
-}
-
-COMPLEX_TASK_INDICATORS = {
-    "tool_calls": "5+",
-    "files_accessed": "5+",
-    "execution_time": "> 2min",
-    "has_dependencies": True
-}
+# Map ComplexityDetector results to modes:
+# SIMPLE (0-1 indicators) → normal mode
+# MODERATE (2-4 indicators, no dependencies) → agent mode
+# COMPLEX (5+ indicators or dependencies) → plan mode
 ```
 
-**Confidence Scoring:**
+**Confidence Scoring (from ComplexityDetector):**
 - High confidence (>0.8): Auto-suggest immediately
 - Medium confidence (0.5-0.8): Suggest after confirmation threshold
 - Low confidence (<0.5): Don't suggest
 
+**Integration Point:**
+```python
+# AdaptiveModeManager fits between ConversationManager and AgentLoop
+# It does NOT duplicate detection - it consults existing detectors
+
+class ConversationManager:
+    def __init__(self, ...):
+        # Existing detectors
+        self.complexity_detector = ComplexityDetector()
+        self.goal_tracker = GoalTracker()
+        self.loop_detector = LoopDetector()
+
+        # NEW: Thin orchestration layer
+        self.adaptive_mode_manager = AdaptiveModeManager(
+            complexity_detector=self.complexity_detector,  # Pass existing
+            goal_tracker=self.goal_tracker,                # Pass existing
+            loop_detector=self.loop_detector               # Pass existing
+        )
+```
+
 #### 2.5 Example Scenarios
 
-**Scenario 1: Underestimated Complexity**
+**Scenario 1: Underestimated Complexity (ComplexityDetector detects mismatch)**
 ```
 User: [Normal Mode] "Add error handling to all API endpoints"
 
 [System starts execution]
 [After 3 tool calls exploring files]
 
+[AdaptiveModeManager calls ComplexityDetector.analyze()]
+ComplexityDetector returns:
+  - Complexity: COMPLEX
+  - Indicators: 5 (file_system_ops: "all", iterations: "each", architectural: implied)
+  - Files affected: 12
+  - Confidence: 0.9
+
 💡 Mode Suggestion: This task is more COMPLEX than expected.
    Suggested: Plan Mode
-   Reason: Found 12 API endpoint files requiring changes
+   Reason: ComplexityDetector found 5+ complexity indicators
+           (12 API endpoint files requiring coordinated changes)
 
 Switch to Plan Mode? [Y/n]: Y
 
-[Switches to plan mode, generates 5-step plan]
+[Switches to plan mode, generates 5-step plan using DynamicPlanner]
 ```
 
-**Scenario 2: Overestimated Complexity**
+**Scenario 2: Overestimated Complexity (ComplexityDetector shows SIMPLE)**
 ```
 User: [Plan Mode] "Show me what's in config.py"
 
+[AdaptiveModeManager calls ComplexityDetector.analyze()]
+ComplexityDetector returns:
+  - Complexity: SIMPLE
+  - Indicators: 0
+  - Files affected: 1
+  - Confidence: 0.95
+
 💡 Mode Suggestion: This task is SIMPLER than expected.
    Suggested: Normal Mode
-   Reason: Single file read operation
+   Reason: ComplexityDetector found no complexity indicators
+           (single file read operation)
 
 Switch to Normal Mode? [Y/n]: Y
 
 [Reads file immediately, no plan needed]
 ```
 
-**Scenario 3: Mid-Execution Pivot**
+**Scenario 3: Mid-Execution Pivot (LoopDetector + GoalTracker signal stuck)**
 ```
 User: [Agent Mode] "Fix the authentication bug"
 
 [Agent tries 3 different approaches, all fail]
 
+[AdaptiveModeManager checks LoopDetector and GoalTracker]
+LoopDetector: "Repetitive attempts detected"
+GoalTracker: "No progress after 5 tool rounds"
+
 💡 Mode Suggestion: Consider switching to Plan Mode
    Suggested: Plan Mode
-   Reason: Multiple failed attempts suggest need for
-           structured exploration and planning
+   Reason: LoopDetector shows repetitive attempts without progress
+           (structured exploration and planning may help)
 
 Switch to Plan Mode? [Y/n]: Y
 
-[Generates plan: Explore → Diagnose → Design Fix → Implement → Test]
+[Switches to plan mode]
+[DynamicPlanner generates: Explore → Diagnose → Design Fix → Implement → Test]
 ```
 
 #### 2.6 Configuration
@@ -818,7 +897,7 @@ adaptive_mode:
 
 **For Users:**
 - ✅ Don't need to predict task complexity upfront
-- ✅ System guides them to optimal mode
+- ✅ System guides them to optimal mode using proven detection systems
 - ✅ Learn which modes work best for which tasks
 - ✅ Can override suggestions (user stays in control)
 
@@ -827,8 +906,67 @@ adaptive_mode:
 - ✅ Fewer wasted iterations
 - ✅ Faster task completion
 - ✅ User feedback on mode effectiveness
+- ✅ **No code duplication** - reuses ComplexityDetector, GoalTracker, LoopDetector
+- ✅ **Thin orchestration layer** - minimal new code, maximum reuse
 
-#### 2.8 Future Extensions
+#### 2.8 Architecture Overview
+
+**Key Design Principle: Composition over Duplication**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ ConversationManager (existing)                              │
+│                                                             │
+│  ┌─────────────────┐  ┌─────────────────┐                  │
+│  │ComplexityDetector│  │ GoalTracker     │                  │
+│  │   (existing)     │  │   (existing)    │                  │
+│  └────────┬─────────┘  └────────┬────────┘                  │
+│           │                     │                           │
+│           │  ┌──────────────────┴────┐                      │
+│           │  │   LoopDetector        │                      │
+│           │  │   (existing)          │                      │
+│           │  └──────────┬────────────┘                      │
+│           │             │                                   │
+│           └─────────────┴──────────────┐                    │
+│                                        │                    │
+│  ┌─────────────────────────────────────▼──────────────┐    │
+│  │ AdaptiveModeManager (NEW - thin layer)             │    │
+│  │                                                     │    │
+│  │ - REUSES ComplexityDetector for analysis           │    │
+│  │ - REUSES GoalTracker for progress checks           │    │
+│  │ - REUSES LoopDetector for stuck detection          │    │
+│  │ - NO duplicate thresholds or detection logic       │    │
+│  │ - ONLY orchestrates mode switch suggestions        │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                          │                                  │
+│                          ▼                                  │
+│              ┌───────────────────────┐                      │
+│              │ User Confirmation     │                      │
+│              │ (ApprovalManager)     │                      │
+│              └───────────────────────┘                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**What AdaptiveModeManager Does:**
+- ✅ Consults existing detectors for signals
+- ✅ Maps complexity/progress/loops to mode recommendations
+- ✅ Prompts user for confirmation
+- ✅ Executes mode switch if approved
+
+**What AdaptiveModeManager Does NOT Do:**
+- ❌ Reimplement complexity detection
+- ❌ Reimplement goal tracking
+- ❌ Reimplement loop detection
+- ❌ Define new thresholds or indicators
+- ❌ Duplicate any existing logic
+
+**Estimated Implementation Size:**
+- ~150 lines of orchestration code
+- ~50 lines for user confirmation flow
+- ~100 lines for configuration and testing
+- **Total: ~300 lines** (vs 1000+ if reimplemented)
+
+#### 2.9 Future Extensions
 
 - **Learning from history**: Track which mode switches users accept/reject
 - **Proactive suggestions**: "Based on similar tasks, Plan Mode works better"
