@@ -618,6 +618,222 @@ Assistant: *executes write*
 - ⏳ Tool optimization (caching, deduplication)
 - ⏳ Context management
 - ⏳ Parallel step execution
+- ⏳ **Adaptive Mode Switching** (NEW)
+
+---
+
+## 2. Adaptive Mode Switching
+
+### Vision
+The system should intelligently detect when the current execution mode (normal/agent/plan) is not optimal for the task complexity and suggest switching modes with user confirmation.
+
+### Problem
+Currently, users manually choose execution modes:
+- **Normal mode** - for simple queries
+- **Agent mode** - for multi-step autonomous tasks
+- **Plan mode** - for complex tasks requiring structured execution
+
+However, users might:
+- Choose normal mode for a complex task (inefficient, requires many back-and-forth interactions)
+- Choose plan mode for a simple task (overhead of plan generation)
+- Start in one mode and realize mid-execution that another mode would work better
+
+### Proposed Solution
+
+#### 2.1 Mid-Execution Detection
+Monitor task complexity during execution and detect mismatches:
+
+```python
+class AdaptiveModeManager:
+    """Detects when current mode is suboptimal and suggests alternatives."""
+
+    async def evaluate_mode_fit(
+        self,
+        current_mode: str,
+        task: str,
+        execution_history: List[str]
+    ) -> ModeSuggestion:
+        """
+        Evaluate if current mode matches task complexity.
+
+        Returns:
+            - ModeSuggestion with:
+              - should_switch: bool
+              - suggested_mode: str
+              - reason: str
+              - confidence: float
+        """
+        pass
+```
+
+#### 2.2 Detection Triggers
+
+**Switch to Plan Mode** (from normal/agent):
+- User's task requires 5+ tool calls
+- Multiple failed attempts at same subtask
+- Task involves multiple file modifications
+- Clear multi-phase structure detected
+- Example: In normal mode, user asks to "refactor the entire auth system"
+
+**Switch to Agent Mode** (from normal):
+- Task requires 2-3 autonomous steps
+- User asks follow-up questions indicating multi-step intent
+- Example: In normal mode, user asks to "add error logging and test it"
+
+**Switch to Normal Mode** (from agent/plan):
+- Task is actually simple (1-2 tool calls would suffice)
+- User asks a simple informational question
+- Example: In plan mode, user asks "what's in this file?"
+
+#### 2.3 User Confirmation Flow
+
+```
+[During execution, system detects mismatch]
+
+╭─────────────────────────────────────────────────────╮
+│ 💡 Mode Suggestion                                  │
+│                                                     │
+│ This task appears more COMPLEX than expected.       │
+│                                                     │
+│ Current mode: Normal                                │
+│ Suggested mode: Plan Mode                           │
+│                                                     │
+│ Reason: Task requires multiple file modifications   │
+│ across 8 files with dependencies.                   │
+│                                                     │
+│ Plan mode would:                                    │
+│   • Generate structured execution plan              │
+│   • Track progress across steps                    │
+│   • Handle dependencies automatically               │
+│                                                     │
+│ Switch to Plan Mode? [Y/n/never]:                   │
+╰─────────────────────────────────────────────────────╯
+```
+
+**User Options:**
+- **Y** (default) - Switch to suggested mode and continue
+- **n** - Stay in current mode
+- **never** - Disable adaptive suggestions for this session
+
+#### 2.4 Implementation Details
+
+**Detection Points:**
+1. **After initial task analysis** (before first action)
+2. **After 3rd tool call** (pattern emerging)
+3. **After tool errors** (current approach not working)
+4. **On explicit complexity markers** ("comprehensive", "entire", "all")
+
+**Thresholds:**
+```python
+SIMPLE_TASK_INDICATORS = {
+    "tool_calls": 1,
+    "files_accessed": 1,
+    "execution_time": "< 30s"
+}
+
+MODERATE_TASK_INDICATORS = {
+    "tool_calls": "2-5",
+    "files_accessed": "2-5",
+    "execution_time": "30s - 2min"
+}
+
+COMPLEX_TASK_INDICATORS = {
+    "tool_calls": "5+",
+    "files_accessed": "5+",
+    "execution_time": "> 2min",
+    "has_dependencies": True
+}
+```
+
+**Confidence Scoring:**
+- High confidence (>0.8): Auto-suggest immediately
+- Medium confidence (0.5-0.8): Suggest after confirmation threshold
+- Low confidence (<0.5): Don't suggest
+
+#### 2.5 Example Scenarios
+
+**Scenario 1: Underestimated Complexity**
+```
+User: [Normal Mode] "Add error handling to all API endpoints"
+
+[System starts execution]
+[After 3 tool calls exploring files]
+
+💡 Mode Suggestion: This task is more COMPLEX than expected.
+   Suggested: Plan Mode
+   Reason: Found 12 API endpoint files requiring changes
+
+Switch to Plan Mode? [Y/n]: Y
+
+[Switches to plan mode, generates 5-step plan]
+```
+
+**Scenario 2: Overestimated Complexity**
+```
+User: [Plan Mode] "Show me what's in config.py"
+
+💡 Mode Suggestion: This task is SIMPLER than expected.
+   Suggested: Normal Mode
+   Reason: Single file read operation
+
+Switch to Normal Mode? [Y/n]: Y
+
+[Reads file immediately, no plan needed]
+```
+
+**Scenario 3: Mid-Execution Pivot**
+```
+User: [Agent Mode] "Fix the authentication bug"
+
+[Agent tries 3 different approaches, all fail]
+
+💡 Mode Suggestion: Consider switching to Plan Mode
+   Suggested: Plan Mode
+   Reason: Multiple failed attempts suggest need for
+           structured exploration and planning
+
+Switch to Plan Mode? [Y/n]: Y
+
+[Generates plan: Explore → Diagnose → Design Fix → Implement → Test]
+```
+
+#### 2.6 Configuration
+
+Users can control adaptive suggestions:
+
+```yaml
+# .hrisa/config.yaml
+adaptive_mode:
+  enabled: true
+  auto_suggest_threshold: 0.8  # confidence threshold
+  prompt_for_confirmation: true
+  remember_user_preferences: true  # remember "never" choices
+
+  # Disable specific transitions
+  disable_suggestions:
+    - "normal_to_plan"  # Never suggest plan mode from normal
+```
+
+#### 2.7 Benefits
+
+**For Users:**
+- ✅ Don't need to predict task complexity upfront
+- ✅ System guides them to optimal mode
+- ✅ Learn which modes work best for which tasks
+- ✅ Can override suggestions (user stays in control)
+
+**For System:**
+- ✅ Better mode utilization
+- ✅ Fewer wasted iterations
+- ✅ Faster task completion
+- ✅ User feedback on mode effectiveness
+
+#### 2.8 Future Extensions
+
+- **Learning from history**: Track which mode switches users accept/reject
+- **Proactive suggestions**: "Based on similar tasks, Plan Mode works better"
+- **Cost optimization**: "Plan Mode will use fewer LLM calls for this task"
+- **Time estimates**: "Plan Mode estimated: 3 min vs Agent Mode: 8 min"
 
 ---
 
