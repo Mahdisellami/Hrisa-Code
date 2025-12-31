@@ -556,10 +556,19 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
         # Build prompt for this step
         prompt = self._build_step_prompt(step, original_task)
 
-        # Execute via conversation manager
-        response = await self.conversation.process_message(prompt)
+        # Disable goal tracking during plan step execution
+        # Goal tracker evaluates overall task completion, but we're executing a specific step
+        # Let the plan orchestration handle step completion logic instead
+        original_goal_tracking = self.conversation._goal_tracking_enabled
+        self.conversation._goal_tracking_enabled = False
 
-        return response or "Step completed"
+        try:
+            # Execute via conversation manager
+            response = await self.conversation.process_message(prompt)
+            return response or "Step completed"
+        finally:
+            # Restore original goal tracking state
+            self.conversation._goal_tracking_enabled = original_goal_tracking
 
     def _build_step_prompt(self, step: "PlanStep", original_task: str) -> str:
         """Build prompt for executing a specific step.

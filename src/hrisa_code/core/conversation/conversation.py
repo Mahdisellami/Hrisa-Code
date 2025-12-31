@@ -78,6 +78,7 @@ class ConversationManager:
             evaluation_model=ollama_config.model,  # Use main model
             check_frequency=3  # Check every 3 rounds
         )
+        self._goal_tracking_enabled = True  # Can be disabled during plan step execution
 
         # Result verification to evaluate tool output relevance
         self.result_verifier = ResultVerifier(
@@ -1105,7 +1106,8 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             goal_status = self.goal_tracker.current_status
 
             # Otherwise, check goal progress periodically using LLM evaluation
-            if goal_status == GoalStatus.UNKNOWN and self.goal_tracker.should_check_progress():
+            # But only if goal tracking is enabled (disabled during plan step execution)
+            if self._goal_tracking_enabled and goal_status == GoalStatus.UNKNOWN and self.goal_tracker.should_check_progress():
                 with self.console.status(
                     "[dim]Evaluating task progress...[/dim]",
                     spinner="dots"
@@ -1113,7 +1115,8 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                     goal_status = await self.goal_tracker.check_progress()
 
             # Handle intervention for any detected status (immediate or periodic)
-            if goal_status in (GoalStatus.COMPLETE, GoalStatus.STUCK, GoalStatus.CLARIFICATION_NEEDED):
+            # But only if goal tracking is enabled
+            if self._goal_tracking_enabled and goal_status in (GoalStatus.COMPLETE, GoalStatus.STUCK, GoalStatus.CLARIFICATION_NEEDED):
                 intervention_msg = self.goal_tracker.get_intervention_message(goal_status)
 
                 # Display intervention to user
@@ -1130,7 +1133,8 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
             # Send tool results back to LLM and check for more tool calls
             # If goal is COMPLETE, don't provide tools - force a final response
-            tools_for_next_round = None if goal_status == GoalStatus.COMPLETE else self.tool_definitions
+            # But only enforce this if goal tracking is enabled
+            tools_for_next_round = None if (self._goal_tracking_enabled and goal_status == GoalStatus.COMPLETE) else self.tool_definitions
 
             response_start = time.time()
             with self.console.status(
