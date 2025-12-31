@@ -353,6 +353,162 @@ class DynamicPlanner:
                 success_criteria="Fix verified"
             ))
 
+        elif any(word in task_lower for word in ["refactor", "restructure", "reorganize"]):
+            # Refactoring task
+            steps.append(PlanStep(
+                step_number=1,
+                type=PlanStepType.EXPLORATION,
+                description="Analyze current implementation and identify areas to refactor",
+                rationale="Understand existing structure before making changes",
+                expected_tools=["read_file", "search_files", "find_files"],
+                success_criteria="Current implementation understood"
+            ))
+
+            steps.append(PlanStep(
+                step_number=2,
+                type=PlanStepType.DESIGN,
+                description="Design improved structure and refactoring approach",
+                rationale="Plan the refactoring strategy to maintain functionality",
+                expected_tools=["read_file"],
+                dependencies=[1],
+                success_criteria="Refactoring plan clear"
+            ))
+
+            steps.append(PlanStep(
+                step_number=3,
+                type=PlanStepType.IMPLEMENTATION,
+                description="Implement the refactoring changes",
+                rationale="Apply the planned refactoring",
+                expected_tools=["write_file", "read_file"],
+                dependencies=[2],
+                success_criteria="Code refactored"
+            ))
+
+            if complexity in ["MODERATE", "COMPLEX"]:
+                steps.append(PlanStep(
+                    step_number=4,
+                    type=PlanStepType.TESTING,
+                    description="Verify functionality is preserved after refactoring",
+                    rationale="Ensure no regressions were introduced",
+                    expected_tools=["execute_command"],
+                    dependencies=[3],
+                    success_criteria="Tests pass, functionality preserved"
+                ))
+
+        elif any(word in task_lower for word in ["optimize", "improve performance", "speed up"]):
+            # Optimization task
+            steps.append(PlanStep(
+                step_number=1,
+                type=PlanStepType.EXPLORATION,
+                description="Profile and identify performance bottlenecks",
+                rationale="Find what needs optimization",
+                expected_tools=["read_file", "search_files", "execute_command"],
+                success_criteria="Bottlenecks identified"
+            ))
+
+            steps.append(PlanStep(
+                step_number=2,
+                type=PlanStepType.DESIGN,
+                description="Design optimization strategy",
+                rationale="Plan how to improve performance",
+                expected_tools=["read_file"],
+                dependencies=[1],
+                success_criteria="Optimization approach clear"
+            ))
+
+            steps.append(PlanStep(
+                step_number=3,
+                type=PlanStepType.IMPLEMENTATION,
+                description="Implement performance optimizations",
+                rationale="Apply the optimization strategy",
+                expected_tools=["write_file", "read_file"],
+                dependencies=[2],
+                success_criteria="Optimizations implemented"
+            ))
+
+            if complexity in ["MODERATE", "COMPLEX"]:
+                steps.append(PlanStep(
+                    step_number=4,
+                    type=PlanStepType.TESTING,
+                    description="Measure performance improvements",
+                    rationale="Verify optimizations are effective",
+                    expected_tools=["execute_command"],
+                    dependencies=[3],
+                    success_criteria="Performance improved, tests pass"
+                ))
+
+        elif any(word in task_lower for word in ["document", "add documentation", "write docs"]):
+            # Documentation task
+            steps.append(PlanStep(
+                step_number=1,
+                type=PlanStepType.EXPLORATION,
+                description="Review code structure and identify undocumented areas",
+                rationale="Understand what needs documentation",
+                expected_tools=["read_file", "search_files", "find_files"],
+                success_criteria="Documentation gaps identified"
+            ))
+
+            steps.append(PlanStep(
+                step_number=2,
+                type=PlanStepType.ANALYSIS,
+                description="Analyze code behavior and intended usage",
+                rationale="Understand functionality to document accurately",
+                expected_tools=["read_file"],
+                dependencies=[1],
+                success_criteria="Code behavior understood"
+            ))
+
+            steps.append(PlanStep(
+                step_number=3,
+                type=PlanStepType.DOCUMENTATION,
+                description="Write comprehensive documentation",
+                rationale="Create clear, helpful documentation",
+                expected_tools=["write_file"],
+                dependencies=[2],
+                success_criteria="Documentation complete"
+            ))
+
+        elif "test" in task_lower and any(word in task_lower for word in ["write", "add", "create"]):
+            # Testing task (only when explicitly writing tests)
+            steps.append(PlanStep(
+                step_number=1,
+                type=PlanStepType.EXPLORATION,
+                description="Analyze code to be tested",
+                rationale="Understand what functionality needs testing",
+                expected_tools=["read_file", "search_files"],
+                success_criteria="Code to test identified"
+            ))
+
+            steps.append(PlanStep(
+                step_number=2,
+                type=PlanStepType.DESIGN,
+                description="Design test cases and scenarios",
+                rationale="Plan comprehensive test coverage",
+                expected_tools=["read_file"],
+                dependencies=[1],
+                success_criteria="Test cases designed"
+            ))
+
+            steps.append(PlanStep(
+                step_number=3,
+                type=PlanStepType.TESTING,
+                description="Implement tests",
+                rationale="Write the test code",
+                expected_tools=["write_file"],
+                dependencies=[2],
+                success_criteria="Tests written"
+            ))
+
+            steps.append(PlanStep(
+                step_number=4,
+                type=PlanStepType.VALIDATION,
+                description="Run tests and verify coverage",
+                rationale="Ensure tests pass and provide good coverage",
+                expected_tools=["execute_command"],
+                dependencies=[3],
+                success_criteria="Tests pass, coverage adequate"
+            ))
+
         else:
             # Generic task
             steps.append(PlanStep(
