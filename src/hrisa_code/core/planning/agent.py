@@ -580,20 +580,34 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
         Returns:
             Formatted prompt
         """
-        prompt = f"""Execute this step from the plan:
+        prompt = f"""Execute this SPECIFIC step from the plan. Focus ONLY on this step, not the entire task.
 
-Original Task: {original_task}
+=== ORIGINAL TASK ===
+{original_task}
 
-Current Step ({step.step_number}):
+=== YOUR CURRENT STEP (Step {step.step_number}) ===
 {step.description}
 
-Rationale: {step.rationale}
+=== WHY THIS STEP ===
+{step.rationale}
 
-Expected Tools: {', '.join(step.expected_tools) if step.expected_tools else 'Any appropriate tools'}
+=== EXPECTED TOOLS ===
+{', '.join(step.expected_tools) if step.expected_tools else 'Any appropriate tools'}
 
-Success Criteria: {step.success_criteria}
+=== SUCCESS CRITERIA ===
+{step.success_criteria}
 
-Execute this step now. Be thorough and use the expected tools. Report what you did.
+=== INSTRUCTIONS ===
+1. Focus ONLY on this specific step - do NOT try to complete the entire task in one step
+2. Use the expected tools to accomplish THIS step
+3. Follow tool parameter requirements carefully (check required vs optional parameters)
+4. If a tool call fails with validation error, read the error message and fix the parameters
+5. Report what you accomplished in THIS step when done
+
+IMPORTANT: This is step {step.step_number} of a multi-step plan. Do not try to complete steps that come later.
+Just complete THIS step, then report your findings.
+
+Execute this step now:
 """
         return prompt
 

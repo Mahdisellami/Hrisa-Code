@@ -272,32 +272,32 @@ class SearchFilesTool:
             "type": "function",
             "function": {
                 "name": "search_files",
-                "description": "Search for regex patterns INSIDE files (grep-like). Supports regular expressions by default. IMPORTANT: Searches line-by-line, so patterns CANNOT match across multiple lines. Use when looking for code/text patterns within files. For listing files by name, use execute_command instead.\n\nLIMITATION: Each line is searched independently. Patterns expecting to match across lines will fail.\n\nGOOD patterns (single-line):\n- '@app\\.command' - finds decorators\n- 'def \\w+\\(' - finds function definitions\n- 'class \\w+:' - finds class definitions\n- 'import .* from' - finds imports\n\nBAD patterns (multi-line, won't work):\n- '@app\\.command\\(.*?def \\w+' - spans decorator and function (different lines)\n- 'if.*:\\n.*return' - expects newline in pattern\n\nWORKAROUND: Use separate simple patterns instead of one multi-line pattern.",
+                "description": "Search for patterns INSIDE files (grep-like). Use when looking for code/text patterns within files. For finding files by name, use find_files instead.\n\nCOMMON USE CASES:\n1. Find TODO comments: pattern='TODO', directory='.', file_pattern='**/*.py', use_regex=false\n2. Find function definitions: pattern='def\\s+\\w+\\(', directory='src/', use_regex=true\n3. Find class usage: pattern='ModelCatalog', directory='.', use_regex=false\n4. Find decorators: pattern='@app\\.command', directory='src/', use_regex=true\n\nIMPORTANT:\n- For literal strings (TODO, FIXME, class names), set use_regex=false\n- For patterns with special chars (def, \\s, \\w), keep use_regex=true (default)\n- Searches line-by-line only (cannot match across multiple lines)\n- Always provide 'directory' parameter (required)\n- file_pattern is optional (defaults to all files)",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "pattern": {
                             "type": "string",
-                            "description": "Regex pattern to search for. Examples: '@app\\.command', 'def\\s+\\w+\\(', 'class\\s+ModelCatalog', 'import|from'. For literal strings, set use_regex=false.",
+                            "description": "Regex pattern to search for. Examples: 'TODO' (literal), '@app\\.command' (decorator), 'def\\s+\\w+\\(' (functions), 'class\\s+\\w+' (classes). For literal strings like 'TODO' or 'FIXME', set use_regex=false.",
                         },
                         "directory": {
                             "type": "string",
-                            "description": "Directory to search in",
+                            "description": "REQUIRED. Directory to search in. Examples: '.' (current), 'src/', 'tests/', '../project/'",
                         },
                         "file_pattern": {
                             "type": "string",
-                            "description": "File pattern to match. Use '**/*.py' for recursive search (recommended), '*.py' for current directory only. Default: '**/*' (all files recursively).",
+                            "description": "Optional file glob pattern. Examples: '**/*.py' (all Python files recursively), '*.md' (markdown in current dir), '**/*.{js,ts}' (JS/TS files). Default: '**/*' (all files)",
                         },
                         "use_regex": {
                             "type": "boolean",
-                            "description": "Use regex matching (default: true). Set to false for literal string search.",
+                            "description": "Use regex matching (default: true). Set to false for literal string search (recommended for simple text like 'TODO').",
                         },
                         "working_directory": {
                             "type": "string",
-                            "description": "Alias for 'directory' parameter. Either 'directory' or 'working_directory' can be used.",
+                            "description": "Alias for 'directory' parameter. Use 'directory' instead (preferred).",
                         },
                     },
-                    "required": ["pattern"],
+                    "required": ["pattern", "directory"],
                 },
             },
         }

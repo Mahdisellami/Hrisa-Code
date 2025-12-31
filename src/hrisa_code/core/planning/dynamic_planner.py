@@ -380,7 +380,7 @@ RATIONALE: [Why this approach is best for this task]
 
 STEP 1:
 TYPE: [exploration/analysis/design/implementation/testing/documentation/validation]
-DESCRIPTION: [What to do in this step]
+DESCRIPTION: [What to do in this step - be SPECIFIC and CONCRETE]
 RATIONALE: [Why this step is needed]
 TOOLS: [Expected tools: read_file, write_file, search_files, execute_command, git_*, etc.]
 SUCCESS_CRITERIA: [How to know this step succeeded]
@@ -401,7 +401,23 @@ Guidelines:
 - Start with exploration/analysis when needed
 - Include design steps for complex changes
 - End with testing/validation for implementations
-- Be specific and actionable
+- Be specific and actionable in step descriptions
+
+IMPORTANT - Breaking Down Tasks:
+- For "Find X and summarize" tasks: Break into (1) Find/locate X, (2) Read/analyze X, (3) Summarize findings
+- For "Search for pattern" tasks: Break into (1) Identify files to search, (2) Search each file, (3) Collect results
+- For "Analyze codebase" tasks: Break into (1) Explore structure, (2) Read key files, (3) Analyze patterns
+- NEVER create a single step that repeats the entire task - break it down into concrete sub-steps!
+
+Examples of GOOD step descriptions:
+✓ "Use search_files to find all Python files containing 'TODO' comments"
+✓ "Read each file that contains TODO comments and extract the comment text with line numbers"
+✓ "Compile all TODO comments into a categorized summary"
+
+Examples of BAD step descriptions:
+✗ "Find all TODO comments in the codebase and summarize them" (too vague - just repeats the task)
+✗ "Complete the task" (not actionable)
+✗ "Do research" (not specific)
 """
         return prompt
 
