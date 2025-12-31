@@ -353,9 +353,22 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
         # Generate plan if not provided
         if not plan:
             # Analyze complexity first
+            self.console.print("[dim]Analyzing task complexity...[/dim]")
             complexity_analysis = self.complexity_detector.analyze(task)
 
-            # Generate plan
+            # For SIMPLE tasks, skip planning and use direct execution
+            if complexity_analysis.complexity.value == "simple":
+                self.console.print(
+                    f"[yellow]Task is {complexity_analysis.complexity.value.upper()} - "
+                    f"using direct execution instead of planning[/yellow]"
+                )
+                return await self.execute_task(task)
+
+            # Generate plan for moderate/complex tasks
+            self.console.print(
+                f"[dim]Task complexity: {complexity_analysis.complexity.value.upper()} - "
+                f"generating execution plan...[/dim]"
+            )
             plan = await self.dynamic_planner.generate_plan(
                 task=task,
                 complexity=complexity_analysis.complexity.value.upper(),
@@ -364,6 +377,7 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
 
             # Validate plan
             if not self.dynamic_planner.validate_plan(plan):
+                self.console.print("[yellow]Generated plan invalid - falling back to agent mode[/yellow]")
                 # Fall back to regular execution
                 return await self.execute_task(task)
 

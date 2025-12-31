@@ -6,6 +6,7 @@ from typing import Optional
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.key_binding import KeyBindings
 from rich.console import Console
 from rich.panel import Panel
 
@@ -136,9 +137,32 @@ class InteractiveSession:
         history_file = working_directory / ".hrisa" / "history.txt"
         history_file.parent.mkdir(parents=True, exist_ok=True)
 
+        # Set up key bindings for mode cycling
+        kb = KeyBindings()
+
+        @kb.add('s-tab')  # SHIFT+TAB
+        def _(event):
+            """Cycle execution modes with SHIFT+TAB."""
+            # Cycle through modes
+            mode_cycle = {"normal": "agent", "agent": "plan", "plan": "normal"}
+            self.execution_mode = mode_cycle[self.execution_mode]
+
+            # Show mode change feedback
+            mode_info = {
+                "normal": ("Normal Mode", "yellow"),
+                "agent": ("Agent Mode", "cyan"),
+                "plan": ("Plan Mode", "magenta")
+            }
+            title, color = mode_info[self.execution_mode]
+
+            # Print feedback above the prompt
+            self.console.print()
+            self.console.print(f"[{color}]► Switched to {title}[/{color}]")
+
         self.prompt_session: PromptSession[str] = PromptSession(
             history=FileHistory(str(history_file)),
             auto_suggest=AutoSuggestFromHistory(),
+            key_bindings=kb,
         )
 
     def _display_welcome(self) -> None:
