@@ -2,11 +2,12 @@
 
 import asyncio
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.formatted_text import HTML
 from rich.console import Console
 from rich.panel import Panel
 
@@ -172,27 +173,20 @@ class InteractiveSession:
             key_bindings=kb,
         )
 
-    def _get_prompt(self) -> str:
-        """Get the prompt string with mode indicator.
+    def _get_prompt(self) -> HTML:
+        """Get the prompt with mode indicator.
 
         Returns:
-            Formatted prompt string with mode indicator
+            HTML formatted prompt that updates dynamically
         """
         mode_name, mode_color = self.mode_styles[self.execution_mode]
         if self.execution_mode == "normal":
             # Normal mode: simple prompt
-            return "\n> "
+            return HTML("\n> ")
         else:
             # Agent/Plan mode: show mode in brackets with color
-            # Using ANSI color codes directly for prompt_toolkit compatibility
-            color_codes = {
-                "cyan": "\033[36m",
-                "magenta": "\033[35m",
-                "reset": "\033[0m"
-            }
-            color = color_codes.get(mode_color, "")
-            reset = color_codes["reset"]
-            return f"\n{color}[{mode_name}]{reset} > "
+            # Using prompt_toolkit HTML formatting for proper color support
+            return HTML(f"\n<{mode_color}>[{mode_name}]</{mode_color}> > ")
 
     def _display_welcome(self) -> None:
         """Display welcome message with ASCII art."""
@@ -395,11 +389,10 @@ class InteractiveSession:
 
         while True:
             try:
-                # Get user input with mode-aware prompt
-                prompt_str = self._get_prompt()
+                # Get user input with mode-aware prompt (fetched fresh each time)
                 user_input = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    lambda p=prompt_str: self.prompt_session.prompt(p)
+                    lambda: self.prompt_session.prompt(self._get_prompt())
                 )
 
                 if not user_input.strip():
