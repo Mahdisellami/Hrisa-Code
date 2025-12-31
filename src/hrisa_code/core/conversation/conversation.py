@@ -1076,12 +1076,16 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
                 )
 
                 # Verify result relevance immediately after execution
-                verification = await self.result_verifier.verify_result(
-                    tool_name=tool_name,
-                    tool_arguments=arguments,
-                    tool_result=result,
-                    had_error=tool_result_data["had_error"]
-                )
+                with self.console.status(
+                    "[dim]Verifying result relevance...[/dim]",
+                    spinner="dots"
+                ):
+                    verification = await self.result_verifier.verify_result(
+                        tool_name=tool_name,
+                        tool_arguments=arguments,
+                        tool_result=result,
+                        had_error=tool_result_data["had_error"]
+                    )
 
                 # Display verification feedback if result is not relevant
                 if verification.relevance == RelevanceScore.NOT_RELEVANT:
@@ -1102,7 +1106,11 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
             # Otherwise, check goal progress periodically using LLM evaluation
             if goal_status == GoalStatus.UNKNOWN and self.goal_tracker.should_check_progress():
-                goal_status = await self.goal_tracker.check_progress()
+                with self.console.status(
+                    "[dim]Evaluating task progress...[/dim]",
+                    spinner="dots"
+                ):
+                    goal_status = await self.goal_tracker.check_progress()
 
             # Handle intervention for any detected status (immediate or periodic)
             if goal_status in (GoalStatus.COMPLETE, GoalStatus.STUCK, GoalStatus.CLARIFICATION_NEEDED):
