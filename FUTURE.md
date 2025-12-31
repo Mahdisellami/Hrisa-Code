@@ -613,6 +613,25 @@ Assistant: *executes write*
 - ✅ ConversationManager integration (plan mode accessible via /agent command cycling)
 - ✅ Full end-to-end workflow (normal → agent → plan mode cycling with visual feedback)
 
+### Q3 2025: Real Project Implementation 🏗️
+- ⏳ Use Hrisa to build a complete project from scratch
+- ⏳ Validate all improvements in real-world scenario
+- ⏳ Measure success metrics (code written by Hrisa, tests passing, etc.)
+- ⏳ Identify gaps and improvement opportunities
+- ⏳ Document lessons learned
+
+**Candidate Projects:**
+- CLI Task Manager (CRUD, persistence, search)
+- API Client Library (auth, retries, rate limiting)
+- Code Analysis Tool (AST parsing, metrics, refactoring suggestions)
+
+**Success Criteria:**
+- Minimum: 50% code by Hrisa, 70% tests passing
+- Good: 70% code by Hrisa, 85% tests passing
+- Excellent: 85%+ code by Hrisa, 95%+ tests passing
+
+See detailed plan in section 2 below.
+
 ### Q4 2025: Optimization & Scale
 - ⏳ Performance tuning
 - ⏳ Tool optimization (caching, deduplication)
@@ -622,7 +641,243 @@ Assistant: *executes write*
 
 ---
 
-## 2. Adaptive Mode Switching
+## 2. Real Project Implementation Test (Q3 2025)
+
+### Goal
+Use Hrisa to implement a complete real-world project from scratch to validate all improvements and identify remaining gaps.
+
+### Project Selection Criteria
+Choose a project that:
+- **Moderate complexity** - Multiple modules, testing, documentation needed
+- **Clear requirements** - Well-defined scope to measure success
+- **Real utility** - Actually useful, not just a demo
+- **Good test case** - Exercises all patterns (implement, refactor, test, document, optimize)
+
+### Candidate Projects
+
+**Option 1: CLI Task Manager**
+```
+Scope:
+- Add/edit/delete tasks with priorities
+- Task categories and tags
+- Due dates and reminders
+- Search and filtering
+- Export to various formats (JSON, CSV, Markdown)
+
+Why Good Test:
+✓ Implements CRUD operations
+✓ Needs data persistence (file or SQLite)
+✓ Requires comprehensive testing
+✓ Needs user documentation
+✓ Can be optimized (search performance)
+✓ Can be refactored (add features incrementally)
+✓ Exercises: implement, test, document, refactor, optimize patterns
+```
+
+**Option 2: API Client Library**
+```
+Scope:
+- REST API wrapper with authentication (Bearer, OAuth)
+- Request/response handling with serialization
+- Error handling and automatic retries
+- Rate limiting and backoff
+- Comprehensive documentation and examples
+
+Why Good Test:
+✓ Requires design phase (API surface)
+✓ Needs extensive testing (unit + integration + mocking)
+✓ Documentation is critical (public API)
+✓ Error handling complexity
+✓ Can be optimized (caching, connection pooling)
+✓ Exercises: design, implement, test, document, optimize patterns
+```
+
+**Option 3: Code Analysis Tool**
+```
+Scope:
+- Parse Python code using AST
+- Detect code smells (long functions, deep nesting, etc.)
+- Generate complexity metrics (cyclomatic, cognitive)
+- Suggest refactorings
+- Output reports in multiple formats
+
+Why Good Test:
+✓ Complex implementation (AST traversal)
+✓ Needs multiple modules (parser, analyzer, reporter)
+✓ Testing is critical (many edge cases)
+✓ Documentation needed (usage, extending)
+✓ Performance matters (large codebases)
+✓ Self-referential (can analyze itself!)
+✓ Exercises: ALL patterns (explore, analyze, design, implement, test, document, optimize)
+```
+
+### Testing Methodology
+
+**Phase 1: Planning (Day 1)**
+```bash
+hrisa chat
+/agent  # Cycle to plan mode
+> Implement a [PROJECT] with the following features: [SPEC]
+```
+**Measure:**
+- Plan quality (number of steps, specificity of each step)
+- Complexity detection accuracy
+- Time to generate plan
+
+**Expected:**
+- Multi-step plan (8-15 steps)
+- Proper phases (exploration → design → implement → test → document)
+- Realistic dependencies between steps
+
+---
+
+**Phase 2: Implementation (Days 2-5)**
+```bash
+> Implement the [MODULE_NAME] according to the design in step 3
+> Write comprehensive tests for [MODULE_NAME] covering happy path and edge cases
+> Add documentation for [MODULE_NAME] including usage examples
+```
+
+**Measure per module:**
+- Code quality (passes linting: black, ruff, mypy)
+- Tool calls efficiency (how many calls per step)
+- Self-correction rate (validation errors, retries)
+- Manual fixes needed (% of code that needs human intervention)
+
+**Expected:**
+- Working code with <30% manual fixes needed
+- Tests that pass on first run (with minor fixes)
+- Clear documentation generated
+
+---
+
+**Phase 3: Refinement (Days 6-7)**
+```bash
+> Refactor [MODULE] to improve maintainability by extracting helper functions
+> Optimize [FUNCTION] for better performance with large inputs
+> Add comprehensive API documentation with docstrings and examples
+```
+
+**Measure:**
+- Refactoring quality (maintains tests, improves structure)
+- Pattern usage (refactor, optimize, document patterns triggered)
+- Integration across modules (does refactoring break other modules?)
+
+**Expected:**
+- Improved code structure without breaking tests
+- Performance improvements measurable
+- Complete documentation coverage
+
+---
+
+**Phase 4: Analysis & Metrics (Day 8)**
+
+**Success Metrics:**
+- **Code Written:** % of LOC written by Hrisa vs manual
+- **Tests Passing:** % of tests passing without manual fixes
+- **Iterations:** Average # of iterations per feature
+- **Time Saved:** Estimated time saved vs manual coding
+- **Tool Efficiency:** Tool calls per completed feature
+
+**Quality Metrics:**
+- Code passes linting (black, ruff, mypy) ✓/✗
+- Tests have >80% coverage ✓/✗
+- Documentation complete and clear ✓/✗
+- No major bugs in functionality ✓/✗
+- Code follows project conventions ✓/✗
+
+---
+
+### What We'll Learn
+
+**Strengths to Validate:**
+- ✓ Step context passing reduces redundancy
+- ✓ Heuristic patterns work for real tasks
+- ✓ Plan mode handles multi-module projects
+- ✓ Goal tracking prevents premature completion
+- ✓ Parameter checklists reduce errors
+
+**Gaps to Discover:**
+- ❓ Module interdependencies (does it maintain consistency?)
+- ❓ Long-running tasks (context management over days)
+- ❓ Error recovery in multi-step implementations
+- ❓ Design consistency across modules
+- ❓ Integration testing coordination
+- ❓ Refactoring impact analysis
+- ❓ Documentation quality and completeness
+
+**Improvements to Identify:**
+- What patterns are missing?
+- What tool calls are redundant?
+- What prompts need clarification?
+- What error recovery is needed?
+
+---
+
+### Success Criteria
+
+**Minimum Success (⭐):**
+- 50% of code written by Hrisa (other 50% manual fixes)
+- 70% of tests passing without fixes
+- Project is functional and usable
+- Manual intervention <5 times per module
+
+**Good Success (⭐⭐):**
+- 70% of code written by Hrisa
+- 85% of tests passing
+- Minimal manual intervention (<3 times per module)
+- Documentation mostly complete
+
+**Excellent Success (⭐⭐⭐):**
+- 85%+ code written by Hrisa
+- 95%+ tests passing
+- Production-quality output
+- Documentation complete and clear
+- Minimal manual intervention (<2 times per module)
+
+---
+
+### Expected Timeline
+
+- **When:** Q3 2025 (after step context and quality improvements settle)
+- **Duration:** 1-2 weeks for full project implementation
+- **Effort:** Daily sessions (1-2 hours) to maintain context
+- **Commitment:** Consistent testing to gather meaningful data
+
+---
+
+### Deliverables
+
+1. **Working Project**
+   - Complete implementation
+   - All tests passing
+   - Documentation included
+   - Ready for real use
+
+2. **Implementation Log**
+   - Detailed record of all Hrisa interactions
+   - Copy of all prompts and responses
+   - Notes on manual interventions
+
+3. **Metrics Report**
+   - Quantified success metrics (tables, charts)
+   - Comparison: expected vs actual
+   - Time savings analysis
+
+4. **Lessons Learned Document**
+   - What worked well
+   - What didn't work
+   - Surprising findings
+   - User experience feedback
+
+5. **Improvement Roadmap**
+   - Next features needed based on real usage
+   - Prioritized list of fixes
+   - New pattern ideas discovered
+
+---
+
+## 3. Adaptive Mode Switching
 
 ### Vision
 The system should intelligently detect when the current execution mode (normal/agent/plan) is not optimal for the task complexity and suggest switching modes with user confirmation.
