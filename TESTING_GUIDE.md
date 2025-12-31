@@ -54,9 +54,10 @@ Find all TODO comments in the codebase and summarize them
 ```
 
 Expected behavior:
-- Shows: "Analyzing task complexity..."
-- Shows: "Task complexity: MODERATE - generating execution plan..."
+- Shows animated spinner: "⠋ Analyzing task complexity..."
+- Shows animated spinner: "⠙ Task complexity: MODERATE - generating execution plan..."
 - Generates and displays a plan table
+- Shows animated spinner for each step: "⠹ Executing step 1..."
 - Executes steps with progress tracking
 
 ## What to Try
@@ -86,8 +87,8 @@ Task is SIMPLE - using direct execution instead of planning
 ### MODERATE/COMPLEX Tasks
 ```
 > Add error logging to all functions
-Analyzing task complexity...
-Task complexity: MODERATE - generating execution plan...
+⠋ Analyzing task complexity...
+⠙ Task complexity: MODERATE - generating execution plan...
 
     📋 Execution Plan: Add error logging
 ┏━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
