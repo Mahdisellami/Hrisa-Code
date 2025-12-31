@@ -409,7 +409,7 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
                     f"[bold blue]Executing step {next_step.step_number}: {next_step.description}...",
                     spinner="dots"
                 ):
-                    step_result = await self._execute_step(next_step, task)
+                    step_result = await self._execute_step(next_step, task, plan)
 
                 # Mark step complete
                 plan.mark_step_complete(next_step.step_number, step_result)
@@ -543,18 +543,19 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
                 )
             )
 
-    async def _execute_step(self, step: "PlanStep", original_task: str) -> str:
+    async def _execute_step(self, step: "PlanStep", original_task: str, plan: "ExecutionPlan") -> str:
         """Execute a single plan step.
 
         Args:
             step: The step to execute
             original_task: The original task description
+            plan: The execution plan (to access previous step results)
 
         Returns:
             Result of step execution
         """
-        # Build prompt for this step
-        prompt = self._build_step_prompt(step, original_task)
+        # Build prompt for this step with previous results as context
+        prompt = self._build_step_prompt(step, original_task, plan)
 
         # Disable goal tracking during plan step execution
         # Goal tracker evaluates overall task completion, but we're executing a specific step
@@ -570,21 +571,43 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
             # Restore original goal tracking state
             self.conversation._goal_tracking_enabled = original_goal_tracking
 
-    def _build_step_prompt(self, step: "PlanStep", original_task: str) -> str:
+    def _build_step_prompt(self, step: "PlanStep", original_task: str, plan: "ExecutionPlan") -> str:
         """Build prompt for executing a specific step.
 
         Args:
             step: The step to execute
             original_task: The original task
+            plan: The execution plan (to access previous step results)
 
         Returns:
             Formatted prompt
         """
+        # Collect previous step results
+        previous_results = []
+        for prev_step in plan.steps:
+            if prev_step.step_number < step.step_number and prev_step.completed and prev_step.result:
+                previous_results.append({
+                    "step": prev_step.step_number,
+                    "description": prev_step.description,
+                    "result": prev_step.result
+                })
+
+        # Build previous results section
+        previous_context = ""
+        if previous_results:
+            previous_context = "\n=== PREVIOUS STEP RESULTS ===\n"
+            for prev in previous_results:
+                # Truncate long results to keep prompt manageable
+                result_preview = prev['result'][:500] + "..." if len(prev['result']) > 500 else prev['result']
+                previous_context += f"\nStep {prev['step']}: {prev['description']}\n"
+                previous_context += f"Result: {result_preview}\n"
+            previous_context += "\nIMPORTANT: Use the information from previous steps above. Do NOT re-execute searches or operations that were already completed.\n"
+
         prompt = f"""Execute this SPECIFIC step from the plan. Focus ONLY on this step, not the entire task.
 
 === ORIGINAL TASK ===
 {original_task}
-
+{previous_context}
 === YOUR CURRENT STEP (Step {step.step_number}) ===
 {step.description}
 
@@ -602,7 +625,8 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
 2. Use the expected tools to accomplish THIS step
 3. Follow tool parameter requirements carefully (check required vs optional parameters)
 4. If a tool call fails with validation error, read the error message and fix the parameters
-5. Report what you accomplished in THIS step when done
+5. If previous steps provided results, USE THEM instead of repeating the same searches
+6. Report what you accomplished in THIS step when done
 
 IMPORTANT: This is step {step.step_number} of a multi-step plan. Do not try to complete steps that come later.
 Just complete THIS step, then report your findings.
