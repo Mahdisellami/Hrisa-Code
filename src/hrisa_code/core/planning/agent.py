@@ -353,8 +353,8 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
         # Generate plan if not provided
         if not plan:
             # Analyze complexity first
-            self.console.print("[dim]Analyzing task complexity...[/dim]")
-            complexity_analysis = self.complexity_detector.analyze(task)
+            with self.console.status("[bold blue]Analyzing task complexity...", spinner="dots"):
+                complexity_analysis = self.complexity_detector.analyze(task)
 
             # For SIMPLE tasks, skip planning and use direct execution
             if complexity_analysis.complexity.value == "simple":
@@ -365,15 +365,15 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
                 return await self.execute_task(task)
 
             # Generate plan for moderate/complex tasks
-            self.console.print(
-                f"[dim]Task complexity: {complexity_analysis.complexity.value.upper()} - "
-                f"generating execution plan...[/dim]"
-            )
-            plan = await self.dynamic_planner.generate_plan(
-                task=task,
-                complexity=complexity_analysis.complexity.value.upper(),
-                context=None  # TODO: Add codebase context
-            )
+            with self.console.status(
+                f"[bold cyan]Task complexity: {complexity_analysis.complexity.value.upper()} - generating execution plan...",
+                spinner="dots"
+            ):
+                plan = await self.dynamic_planner.generate_plan(
+                    task=task,
+                    complexity=complexity_analysis.complexity.value.upper(),
+                    context=None  # TODO: Add codebase context
+                )
 
             # Validate plan
             if not self.dynamic_planner.validate_plan(plan):
@@ -402,9 +402,14 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
             # Display current step
             self._display_step_start(next_step, plan)
 
-            # Execute the step
+            # Execute the step with spinner for long-running operations
             try:
-                step_result = await self._execute_step(next_step, task)
+                # Show spinner during execution
+                with self.console.status(
+                    f"[bold blue]Executing step {next_step.step_number}: {next_step.description}...",
+                    spinner="dots"
+                ):
+                    step_result = await self._execute_step(next_step, task)
 
                 # Mark step complete
                 plan.mark_step_complete(next_step.step_number, step_result)
