@@ -10,6 +10,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.formatted_text import HTML
 from rich.console import Console
 from rich.panel import Panel
+from rich.text import Text
 
 from hrisa_code.core.conversation import ConversationManager
 from hrisa_code.core.conversation import OllamaConfig
@@ -171,6 +172,7 @@ class InteractiveSession:
             history=FileHistory(str(history_file)),
             auto_suggest=AutoSuggestFromHistory(),
             key_bindings=kb,
+            bottom_toolbar=self._get_bottom_toolbar,
         )
 
     def _get_prompt(self) -> HTML:
@@ -187,6 +189,23 @@ class InteractiveSession:
             # Agent/Plan mode: show mode in brackets with color
             # Using prompt_toolkit HTML formatting for proper color support
             return HTML(f"\n<{mode_color}>[{mode_name}]</{mode_color}> > ")
+
+    def _get_bottom_toolbar(self) -> HTML:
+        """Get the bottom toolbar showing current mode.
+
+        This function is called by prompt_toolkit on every render,
+        providing a persistent status bar at the bottom of the screen.
+
+        Returns:
+            HTML formatted toolbar text
+        """
+        mode_name, mode_color = self.mode_styles[self.execution_mode]
+
+        # Format: " Mode: [agent] " with appropriate color
+        if self.execution_mode == "normal":
+            return HTML(f" <b>Mode:</b> {mode_name} ")
+        else:
+            return HTML(f" <b>Mode:</b> <{mode_color}><b>{mode_name}</b></{mode_color}> ")
 
     def _display_welcome(self) -> None:
         """Display welcome message with ASCII art."""
