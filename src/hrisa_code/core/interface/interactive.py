@@ -307,7 +307,54 @@ class InteractiveSession:
         elif command_lower == "/agent":
             # Cycle through execution modes: normal → agent → plan → normal
             mode_cycle = {"normal": "agent", "agent": "plan", "plan": "normal"}
-            self.execution_mode = mode_cycle[self.execution_mode]
+            next_mode = mode_cycle[self.execution_mode]
+
+            # For Plan Mode, require confirmation to prevent accidental activation
+            if next_mode == "plan":
+                self.console.print()
+                self.console.print(
+                    Panel(
+                        "[bold magenta]⚠ Entering Plan Mode[/bold magenta]\n\n"
+                        "Plan Mode generates a multi-step execution plan for your next task.\n\n"
+                        "[bold]The system will:[/bold]\n"
+                        "  1. Analyze task complexity (SIMPLE/MODERATE/COMPLEX)\n"
+                        "  2. Generate 4-15 step execution plan\n"
+                        "  3. Execute each step with visual progress\n"
+                        "  4. Use previous step results to avoid redundancy\n\n"
+                        "[dim]This is the recommended mode for complex multi-feature tasks.[/dim]",
+                        title="Plan Mode Activation",
+                        border_style="magenta",
+                        padding=(1, 2),
+                    )
+                )
+                self.console.print()
+
+                # Ask for confirmation
+                confirm = self.prompt_session.prompt(
+                    HTML("<b>Enter Plan Mode?</b> (y/n): "),
+                    default="y"
+                )
+
+                if confirm.lower() not in ["y", "yes"]:
+                    self.console.print("[yellow]Staying in current mode.[/yellow]")
+                    return True
+
+                # Show large confirmation banner
+                self.console.print()
+                self.console.print(
+                    Panel(
+                        "[bold magenta]YOU ARE NOW IN PLAN MODE[/bold magenta]\n\n"
+                        "Your next task will be planned and executed step-by-step.\n"
+                        "Watch the bottom toolbar for persistent mode indicator.",
+                        border_style="magenta",
+                        padding=(1, 2),
+                        title="✓ Plan Mode Active",
+                    )
+                )
+                self.console.print()
+
+            # Set the mode
+            self.execution_mode = next_mode
 
             # Mode-specific descriptions
             mode_info = {
@@ -345,14 +392,16 @@ class InteractiveSession:
                 }
             }
 
-            info = mode_info[self.execution_mode]
-            self.console.print(
-                Panel(
-                    info["description"],
-                    title=f"► {info['title']}",
-                    border_style=info["color"],
+            # Skip showing panel for plan mode (already shown confirmation banner)
+            if next_mode != "plan":
+                info = mode_info[self.execution_mode]
+                self.console.print(
+                    Panel(
+                        info["description"],
+                        title=f"► {info['title']}",
+                        border_style=info["color"],
+                    )
                 )
-            )
 
         elif command_lower == "/clear":
             self.conversation.clear_history()
