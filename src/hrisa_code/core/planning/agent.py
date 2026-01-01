@@ -639,6 +639,24 @@ Before calling any tool, verify:
 === UNDERSTANDING STEP TYPES ===
 - exploration: Find and locate information (use search_files, find_files, read_file)
 - analysis: Review and understand what was found (use read_file on results from exploration)
+- implementation: Write COMPLETE, WORKING code with full functionality
+  * CRITICAL: Implement FULL functionality, NOT placeholder code
+  * Each function MUST have complete logic, NOT just 'pass' or comments
+  * Use data models/databases to persist and retrieve data
+  * Add proper error handling and validation
+  * Include type hints on all functions
+  * DO NOT create skeleton/stub code - implement working features
+  * Example of WRONG implementation:
+    def add_task(title: str):
+        # Add a task
+        pass  # ← NEVER DO THIS!
+  * Example of CORRECT implementation:
+    def add_task(title: str, description: str = "") -> Task:
+        session = Session()
+        task = Task(title=title, description=description)
+        session.add(task)
+        session.commit()
+        return task
 - documentation: "Compile and summarize findings" means:
   * Review results from previous steps (already provided above)
   * Organize information into categories/structure

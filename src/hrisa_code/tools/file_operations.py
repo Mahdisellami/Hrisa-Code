@@ -10,6 +10,9 @@ from pydantic import BaseModel
 # Import git tools
 from hrisa_code.tools.git_operations import GIT_TOOLS
 
+# Import code quality validator
+from hrisa_code.core.validation.code_quality import CodeQualityValidator
+
 
 class FileOperation(BaseModel):
     """Base class for file operations."""
@@ -123,12 +126,44 @@ class WriteFileTool:
         """
         try:
             path = Path(file_path)
+
+            # Validate Python files before writing
+            if file_path.endswith('.py'):
+                validation_warnings = []
+
+                # Check syntax
+                syntax_ok, syntax_error = CodeQualityValidator.validate_python_syntax(content)
+                if not syntax_ok:
+                    return f"SYNTAX ERROR - File not written:\n{syntax_error}\n\nPlease fix the syntax error and try again."
+
+                # Check imports
+                imports_ok, import_issues = CodeQualityValidator.check_imports(content)
+                if not imports_ok and import_issues:
+                    validation_warnings.append(f"Import warnings:\n" + "\n".join(f"  - {issue}" for issue in import_issues))
+
+                # Check type hints
+                hints_ok, hint_issues = CodeQualityValidator.check_type_hints(content, require_hints=False)
+                if not hints_ok and hint_issues:
+                    validation_warnings.append(f"Type hint warnings:\n" + "\n".join(f"  - {issue}" for issue in hint_issues))
+
+                # Check f-string syntax
+                fstring_ok, fstring_issues = CodeQualityValidator.check_fstring_syntax(content)
+                if not fstring_ok and fstring_issues:
+                    validation_warnings.append(f"F-string warnings:\n" + "\n".join(f"  - {issue}" for issue in fstring_issues))
+
             path.parent.mkdir(parents=True, exist_ok=True)
 
             with open(path, "w", encoding="utf-8") as f:
                 f.write(content)
 
-            return f"Successfully wrote to {file_path}"
+            result = f"Successfully wrote to {file_path}"
+
+            # Append validation warnings if any
+            if file_path.endswith('.py') and validation_warnings:
+                result += "\n\nCODE QUALITY WARNINGS:\n" + "\n".join(validation_warnings)
+                result += "\n\nConsider fixing these issues in the next step."
+
+            return result
         except Exception as e:
             return f"Error writing file: {str(e)}"
 

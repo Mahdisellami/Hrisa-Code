@@ -248,6 +248,152 @@ class DynamicPlanner:
                 success_criteria="Comprehensive analysis complete"
             ))
 
+        elif ("cli" in task_lower and any(keyword in task_lower for keyword in ["crud", "task manager", "commands", "add", "list", "edit", "delete"])):
+            # CLI tool with CRUD operations - specific pattern
+            steps.append(PlanStep(
+                step_number=1,
+                type=PlanStepType.EXPLORATION,
+                description=f"Review project structure and requirements for: {task}",
+                rationale="Understand requirements and check for existing implementations",
+                expected_tools=["list_directory", "read_file", "search_files"],
+                success_criteria="Requirements understood and project structure mapped"
+            ))
+
+            steps.append(PlanStep(
+                step_number=2,
+                type=PlanStepType.DESIGN,
+                description="Design data model with all required fields",
+                rationale="Define schema before implementing CRUD operations",
+                dependencies=[1],
+                success_criteria="Data model designed with all fields specified in requirements"
+            ))
+
+            steps.append(PlanStep(
+                step_number=3,
+                type=PlanStepType.DESIGN,
+                description="Design CLI command structure and interface",
+                rationale="Plan CLI commands and their parameters before implementation",
+                dependencies=[2],
+                success_criteria="All CLI commands planned with clear parameter definitions"
+            ))
+
+            steps.append(PlanStep(
+                step_number=4,
+                type=PlanStepType.IMPLEMENTATION,
+                description="Implement data model and database layer",
+                rationale="Foundation for all CRUD operations",
+                expected_tools=["write_file"],
+                dependencies=[2, 3],
+                success_criteria="Data model implemented with proper field types and database setup"
+            ))
+
+            steps.append(PlanStep(
+                step_number=5,
+                type=PlanStepType.IMPLEMENTATION,
+                description="Implement 'add' command with full functionality and validation",
+                rationale="Create operation - first CRUD operation",
+                expected_tools=["write_file", "edit_file"],
+                dependencies=[4],
+                success_criteria="Add command fully functional with data validation and persistence"
+            ))
+
+            steps.append(PlanStep(
+                step_number=6,
+                type=PlanStepType.IMPLEMENTATION,
+                description="Implement 'list' command with formatting and display",
+                rationale="Read operation - display all records",
+                expected_tools=["edit_file"],
+                dependencies=[4],
+                success_criteria="List command shows all records with proper formatting"
+            ))
+
+            steps.append(PlanStep(
+                step_number=7,
+                type=PlanStepType.IMPLEMENTATION,
+                description="Implement 'show' command for single record details",
+                rationale="Read operation - display single record",
+                expected_tools=["edit_file"],
+                dependencies=[4],
+                success_criteria="Show command displays detailed information for specific record"
+            ))
+
+            steps.append(PlanStep(
+                step_number=8,
+                type=PlanStepType.IMPLEMENTATION,
+                description="Implement 'edit' command with update functionality",
+                rationale="Update operation - modify existing records",
+                expected_tools=["edit_file"],
+                dependencies=[4],
+                success_criteria="Edit command can update all editable fields with validation"
+            ))
+
+            steps.append(PlanStep(
+                step_number=9,
+                type=PlanStepType.IMPLEMENTATION,
+                description="Implement 'delete' command with confirmation",
+                rationale="Delete operation - remove records safely",
+                expected_tools=["edit_file"],
+                dependencies=[4],
+                success_criteria="Delete command removes records with user confirmation"
+            ))
+
+            # Add search/filter and export if mentioned in requirements
+            if any(keyword in task_lower for keyword in ["search", "filter", "query"]):
+                steps.append(PlanStep(
+                    step_number=10,
+                    type=PlanStepType.IMPLEMENTATION,
+                    description="Implement search and filtering functionality",
+                    rationale="Allow users to find specific records",
+                    expected_tools=["edit_file"],
+                    dependencies=[4],
+                    success_criteria="Search works across relevant fields with filtering options"
+                ))
+
+            if any(keyword in task_lower for keyword in ["export", "json", "csv", "markdown"]):
+                export_step = len(steps) + 1
+                steps.append(PlanStep(
+                    step_number=export_step,
+                    type=PlanStepType.IMPLEMENTATION,
+                    description="Implement export functionality (JSON/CSV/Markdown as specified)",
+                    rationale="Allow data export to various formats",
+                    expected_tools=["edit_file"],
+                    dependencies=[4],
+                    success_criteria="Export works for all specified formats"
+                ))
+
+            # Testing
+            test_step = len(steps) + 1
+            steps.append(PlanStep(
+                step_number=test_step,
+                type=PlanStepType.TESTING,
+                description="Write unit tests for all commands and functionality",
+                rationale="Ensure all features work correctly",
+                expected_tools=["write_file", "execute_command"],
+                dependencies=list(range(5, test_step)),
+                success_criteria="Unit tests written for all commands and passing"
+            ))
+
+            steps.append(PlanStep(
+                step_number=test_step + 1,
+                type=PlanStepType.TESTING,
+                description="Write integration tests and verify end-to-end workflows",
+                rationale="Test complete user workflows",
+                expected_tools=["write_file", "execute_command"],
+                dependencies=[test_step],
+                success_criteria="Integration tests pass, all workflows verified"
+            ))
+
+            # Documentation
+            steps.append(PlanStep(
+                step_number=test_step + 2,
+                type=PlanStepType.DOCUMENTATION,
+                description="Add comprehensive docstrings and type hints to all functions",
+                rationale="Ensure code is well-documented per requirements",
+                expected_tools=["edit_file"],
+                dependencies=list(range(4, test_step)),
+                success_criteria="All functions have type hints and docstrings"
+            ))
+
         elif any(word in task_lower for word in ["implement", "create", "build", "add"]):
             # Implementation task
             steps.append(PlanStep(

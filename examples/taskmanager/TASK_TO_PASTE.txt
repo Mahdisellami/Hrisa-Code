@@ -1,0 +1,9 @@
+Implement a CLI task manager with the following features:
+- Task CRUD operations (add, list, show, edit, complete, delete)
+- SQLite persistence with data model (id, title, description, priority, status, tags, created_at, updated_at, due_date, completed_at)
+- Search and filtering capabilities (by status, priority, tags, text search)
+- Export to JSON, CSV, and Markdown formats
+- Full test coverage with pytest (unit tests + integration tests)
+- Type hints on ALL functions and methods
+- Comprehensive docstrings
+Use Typer for CLI and follow Python best practices.
