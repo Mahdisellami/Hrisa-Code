@@ -329,11 +329,15 @@ class InteractiveSession:
                 )
                 self.console.print()
 
-                # Ask for confirmation
-                confirm = self.prompt_session.prompt(
-                    HTML("<b>Enter Plan Mode?</b> (y/n): "),
-                    default="y"
-                )
+                # Ask for confirmation (using async prompt)
+                try:
+                    confirm = await self.prompt_session.prompt_async(
+                        HTML("<b>Enter Plan Mode?</b> (y/n): "),
+                        default="y"
+                    )
+                except Exception as e:
+                    self.console.print(f"[yellow]Confirmation error, staying in current mode: {e}[/yellow]")
+                    return True
 
                 if confirm.lower() not in ["y", "yes"]:
                     self.console.print("[yellow]Staying in current mode.[/yellow]")
