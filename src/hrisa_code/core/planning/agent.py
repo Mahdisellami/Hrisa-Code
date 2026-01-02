@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Optional, TYPE_CHECKING
+import os
+import logging
+from typing import Optional, TYPE_CHECKING, List
 from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from hrisa_code.core.conversation import ConversationManager
@@ -411,7 +415,16 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
                 ):
                     step_result = await self._execute_step(next_step, task, plan)
 
-                # Mark step complete
+                # Verify step completion
+                success, warning_msg = self._verify_step_completion(next_step, step_result)
+
+                if not success:
+                    # Display warnings to user
+                    self.console.print(f"[yellow]{warning_msg}[/yellow]")
+                    # Append warnings to step result for context in next steps
+                    step_result += f"\n\nVERIFICATION WARNINGS:\n{warning_msg}"
+
+                # Mark step complete (even with warnings - let execution continue)
                 plan.mark_step_complete(next_step.step_number, step_result)
 
                 # Display completion
@@ -542,6 +555,83 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
                     border_style="yellow",
                 )
             )
+
+    def _verify_step_completion(self, step: "PlanStep", result: str) -> tuple[bool, str]:
+        """Verify that a step actually completed its expected actions.
+
+        Args:
+            step: The step that was executed
+            result: The result string from step execution
+
+        Returns:
+            Tuple of (success: bool, warning_message: str)
+        """
+        from hrisa_code.core.planning.dynamic_planner import PlanStepType
+
+        warnings = []
+
+        # For implementation steps, verify tool calls
+        if step.type == PlanStepType.IMPLEMENTATION:
+            # Check if write_file was expected and called
+            if step.expected_tools and "write_file" in step.expected_tools:
+                if "Successfully wrote to" not in result and "SYNTAX ERROR" not in result:
+                    warnings.append(
+                        f"⚠️  Step {step.step_number} expected to write files but no write_file calls detected in result"
+                    )
+
+            # Check for expected files based on step description
+            expected_files = self._get_expected_files(step)
+            missing_files = [f for f in expected_files if not os.path.exists(f)]
+
+            if missing_files:
+                warnings.append(
+                    f"⚠️  Step {step.step_number} expected to create {missing_files} but files not found"
+                )
+
+        # For all steps, check if result is suspiciously short (might be just thinking)
+        if len(result) < 50 and step.type == PlanStepType.IMPLEMENTATION:
+            warnings.append(
+                f"⚠️  Step {step.step_number} returned very short result ({len(result)} chars) - may not have executed tools"
+            )
+
+        if warnings:
+            warning_msg = "\n".join(warnings)
+            logger.warning(f"Step {step.step_number} verification warnings:\n{warning_msg}")
+            return False, warning_msg
+
+        return True, ""
+
+    def _get_expected_files(self, step: "PlanStep") -> List[str]:
+        """Determine which files should exist after this step.
+
+        Args:
+            step: The step to check
+
+        Returns:
+            List of expected file paths
+        """
+        description_lower = step.description.lower()
+        expected = []
+
+        # Check for common patterns in step descriptions
+        if "data model" in description_lower or "database layer" in description_lower:
+            expected.extend(["models.py", "db.py"])
+
+        if "cli" in description_lower and ("command" in description_lower or "interface" in description_lower):
+            expected.extend(["cli.py", "commands.py"])
+
+        if "main" in description_lower or "entry point" in description_lower:
+            expected.extend(["main.py", "__main__.py"])
+
+        if "'add'" in description_lower or '"add"' in description_lower:
+            # Add command should be in cli.py
+            if not expected:  # Only check if no other files expected
+                expected.append("cli.py")
+
+        if "test" in description_lower:
+            expected.extend(["test_cli.py", "test_integration.py", "tests/test_cli.py"])
+
+        return expected
 
     async def _execute_step(self, step: "PlanStep", original_task: str, plan: "ExecutionPlan") -> str:
         """Execute a single plan step.
