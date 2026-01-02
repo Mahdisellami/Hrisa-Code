@@ -633,6 +633,48 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
 
         return expected
 
+    def _select_model_for_step(self, step: "PlanStep") -> str:
+        """Select the optimal model for a specific step type.
+
+        Different models have different strengths:
+        - General models (qwen2.5:32b): Good for exploration, design, planning
+        - Code models (qwen2.5-coder:7b/32b): Good for implementation, testing
+        - Reasoning models (deepseek-r1): Good for complex reasoning (NOT for code)
+
+        Args:
+            step: The step to execute
+
+        Returns:
+            Model name to use for this step
+        """
+        from hrisa_code.core.planning.dynamic_planner import PlanStepType
+
+        # Get model mapping from config (if available)
+        model_config = self.conversation.ollama_client.config
+        model_mapping = model_config.model_mapping if hasattr(model_config, 'model_mapping') else None
+
+        if model_mapping:
+            # Use configured mapping if available
+            step_type = step.type.value if hasattr(step.type, 'value') else str(step.type)
+            return model_mapping.get(step_type, model_config.model)
+
+        # Default mapping (fallback)
+        default_mapping = {
+            PlanStepType.EXPLORATION: "qwen2.5:32b",
+            PlanStepType.DESIGN: "qwen2.5:32b",
+            PlanStepType.IMPLEMENTATION: "qwen2.5-coder:7b",
+            PlanStepType.TESTING: "qwen2.5-coder:32b",
+            PlanStepType.DOCUMENTATION: "qwen2.5:32b",
+            PlanStepType.VALIDATION: "qwen2.5-coder:32b",
+            PlanStepType.REFACTORING: "qwen2.5-coder:7b",
+        }
+
+        # Try to get mapped model, fall back to default config model
+        selected_model = default_mapping.get(step.type, self.conversation.ollama_client.config.model)
+
+        logger.info(f"Selected model '{selected_model}' for step {step.step_number} (type: {step.type})")
+        return selected_model
+
     async def _execute_step(self, step: "PlanStep", original_task: str, plan: "ExecutionPlan") -> str:
         """Execute a single plan step.
 
@@ -644,6 +686,19 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
         Returns:
             Result of step execution
         """
+        # Select optimal model for this step type
+        selected_model = self._select_model_for_step(step)
+
+        # Store original model and switch to step-specific model
+        original_model = self.conversation.ollama_client.config.model
+        model_switched = False
+
+        if selected_model != original_model:
+            logger.info(f"Switching model from '{original_model}' to '{selected_model}' for step {step.step_number}")
+            self.console.print(f"[dim cyan]→ Using {selected_model} for {step.type.value} step[/dim cyan]")
+            self.conversation.ollama_client.config.model = selected_model
+            model_switched = True
+
         # Build prompt for this step with previous results as context
         prompt = self._build_step_prompt(step, original_task, plan)
 
@@ -660,6 +715,11 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
         finally:
             # Restore original goal tracking state
             self.conversation._goal_tracking_enabled = original_goal_tracking
+
+            # Restore original model if switched
+            if model_switched:
+                logger.info(f"Restoring model to '{original_model}'")
+                self.conversation.ollama_client.config.model = original_model
 
     def _build_step_prompt(self, step: "PlanStep", original_task: str, plan: "ExecutionPlan") -> str:
         """Build prompt for executing a specific step.

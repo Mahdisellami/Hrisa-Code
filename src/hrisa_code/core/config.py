@@ -1,7 +1,7 @@
 """Configuration management for Hrisa Code."""
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict
 import yaml
 from pydantic import BaseModel, Field
 
@@ -13,6 +13,11 @@ class ModelConfig(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     top_p: float = Field(default=0.9, ge=0.0, le=1.0)
     top_k: int = Field(default=40, ge=0)
+    model_mapping: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Optional mapping of step types to specific models. "
+        "Keys: 'exploration', 'design', 'implementation', 'testing', 'documentation', 'validation', 'refactoring'"
+    )
 
 
 class OllamaServerConfig(BaseModel):
