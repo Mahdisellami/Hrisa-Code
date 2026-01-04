@@ -7,6 +7,7 @@ import os
 import logging
 from typing import Optional, TYPE_CHECKING, List
 from pathlib import Path
+from enum import Enum
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -18,6 +19,13 @@ if TYPE_CHECKING:
 
 from hrisa_code.core.planning.complexity_detector import ComplexityDetector
 from hrisa_code.core.planning.dynamic_planner import DynamicPlanner, ExecutionPlan
+
+
+class VerificationSeverity(Enum):
+    """Severity levels for step verification results."""
+    SUCCESS = "success"          # Step completed successfully
+    WARNING = "warning"          # Step completed but with issues
+    CRITICAL = "critical"        # Step failed, must be retried
 
 
 class AgentLoop:
@@ -416,19 +424,44 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
                     step_result = await self._execute_step(next_step, task, plan)
 
                 # Verify step completion
-                success, warning_msg = self._verify_step_completion(next_step, step_result)
+                severity, verification_msg = self._verify_step_completion(next_step, step_result)
 
-                if not success:
-                    # Display warnings to user
-                    self.console.print(f"[yellow]{warning_msg}[/yellow]")
-                    # Append warnings to step result for context in next steps
-                    step_result += f"\n\nVERIFICATION WARNINGS:\n{warning_msg}"
+                # Handle verification results based on severity
+                if severity == VerificationSeverity.CRITICAL:
+                    # Critical failure - DO NOT mark step as complete
+                    self.console.print(f"[red bold]{verification_msg}[/red bold]")
+                    self.console.print(f"[red]✗ Step {next_step.step_number} failed verification - NOT marked complete[/red]")
 
-                # Mark step complete (even with warnings - let execution continue)
-                plan.mark_step_complete(next_step.step_number, step_result)
+                    # Track as failure
+                    self.error_count += 1
+                    if self.error_count > 3:
+                        self.console.print(f"[red bold]Too many failures ({self.error_count}), stopping execution[/red bold]")
+                        break
 
-                # Display completion
-                self._display_step_complete(next_step, plan)
+                    # Try to retry this step once
+                    if not hasattr(next_step, '_retry_count'):
+                        next_step._retry_count = 0
+
+                    if next_step._retry_count < 1:
+                        next_step._retry_count += 1
+                        self.console.print(f"[yellow]Retrying step {next_step.step_number} (attempt {next_step._retry_count + 1}/2)[/yellow]")
+                        continue  # Retry the same step
+                    else:
+                        # Max retries reached, mark as failed and continue
+                        plan.mark_step_complete(next_step.step_number, f"FAILED (verification): {verification_msg}\n\nResult was:\n{step_result}")
+                        continue
+
+                elif severity == VerificationSeverity.WARNING:
+                    # Warnings - mark complete but show warnings
+                    self.console.print(f"[yellow]{verification_msg}[/yellow]")
+                    step_result += f"\n\nVERIFICATION WARNINGS:\n{verification_msg}"
+                    plan.mark_step_complete(next_step.step_number, step_result)
+                    self._display_step_complete(next_step, plan)
+
+                else:
+                    # Success - mark complete
+                    plan.mark_step_complete(next_step.step_number, step_result)
+                    self._display_step_complete(next_step, plan)
 
                 final_response = step_result
 
@@ -556,7 +589,7 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
                 )
             )
 
-    def _verify_step_completion(self, step: "PlanStep", result: str) -> tuple[bool, str]:
+    def _verify_step_completion(self, step: "PlanStep", result: str) -> tuple[VerificationSeverity, str]:
         """Verify that a step actually completed its expected actions.
 
         Args:
@@ -564,42 +597,79 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
             result: The result string from step execution
 
         Returns:
-            Tuple of (success: bool, warning_message: str)
+            Tuple of (severity: VerificationSeverity, message: str)
         """
         from hrisa_code.core.planning.dynamic_planner import PlanStepType
 
+        critical_issues = []
         warnings = []
 
-        # For implementation steps, verify tool calls
+        # CRITICAL: Check for syntax errors in result
+        if "SYNTAX ERROR" in result or "SyntaxError" in result:
+            critical_issues.append(
+                f"❌ Step {step.step_number} produced syntax errors - code is not valid"
+            )
+
+        # CRITICAL: Check for unterminated strings or other parse errors
+        if "unterminated string" in result.lower() or "Unterminated string" in result:
+            critical_issues.append(
+                f"❌ Step {step.step_number} produced code with unterminated strings"
+            )
+
+        # CRITICAL: Check for malformed tool calls that were skipped
+        if "Skipped malformed tool call" in result:
+            malformed_count = result.count("Skipped malformed tool call")
+            critical_issues.append(
+                f"❌ Step {step.step_number} had {malformed_count} malformed tool call(s) that were skipped"
+            )
+
+        # For implementation steps, verify tool calls and files
         if step.type == PlanStepType.IMPLEMENTATION:
             # Check if write_file was expected and called
             if step.expected_tools and "write_file" in step.expected_tools:
-                if "Successfully wrote to" not in result and "SYNTAX ERROR" not in result:
+                if "Successfully wrote to" not in result:
                     warnings.append(
-                        f"⚠️  Step {step.step_number} expected to write files but no write_file calls detected in result"
+                        f"⚠️  Step {step.step_number} expected to write files but no successful write_file calls detected"
                     )
 
             # Check for expected files based on step description
             expected_files = self._get_expected_files(step)
-            missing_files = [f for f in expected_files if not os.path.exists(f)]
+            for expected_file in expected_files:
+                if not os.path.exists(expected_file):
+                    critical_issues.append(
+                        f"❌ Step {step.step_number} expected to create {expected_file} but file not found"
+                    )
+                elif os.path.getsize(expected_file) == 0:
+                    critical_issues.append(
+                        f"❌ Step {step.step_number} created {expected_file} but file is empty (0 bytes)"
+                    )
 
-            if missing_files:
-                warnings.append(
-                    f"⚠️  Step {step.step_number} expected to create {missing_files} but files not found"
-                )
-
-        # For all steps, check if result is suspiciously short (might be just thinking)
+        # Check if result is suspiciously short (might be just thinking)
         if len(result) < 50 and step.type == PlanStepType.IMPLEMENTATION:
             warnings.append(
                 f"⚠️  Step {step.step_number} returned very short result ({len(result)} chars) - may not have executed tools"
             )
 
-        if warnings:
-            warning_msg = "\n".join(warnings)
-            logger.warning(f"Step {step.step_number} verification warnings:\n{warning_msg}")
-            return False, warning_msg
+        # Check for explicit failure markers
+        if "FAILED:" in result or "[CANCELLED]" in result:
+            critical_issues.append(
+                f"❌ Step {step.step_number} execution was cancelled or failed explicitly"
+            )
 
-        return True, ""
+        # Return severity based on what we found
+        if critical_issues:
+            message = "\n".join(critical_issues)
+            if warnings:
+                message += "\n" + "\n".join(warnings)
+            logger.error(f"Step {step.step_number} CRITICAL verification failures:\n{message}")
+            return VerificationSeverity.CRITICAL, message
+
+        if warnings:
+            message = "\n".join(warnings)
+            logger.warning(f"Step {step.step_number} verification warnings:\n{message}")
+            return VerificationSeverity.WARNING, message
+
+        return VerificationSeverity.SUCCESS, ""
 
     def _get_expected_files(self, step: "PlanStep") -> List[str]:
         """Determine which files should exist after this step.
