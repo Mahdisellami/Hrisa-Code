@@ -115,35 +115,64 @@ class ConversationManager:
 
         tool_calls = []
 
-        # Pattern to match JSON objects with "name" and "arguments" keys
-        # This handles the format: {"name": "tool_name", "arguments": {...}}
-        # Using a more flexible pattern to handle nested braces in arguments
-        pattern = r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{[^}]*(?:\{[^}]*\}[^}]*)*\})\s*\}'
+        # Multiple patterns to handle different malformed JSON cases
+        patterns = [
+            # Standard pattern: {"name": "tool_name", "arguments": {...}}
+            r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{[^}]*(?:\{[^}]*\}[^}]*)*\})\s*\}',
+            # Handle potential whitespace/newline issues
+            r'\{\s*["\']name["\']\s*:\s*["\']([^"\']+)["\']\s*,\s*["\']arguments["\']\s*:\s*(\{[^\}]*\})\s*\}',
+            # More lenient for nested structures
+            r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{(?:[^{}]|(?:\{[^{}]*\}))*\})\s*\}'
+        ]
 
-        matches = re.finditer(pattern, text, re.DOTALL)
+        for pattern_idx, pattern in enumerate(patterns):
+            matches = re.finditer(pattern, text, re.DOTALL | re.MULTILINE)
 
-        for match in matches:
-            try:
-                # Extract the full JSON string
-                json_str = match.group(0)
-                parsed = json.loads(json_str)
+            for match in matches:
+                try:
+                    # Extract the full JSON string
+                    json_str = match.group(0)
 
-                # Validate it has the expected structure
-                if "name" in parsed and "arguments" in parsed:
-                    # Verify the tool exists in our tool definitions
-                    if parsed["name"] in AVAILABLE_TOOLS:
-                        # Convert to Ollama's tool call format
-                        tool_calls.append({
-                            "function": {
-                                "name": parsed["name"],
-                                "arguments": parsed["arguments"]
-                            }
-                        })
-                        self.console.print(f"[dim]→ Detected text-based tool call: {parsed['name']}[/dim]")
-            except (json.JSONDecodeError, KeyError) as e:
-                # Skip malformed JSON
-                self.console.print(f"[dim]→ Skipped malformed tool call: {e}[/dim]")
-                continue
+                    # Try to parse with standard JSON
+                    parsed = json.loads(json_str)
+
+                    # Validate it has the expected structure
+                    if "name" in parsed and "arguments" in parsed:
+                        # Verify the tool exists in our tool definitions
+                        if parsed["name"] in AVAILABLE_TOOLS:
+                            # Convert to Ollama's tool call format
+                            tool_calls.append({
+                                "function": {
+                                    "name": parsed["name"],
+                                    "arguments": parsed["arguments"]
+                                }
+                            })
+                            self.console.print(f"[dim]→ Detected text-based tool call: {parsed['name']}[/dim]")
+                        else:
+                            self.console.print(f"[yellow]→ Warning: Unknown tool '{parsed['name']}' - skipping[/yellow]")
+
+                except json.JSONDecodeError as e:
+                    # Provide detailed error information
+                    error_msg = str(e)
+                    if "Unterminated string" in error_msg:
+                        self.console.print(f"[yellow]→ Skipped malformed tool call: Unterminated string (check quotes)[/yellow]")
+                    elif "Expecting" in error_msg:
+                        self.console.print(f"[yellow]→ Skipped malformed tool call: {error_msg}[/yellow]")
+                    else:
+                        self.console.print(f"[yellow]→ Skipped malformed tool call: Invalid JSON - {error_msg}[/yellow]")
+
+                    # Log the problematic JSON for debugging
+                    if len(json_str) < 200:
+                        self.console.print(f"[dim]   Attempted to parse: {json_str[:100]}...[/dim]")
+                    continue
+
+                except KeyError as e:
+                    self.console.print(f"[yellow]→ Skipped tool call: Missing required key {e}[/yellow]")
+                    continue
+
+            # If we found tool calls with this pattern, don't try other patterns
+            if tool_calls:
+                break
 
         return tool_calls
 
