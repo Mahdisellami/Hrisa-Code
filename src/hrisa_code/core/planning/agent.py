@@ -82,6 +82,7 @@ class AgentLoop:
         self.task_complete = False
         self.error_count = 0
         self.current_plan: Optional[ExecutionPlan] = None
+        self.step_snapshots: dict = {}  # Track git snapshots for rollback (step_number -> stash_info)
 
     def _get_agentic_system_prompt_additions(self) -> str:
         """Get additional system prompt instructions for agentic behavior.
