@@ -53,14 +53,14 @@ class LoopDetector:
         self,
         max_identical_calls: int = 3,
         warning_threshold: int = 2,
-        history_window: int = 10,
+        history_window: int = 20,
     ):
         """Initialize the loop detector.
 
         Args:
             max_identical_calls: Maximum identical calls before intervention (default: 3)
             warning_threshold: Warn after this many identical calls (default: 2)
-            history_window: Number of recent calls to track (default: 10)
+            history_window: Number of recent calls to track (default: 20, increased to detect patterns)
         """
         self.max_identical = max_identical_calls
         self.warning_threshold = warning_threshold
@@ -112,13 +112,31 @@ class LoopDetector:
             if candidate.matches(call)
         )
 
-        # Determine status based on count
+        # Check for identical call loops first
         if identical_count >= self.max_identical:
             return LoopStatus.DETECTED
         elif identical_count >= self.warning_threshold:
             return LoopStatus.WARNING
-        else:
-            return LoopStatus.OK
+
+        # Check for semantic loops (same tool, different parameters)
+        same_tool_count = sum(
+            1 for call in self.tool_history
+            if call.tool_name == tool_name
+        )
+
+        # If we've called this tool >60% of recent rounds, likely stuck in a pattern
+        if len(self.tool_history) >= 5:
+            same_tool_ratio = (same_tool_count + 1) / (len(self.tool_history) + 1)
+            if same_tool_ratio > 0.6:
+                return LoopStatus.WARNING
+
+        # If this tool was called 4+ times in last 6 rounds, warn
+        recent_calls = self.tool_history[-6:] if len(self.tool_history) >= 6 else self.tool_history
+        recent_same_tool = sum(1 for call in recent_calls if call.tool_name == tool_name)
+        if recent_same_tool >= 3:
+            return LoopStatus.WARNING
+
+        return LoopStatus.OK
 
     def get_loop_details(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """Get details about the detected loop.
@@ -167,17 +185,31 @@ class LoopDetector:
             Message to inject into the conversation
         """
         details = self.get_loop_details(tool_name, arguments)
-        count = details["count"]
+        identical_count = details["count"]
+
+        # Count total calls to this tool (semantic loop detection)
+        same_tool_count = sum(1 for call in self.tool_history if call.tool_name == tool_name)
 
         if status == LoopStatus.WARNING:
-            return (
-                f"[SYSTEM WARNING] You've called '{tool_name}' {count} times with identical parameters. "
-                f"Consider if you have enough information to answer the user's question, or try a different approach."
-            )
+            # Check if this is an identical call warning or semantic loop warning
+            if identical_count >= self.warning_threshold:
+                return (
+                    f"[SYSTEM WARNING] You've called '{tool_name}' {identical_count} times with identical parameters. "
+                    f"Consider if you have enough information to answer the user's question, or try a different approach."
+                )
+            else:
+                # Semantic loop warning
+                return (
+                    f"[SYSTEM WARNING] You've called '{tool_name}' {same_tool_count} times recently with different parameters. "
+                    f"You may be stuck in a search loop. Consider:\n"
+                    f"1. Summarizing what you've found so far\n"
+                    f"2. Trying a completely different tool or approach\n"
+                    f"3. Providing an answer based on available information"
+                )
 
         elif status == LoopStatus.DETECTED:
             return (
-                f"[SYSTEM INTERVENTION] Loop detected: '{tool_name}' called {count} times with identical parameters.\n\n"
+                f"[SYSTEM INTERVENTION] Loop detected: '{tool_name}' called {identical_count} times with identical parameters.\n\n"
                 f"The tool results are not changing. You must either:\n"
                 f"1. Provide a final answer based on the information you already have\n"
                 f"2. Try a completely different tool or approach\n"

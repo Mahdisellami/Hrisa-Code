@@ -875,7 +875,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             )
         )
 
-    async def process_message(self, user_message: str, max_tool_rounds: int = 20) -> str:
+    async def process_message(self, user_message: str, max_tool_rounds: int = 12) -> str:
         """Process a user message and handle any tool calls (Claude Code style).
 
         This implements Claude Code-style behavior where the LLM can make multiple
@@ -884,13 +884,13 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
         Args:
             user_message: The user's message
-            max_tool_rounds: Maximum tool calling rounds (default: 20)
+            max_tool_rounds: Maximum tool calling rounds (default: 12, lowered from 20)
 
         Returns:
             The assistant's response
         """
 
-    async def process_message(self, user_message: str, max_tool_rounds: int = 20) -> str:
+    async def process_message(self, user_message: str, max_tool_rounds: int = 12) -> str:
         """Process a user message and handle any tool calls (Claude Code style).
 
         This implements Claude Code-style behavior where the LLM can make multiple
@@ -899,7 +899,7 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
         Args:
             user_message: The user's message
-            max_tool_rounds: Maximum tool calling rounds (default: 20)
+            max_tool_rounds: Maximum tool calling rounds (default: 12, lowered from 20)
 
         Returns:
             The assistant's response
@@ -961,6 +961,17 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
 
             if tool_round > 1:
                 self.console.print(f"[dim]→ Tool round {tool_round}[/dim]")
+
+            # Warn when approaching round limit (at 80% of max)
+            round_limit_warning_threshold = int(max_tool_rounds * 0.8)
+            if tool_round == round_limit_warning_threshold:
+                warning_msg = (
+                    f"[SYSTEM WARNING] Approaching tool round limit ({tool_round}/{max_tool_rounds}). "
+                    f"Consider providing a summary or final answer soon."
+                )
+                self.console.print(f"\n[yellow]{warning_msg}[/yellow]\n")
+                # Add to conversation so LLM is aware
+                self.ollama_client.add_message("user", warning_msg)
 
             # Increment round counters for both trackers
             self.loop_detector.next_round()
@@ -1186,6 +1197,23 @@ Your job: Choose the right tool with CORRECT paths, use it once, respond clearly
             self.console.print(
                 f"[yellow]Reached max tool rounds ({max_tool_rounds})[/yellow]"
             )
+
+            # Give LLM one more chance to provide a final answer
+            intervention_msg = (
+                f"[SYSTEM INTERVENTION] You have reached the maximum number of tool rounds ({max_tool_rounds}). "
+                f"No more tool calls are allowed. Please provide a final answer or summary based on the information "
+                f"you have gathered so far."
+            )
+            self.console.print(f"\n[yellow]{intervention_msg}[/yellow]\n")
+
+            # Send intervention to LLM for final response
+            with self.console.status("[bold blue]Generating final response...[/bold blue]", spinner="dots"):
+                final_response = await self.ollama_client.chat_raw(
+                    message=intervention_msg,
+                    system_prompt=self.system_prompt,
+                    tools=None,  # No tools for final response
+                )
+            return final_response.get("message", {}).get("content", "")
 
         # Return final text response
         return raw_response.get("message", {}).get("content", "")
