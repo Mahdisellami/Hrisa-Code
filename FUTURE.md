@@ -877,6 +877,247 @@ hrisa chat
 
 ---
 
+## 2A. Model Benchmarking & Selection Strategy
+
+### Background
+
+V6 testing revealed that model selection significantly impacts code generation quality:
+- **V6 Result:** qwen2.5-coder:32b created files but had JSON formatting errors (malformed tool calls)
+- **Key Finding:** Different models have different strengths and weaknesses
+- **Problem:** Currently using guesswork instead of data-driven model selection
+
+### Vision
+
+Implement a **systematic benchmarking framework** to identify the best-performing models for different task types through objective measurement.
+
+---
+
+### Framework Components
+
+#### 1. Standardized Test Suite
+
+**Core Test:** CLI Task Manager (Standard)
+```
+Task: Implement a CLI task manager with the following features:
+- Task CRUD operations (add, list, show, edit, complete, delete)
+- SQLite persistence with data model
+- Search and filtering capabilities
+- Export to JSON, CSV, and Markdown formats
+- Full test coverage with pytest
+- Type hints on ALL functions and methods
+- Comprehensive docstrings
+Use Typer for CLI and follow Python best practices.
+```
+
+**Additional Test Tasks:**
+- FastAPI REST API implementation
+- Data processing library
+- CLI tool with subcommands
+- Code refactoring task
+
+#### 2. Objective Success Metrics
+
+| Metric | Weight | Measurement | Target |
+|--------|--------|-------------|--------|
+| **Files Created** | 15% | Count of .py files | 5+ |
+| **LOC Generated** | 15% | Total lines of code | 400-600 |
+| **Syntax Validity** | 20% | `python -m py_compile` success rate | 100% |
+| **Working Features** | 25% | Commands that actually run | 4+/7 (60%+) |
+| **Test Coverage** | 10% | Tests exist and import successfully | Pass |
+| **Execution Time** | 10% | Minutes to complete | 20-40 min |
+| **Tool Call Success** | 5% | % of write_file calls that succeed | 70%+ |
+
+**Grading Scale:**
+- A (90-100%): Production-ready
+- B (80-89%): Minor fixes needed
+- C (70-79%): Significant gaps but viable
+- D (60-69%): Partial implementation
+- F (0-59%): Mostly non-functional
+
+#### 3. Models to Benchmark
+
+**Tier 1: Code-Specialized Models (Priority)**
+- qwen2.5-coder:32b (baseline from V6)
+- codestral:22b (Mistral's code model)
+- deepseek-coder:33b
+- qwen2.5-coder:14b (middle ground)
+- starcoder2:15b
+
+**Tier 2: General Models (Comparison)**
+- qwen2.5:72b (current exploration model)
+- llama3.1:70b
+- qwen2.5:32b
+
+**Tier 3: Strategies**
+- Single-model approach (one model for everything)
+- Multi-model approach (different models per step type)
+
+---
+
+### Implementation Plan
+
+#### Phase 1: Quick Validation (1-2 days)
+Run 3 critical tests to find a working baseline:
+
+**V7-A:** Fix JSON parser + keep qwen2.5-coder:32b
+- Improve `_extract_tool_calls_from_text()` regex
+- Handle complex nested JSON
+- Expected: Fewer malformed tool call errors
+
+**V7-B:** Single-model strategy (qwen2.5:72b)
+- Remove multi-model switching
+- Use qwen2.5:72b for all steps
+- Expected: Better JSON reliability, slower but consistent
+
+**V7-C:** Try codestral:22b
+- Test Mistral's code-specialized model
+- Expected: Better code generation, reliable tool calling
+
+**Success Criteria:** At least one variant scores >70% (C grade)
+
+#### Phase 2: Full Benchmark (1 week)
+If Phase 1 doesn't produce a clear winner (>80%), run comprehensive benchmark:
+
+1. **Test 5-8 models** on standardized CLI Task Manager test
+2. **Measure all metrics** objectively
+3. **Run 2-3 times per model** to check consistency
+4. **Analyze failure modes** for each model
+5. **Document strengths/weaknesses**
+
+#### Phase 3: Task-Type Specialization (1 week)
+Once winning model(s) identified:
+
+1. Test on **different task types** (API, library, refactoring)
+2. Determine if different models excel at different tasks
+3. Build **task-to-model mapping** for optimal selection
+4. Create **automatic model selection** based on task analysis
+
+---
+
+### Automation
+
+#### Evaluation Script
+```bash
+#!/bin/bash
+# evaluate_test.sh
+
+MODEL=$1
+echo "=== Benchmarking Model: $MODEL ==="
+
+# Run test
+cd examples/taskmanager
+rm -f *.py tests/*.py tasks.db
+hrisa chat < task.txt
+
+# Evaluate results
+FILES=$(ls *.py 2>/dev/null | wc -l)
+LOC=$(find . -name "*.py" -not -path "./.hrisa/*" -exec wc -l {} + | tail -1 | awk '{print $1}')
+SYNTAX=$(find . -name "*.py" -not -path "./.hrisa/*" | xargs python3 -m py_compile 2>&1 | grep -c "^$")
+
+# Calculate preliminary score
+echo "Files: $FILES (target: 5+)"
+echo "LOC: $LOC (target: 400-600)"
+echo "Syntax valid: $SYNTAX files"
+
+# Manual evaluation needed for working features
+```
+
+#### Results Database
+Store results in structured format:
+
+```markdown
+# Model Benchmark Results
+
+| Model | Files | LOC | Syntax | Features | Time | Score | Grade |
+|-------|-------|-----|--------|----------|------|-------|-------|
+| qwen2.5-coder:32b | 3 | 141 | 100% | 0/7 | 15m | 40% | F |
+| qwen2.5:72b | ? | ? | ? | ? | ? | ? | ? |
+| codestral:22b | ? | ? | ? | ? | ? | ? | ? |
+```
+
+---
+
+### Expected Outcomes
+
+**Best Case (1-2 days):**
+- V7-B or V7-C scores >80%
+- Clear winner identified
+- Can immediately use for production
+
+**Likely Case (1 week):**
+- Phase 1 finds viable option (70-80%)
+- Phase 2 identifies best model
+- Build confidence in model selection
+
+**Worst Case (2 weeks):**
+- No single model excels
+- Need multi-model strategy with better implementation model
+- May require parser improvements
+- Consider model fine-tuning or prompt engineering
+
+---
+
+### Long-Term Vision
+
+**Automated Model Selection:**
+```python
+class ModelSelector:
+    """Intelligently selects the best model for a given task."""
+
+    async def select_model(self, task: str, context: str) -> ModelConfig:
+        """
+        Analyze task and select optimal model based on:
+        - Task type (implementation, refactoring, testing, docs)
+        - Complexity (simple, moderate, complex)
+        - Historical performance data
+        - Available models
+
+        Returns best model configuration.
+        """
+        pass
+```
+
+**Continuous Improvement:**
+- Track model performance over time
+- Update benchmarks as new models release
+- A/B test model changes
+- Build performance database
+
+---
+
+### Success Criteria
+
+**Phase 1 Success:**
+- ✅ At least one model scores >70%
+- ✅ Understand each model's failure modes
+- ✅ Have working baseline for production use
+
+**Phase 2 Success:**
+- ✅ Clear winner identified (>80% score)
+- ✅ Consistent results across 3 runs
+- ✅ Documented strengths/weaknesses
+
+**Long-Term Success:**
+- ✅ Automated model selection based on task
+- ✅ Performance database maintained
+- ✅ Models updated as new releases available
+- ✅ Data-driven decisions, not guesswork
+
+---
+
+### Resources & References
+
+**Test Files:**
+- `examples/taskmanager/MODEL_BENCHMARK_STRATEGY.md` - Detailed framework
+- `examples/taskmanager/TEST_INSTRUCTIONS_V7.md` - V7 test protocol
+- `examples/taskmanager/TEST_EVALUATION_V6.md` - V6 baseline results
+
+**Related Sections:**
+- Section 2: Real Project Implementation Test (uses best model)
+- Section 4: Multi-Model Support (model switching infrastructure)
+
+---
+
 ## 3. Adaptive Mode Switching
 
 ### Vision

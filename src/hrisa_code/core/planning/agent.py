@@ -659,14 +659,14 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
             return model_mapping.get(step_type, model_config.model)
 
         # Default mapping (fallback)
+        # Note: This is only used if config.yaml doesn't have model_mapping
         default_mapping = {
-            PlanStepType.EXPLORATION: "qwen2.5:32b",
-            PlanStepType.DESIGN: "qwen2.5:32b",
-            PlanStepType.IMPLEMENTATION: "qwen2.5-coder:7b",
+            PlanStepType.EXPLORATION: "qwen2.5:72b",        # Changed from 32b (most common model size)
+            PlanStepType.DESIGN: "qwen2.5:72b",             # Changed from 32b
+            PlanStepType.IMPLEMENTATION: "qwen2.5-coder:32b",  # Changed from 7b (7b doesn't write code reliably)
             PlanStepType.TESTING: "qwen2.5-coder:32b",
-            PlanStepType.DOCUMENTATION: "qwen2.5:32b",
+            PlanStepType.DOCUMENTATION: "qwen2.5:72b",      # Changed from 32b
             PlanStepType.VALIDATION: "qwen2.5-coder:32b",
-            PlanStepType.REFACTORING: "qwen2.5-coder:7b",
         }
 
         # Try to get mapped model, fall back to default config model
