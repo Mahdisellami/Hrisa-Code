@@ -148,6 +148,12 @@ src/hrisa_code/          # Main package
 - **Git read tools**: git_status, git_diff, git_log, git_branch
 - **Git write tools** (require approval): git_commit, git_push, git_pull, git_stash
 
+**IMPORTANT NOTE ON FILE EDITING:**
+- There is **NO edit_file or patch tool** available in the tool system
+- To modify existing files, **ALWAYS use write_file with the complete file content**
+- Read the file first with read_file, make modifications, then write_file the complete new version
+- Never attempt to use edit_file, patch_file, or similar - they do not exist
+
 ## Development Practices
 
 ### Code Style
@@ -156,6 +162,7 @@ src/hrisa_code/          # Main package
 - **Type Checking**: MyPy with strict mode
 - **Docstrings**: Google-style for all public functions
 - **NO EMOJIS**: Do not use emojis in code, UI, or terminal output. Documentation (README, markdown files) may use emojis sparingly if needed, but code and user interfaces must be emoji-free
+- **File Naming**: When creating database layers, use simple, consistent names (e.g., `db.py` for database module with models and session management)
 
 ### Testing
 - **Framework**: pytest with coverage
