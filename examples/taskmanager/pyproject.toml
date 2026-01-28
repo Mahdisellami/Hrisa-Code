@@ -36,7 +36,7 @@ dev = [
 ]
 
 [project.scripts]
-taskmanager = "taskmanager.cli:app"
+taskmanager = "cli:app"
 
 [tool.black]
 line-length = 100
@@ -55,4 +55,4 @@ disallow_untyped_defs = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--cov=src/taskmanager --cov-report=html --cov-report=term"
+addopts = "--cov=. --cov-report=html --cov-report=term"

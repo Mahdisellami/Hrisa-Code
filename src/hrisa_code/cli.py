@@ -128,6 +128,53 @@ def models(
 
 
 @app.command()
+def check(
+    auto_fix: bool = typer.Option(
+        False,
+        "--auto-fix",
+        "-f",
+        help="Automatically attempt to fix issues (e.g., pull missing models)",
+    ),
+    models: Optional[str] = typer.Option(
+        None,
+        "--models",
+        "-m",
+        help="Comma-separated list of required models to check",
+    ),
+) -> None:
+    """Run pre-flight checks to verify Hrisa Code dependencies and requirements.
+
+    Checks for:
+    - Python version (3.10+)
+    - Ollama installation and service status
+    - Required models availability
+    - Git installation (optional)
+    - PDF libraries (optional)
+
+    Example:
+        hrisa check
+        hrisa check --auto-fix
+        hrisa check --models "qwen2.5-coder:32b,qwen2.5:72b"
+    """
+    from hrisa_code.core.validation import run_preflight_checks
+
+    # Parse models list if provided
+    required_models = None
+    if models:
+        required_models = [m.strip() for m in models.split(",")]
+
+    # Run checks
+    all_passed = run_preflight_checks(
+        auto_fix=auto_fix,
+        required_models=required_models,
+        display=True,
+    )
+
+    if not all_passed:
+        raise typer.Exit(1)
+
+
+@app.command()
 def init(
     path: Path = typer.Argument(
         Path.cwd(),

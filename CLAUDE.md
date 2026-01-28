@@ -154,6 +154,43 @@ src/hrisa_code/          # Main package
 - Read the file first with read_file, make modifications, then write_file the complete new version
 - Never attempt to use edit_file, patch_file, or similar - they do not exist
 
+**CRITICAL: DATABASE FILE NAMING REQUIREMENT:**
+- When creating database layers for projects, you **MUST** use `db.py` (not database.py, not models.py)
+- Location: Project root directory (same level as pyproject.toml)
+- Content: SQLAlchemy models AND session management in ONE file
+- Example structure:
+  ```python
+  # db.py
+  from sqlalchemy import create_engine, Column, Integer, String
+  from sqlalchemy.orm import declarative_base, sessionmaker
+
+  Base = declarative_base()
+
+  class MyModel(Base):
+      __tablename__ = 'my_table'
+      id = Column(Integer, primary_key=True)
+      # ... other columns
+
+  def get_session():
+      engine = create_engine('sqlite:///./app.db')
+      Session = sessionmaker(bind=engine)
+      return Session()
+  ```
+- **DO NOT** create separate files like `models.py` and `database.py`
+- **DO NOT** create subdirectories like `src/myapp/models.py` unless explicitly requested
+- This convention ensures consistent, predictable file structure
+
+**IMPORT VALIDATION BEFORE WRITING CODE:**
+- Before importing from any module in your code, verify the file exists
+- Use `find_files` or `list_directory` to check file exists first
+- Only import from files you have created in the current session
+- If you create `db.py`, then import from `db` (not from non-existent modules)
+- Example of correct workflow:
+  1. Create db.py with models
+  2. Use find_files to verify db.py exists
+  3. Then create cli.py that imports from db
+- **NEVER** import from hypothetical files that don't exist yet
+
 ## Development Practices
 
 ### Code Style
@@ -162,7 +199,20 @@ src/hrisa_code/          # Main package
 - **Type Checking**: MyPy with strict mode
 - **Docstrings**: Google-style for all public functions
 - **NO EMOJIS**: Do not use emojis in code, UI, or terminal output. Documentation (README, markdown files) may use emojis sparingly if needed, but code and user interfaces must be emoji-free
-- **File Naming**: When creating database layers, use simple, consistent names (e.g., `db.py` for database module with models and session management)
+- **Syntax Validation**: Before calling write_file, double-check all syntax:
+  - Import statements have no typos (e.g., `import typer` not `timport typer`)
+  - Type hints have proper syntax (e.g., `Optional[str]` not `Optional`)
+  - All opening brackets have matching closing brackets
+  - No missing commas in function arguments or dictionary literals
+
+### Loop Prevention Best Practices
+When using tools during implementation, avoid getting stuck in loops:
+- **File Search**: If a file doesn't exist after 2 search attempts, STOP searching and CREATE the file instead
+- **Reading Non-Existent Files**: Never repeatedly try to read files that don't exist (e.g., `src/main.py`)
+- **Verification**: Use `find_files` to verify a file exists BEFORE trying to read it
+- **Tool Call Limits**: Be aware the system allows max 12 tool rounds per step
+- **System Warnings**: If you see "Loop detected" or "approaching tool round limit", immediately change strategy
+- **Progress Check**: After 3-4 tool calls with no progress, provide a summary or final answer instead of continuing
 
 ### Testing
 - **Framework**: pytest with coverage
