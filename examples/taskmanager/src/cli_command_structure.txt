@@ -1,0 +1,64 @@
+1. Add Task
+   - Command: add
+   - Description: Add a new task.
+   - Parameters:
+     - --title (str): Title of the task (required).
+     - --description (str): Description of the task (optional, default: "").
+     - --priority (int): Priority level of the task (optional, default: 1).
+     - --status (str): Status of the task (options: "todo", "in-progress", "completed", default: "todo").
+     - --tags (List[str]): Tags associated with the task (optional, default: []).
+     - --due-date (str): Due date of the task in ISO format (YYYY-MM-DD) (optional, default: None).
+
+2. List Tasks
+   - Command: list
+   - Description: List all tasks.
+   - Parameters:
+     - --status (str): Filter by status (options: "todo", "in-progress", "completed").
+     - --priority (int): Filter by priority level.
+     - --tags (List[str]): Filter by tags.
+
+3. Show Task
+   - Command: show
+   - Description: Show details of a specific task.
+   - Parameters:
+     - --id (int): ID of the task to show (required).
+
+4. Edit Task
+   - Command: edit
+   - Description: Edit an existing task.
+   - Parameters:
+     - --id (int): ID of the task to edit (required).
+     - --title (str): New title of the task (optional).
+     - --description (str): New description of the task (optional).
+     - --priority (int): New priority level of the task (optional).
+     - --status (str): New status of the task (options: "todo", "in-progress", "completed").
+     - --tags (List[str]): New tags associated with the task (optional).
+     - --due-date (str): New due date of the task in ISO format (YYYY-MM-DD) (optional).
+
+5. Complete Task
+   - Command: complete
+   - Description: Mark a task as completed.
+   - Parameters:
+     - --id (int): ID of the task to complete (required).
+
+6. Delete Task
+   - Command: delete
+   - Description: Delete a task.
+   - Parameters:
+     - --id (int): ID of the task to delete (required).
+
+7. Search Tasks
+   - Command: search
+   - Description: Search for tasks by text.
+   - Parameters:
+     - --text (str): Text to search for in title and description (required).
+     - --status (str): Filter by status (options: "todo", "in-progress", "completed").
+     - --priority (int): Filter by priority level.
+     - --tags (List[str]): Filter by tags.
+
+8. Export Tasks
+   - Command: export
+   - Description: Export tasks to a file.
+   - Parameters:
+     - --format (str): Format of the export (options: "json", "csv", "markdown") (required).
+     - --file (str): Path to the output file (required).
