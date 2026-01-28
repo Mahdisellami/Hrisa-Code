@@ -191,6 +191,27 @@ src/hrisa_code/          # Main package
   3. Then create cli.py that imports from db
 - **NEVER** import from hypothetical files that don't exist yet
 
+**CRITICAL: pyproject.toml STRUCTURE AFFECTS FILE LOCATION:**
+- The entry point structure in pyproject.toml determines where models create files
+- **For simple projects, use FLAT structure** (files at project root):
+  ```toml
+  [project.scripts]
+  myapp = "cli:app"  # ← Flat structure, files at root
+  ```
+- **AVOID package structure** unless explicitly needed:
+  ```toml
+  [project.scripts]
+  myapp = "myapp.cli:app"  # ← Package structure, creates myapp/ subdirectory
+  ```
+- **Why this matters:** Models prioritize structural signals (pyproject.toml) over documentation (CLAUDE.md)
+- **V11 Test Proof:** Changing from `taskmanager.cli:app` to `cli:app` fixed critical file location issues
+- **When package structure is needed:**
+  - Large projects with multiple modules
+  - Libraries that need proper package distribution
+  - Projects explicitly requesting modular structure
+- **Default recommendation:** Use flat structure unless project requirements dictate otherwise
+- **Architecture > Documentation:** Models will follow pyproject.toml structure even if CLAUDE.md says otherwise
+
 ## Development Practices
 
 ### Code Style
