@@ -10,6 +10,11 @@ from pydantic import BaseModel
 # Import git tools
 from hrisa_code.tools.git_operations import GIT_TOOLS
 
+# Import system, docker, and network tools
+from hrisa_code.tools.system_tools import SYSTEM_TOOLS
+from hrisa_code.tools.docker_tools import DOCKER_TOOLS
+from hrisa_code.tools.network_tools import NETWORK_TOOLS
+
 # Import code quality validator
 from hrisa_code.core.validation.code_quality import CodeQualityValidator
 
@@ -569,6 +574,7 @@ class DeleteFileTool:
 
 # Tool registry
 AVAILABLE_TOOLS = {
+    # Core file operations
     "read_file": ReadFileTool,
     "write_file": WriteFileTool,
     "list_directory": ListDirectoryTool,
@@ -576,7 +582,14 @@ AVAILABLE_TOOLS = {
     "search_files": SearchFilesTool,
     "find_files": FindFilesTool,
     "delete_file": DeleteFileTool,
-    **GIT_TOOLS,  # Add git tools
+    # Git operations
+    **GIT_TOOLS,
+    # System monitoring
+    **SYSTEM_TOOLS,
+    # Docker management
+    **DOCKER_TOOLS,
+    # Network tools
+    **NETWORK_TOOLS,
 }
 
 

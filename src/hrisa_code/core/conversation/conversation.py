@@ -13,6 +13,7 @@ from rich.text import Text
 from rich.spinner import Spinner
 
 from .ollama_client import OllamaClient, OllamaConfig
+from .json_repair import repair_json, extract_json_objects, validate_tool_call_structure
 from hrisa_code.core.planning import LoopDetector, LoopStatus
 from hrisa_code.core.planning import GoalTracker, GoalStatus
 from hrisa_code.core.planning import ResultVerifier, RelevanceScore
@@ -103,7 +104,8 @@ class ConversationManager:
         """Extract tool calls from text response (for models that output JSON as text).
 
         Some models like qwen2.5-coder:32b output tool calls as JSON text instead of
-        using Ollama's structured tool calling API. This function extracts those calls.
+        using Ollama's structured tool calling API. This function extracts those calls
+        with robust JSON repair capabilities.
 
         Args:
             text: Response text that may contain JSON tool calls
@@ -111,68 +113,60 @@ class ConversationManager:
         Returns:
             List of tool calls in Ollama's expected format
         """
-        import re
-
         tool_calls = []
 
-        # Multiple patterns to handle different malformed JSON cases
-        patterns = [
-            # Standard pattern: {"name": "tool_name", "arguments": {...}}
-            r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{[^}]*(?:\{[^}]*\}[^}]*)*\})\s*\}',
-            # Handle potential whitespace/newline issues
-            r'\{\s*["\']name["\']\s*:\s*["\']([^"\']+)["\']\s*,\s*["\']arguments["\']\s*:\s*(\{[^\}]*\})\s*\}',
-            # More lenient for nested structures
-            r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"arguments"\s*:\s*(\{(?:[^{}]|(?:\{[^{}]*\}))*\})\s*\}'
-        ]
+        # Extract potential JSON objects from text using bracket matching
+        json_candidates = extract_json_objects(text)
 
-        for pattern_idx, pattern in enumerate(patterns):
-            matches = re.finditer(pattern, text, re.DOTALL | re.MULTILINE)
+        if not json_candidates:
+            return []
 
-            for match in matches:
-                try:
-                    # Extract the full JSON string
-                    json_str = match.group(0)
+        for json_str in json_candidates:
+            # Try to parse and repair if needed
+            parsed, error = repair_json(json_str)
 
-                    # Try to parse with standard JSON
-                    parsed = json.loads(json_str)
+            if parsed is None:
+                # Could not parse even with repair
+                self.console.print(
+                    f"[yellow]→ Skipped malformed tool call: {error}[/yellow]"
+                )
+                # Show snippet for debugging (truncate if too long)
+                snippet = json_str[:150] + "..." if len(json_str) > 150 else json_str
+                self.console.print(f"[dim]   Snippet: {snippet}[/dim]")
+                continue
 
-                    # Validate it has the expected structure
-                    if "name" in parsed and "arguments" in parsed:
-                        # Verify the tool exists in our tool definitions
-                        if parsed["name"] in AVAILABLE_TOOLS:
-                            # Convert to Ollama's tool call format
-                            tool_calls.append({
-                                "function": {
-                                    "name": parsed["name"],
-                                    "arguments": parsed["arguments"]
-                                }
-                            })
-                            self.console.print(f"[dim]→ Detected text-based tool call: {parsed['name']}[/dim]")
-                        else:
-                            self.console.print(f"[yellow]→ Warning: Unknown tool '{parsed['name']}' - skipping[/yellow]")
+            # Validate it has the expected tool call structure
+            is_valid, validation_error = validate_tool_call_structure(parsed)
+            if not is_valid:
+                self.console.print(
+                    f"[yellow]→ Skipped invalid structure: {validation_error}[/yellow]"
+                )
+                continue
 
-                except json.JSONDecodeError as e:
-                    # Provide detailed error information
-                    error_msg = str(e)
-                    if "Unterminated string" in error_msg:
-                        self.console.print(f"[yellow]→ Skipped malformed tool call: Unterminated string (check quotes)[/yellow]")
-                    elif "Expecting" in error_msg:
-                        self.console.print(f"[yellow]→ Skipped malformed tool call: {error_msg}[/yellow]")
-                    else:
-                        self.console.print(f"[yellow]→ Skipped malformed tool call: Invalid JSON - {error_msg}[/yellow]")
+            tool_name = parsed["name"]
+            arguments = parsed["arguments"]
 
-                    # Log the problematic JSON for debugging
-                    if len(json_str) < 200:
-                        self.console.print(f"[dim]   Attempted to parse: {json_str[:100]}...[/dim]")
-                    continue
+            # Verify the tool exists in our tool definitions
+            if tool_name not in AVAILABLE_TOOLS:
+                self.console.print(
+                    f"[yellow]→ Warning: Unknown tool '{tool_name}' - skipping[/yellow]"
+                )
+                available = ", ".join(sorted(AVAILABLE_TOOLS.keys())[:5])
+                self.console.print(
+                    f"[dim]   Available tools: {available}, ...[/dim]"
+                )
+                continue
 
-                except KeyError as e:
-                    self.console.print(f"[yellow]→ Skipped tool call: Missing required key {e}[/yellow]")
-                    continue
-
-            # If we found tool calls with this pattern, don't try other patterns
-            if tool_calls:
-                break
+            # Convert to Ollama's tool call format
+            tool_calls.append({
+                "function": {
+                    "name": tool_name,
+                    "arguments": arguments
+                }
+            })
+            self.console.print(
+                f"[dim]→ Detected text-based tool call: {tool_name}[/dim]"
+            )
 
         return tool_calls
 
