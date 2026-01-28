@@ -636,13 +636,16 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
             # Check for expected files based on step description
             expected_files = self._get_expected_files(step)
             for expected_file in expected_files:
-                if not os.path.exists(expected_file):
+                # Try to find the file in common locations
+                found_path = self._find_file_in_common_locations(expected_file)
+
+                if not found_path:
                     critical_issues.append(
-                        f"❌ Step {step.step_number} expected to create {expected_file} but file not found"
+                        f"❌ Step {step.step_number} expected to create {expected_file} but file not found in root, src/, or app/"
                     )
-                elif os.path.getsize(expected_file) == 0:
+                elif os.path.getsize(found_path) == 0:
                     critical_issues.append(
-                        f"❌ Step {step.step_number} created {expected_file} but file is empty (0 bytes)"
+                        f"❌ Step {step.step_number} created {found_path} but file is empty (0 bytes)"
                     )
 
         # Check if result is suspiciously short (might be just thinking)
@@ -679,7 +682,7 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
             step: The step to check
 
         Returns:
-            List of expected file paths
+            List of expected file paths (base names, will check multiple locations)
         """
         description_lower = step.description.lower()
         expected = []
@@ -703,6 +706,42 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
             expected.extend(["test_cli.py", "test_integration.py", "tests/test_cli.py"])
 
         return expected
+
+    def _find_file_in_common_locations(self, filename: str) -> Optional[str]:
+        """Find a file in common project locations.
+
+        Checks multiple common Python project structures:
+        - Root directory (flat structure)
+        - src/ directory (src layout)
+        - app/ directory (app layout)
+        - project_name/ directory (package layout)
+
+        Args:
+            filename: Base filename to search for (e.g., "cli.py")
+
+        Returns:
+            Full path to file if found, None otherwise
+        """
+        # Common locations to check (in order of preference)
+        search_paths = [
+            filename,  # Root directory
+            os.path.join("src", filename),  # src layout
+            os.path.join("app", filename),  # app layout
+        ]
+
+        # Also check for the file in any immediate subdirectories
+        # This catches patterns like task_manager/cli.py
+        if os.path.exists("."):
+            for item in os.listdir("."):
+                if os.path.isdir(item) and not item.startswith("."):
+                    search_paths.append(os.path.join(item, filename))
+
+        # Check each path
+        for path in search_paths:
+            if os.path.exists(path):
+                return path
+
+        return None
 
     def _select_model_for_step(self, step: "PlanStep") -> str:
         """Select the optimal model for a specific step type.

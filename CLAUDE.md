@@ -144,9 +144,28 @@ src/hrisa_code/          # Main package
 ### 11. Tools (`tools/file_operations.py` and `tools/git_operations.py`)
 - Tool definition via get_definition()
 - Tool execution via execute()
-- **File operation tools**: read_file, write_file, delete_file, list_directory, execute_command, search_files
-- **Git read tools**: git_status, git_diff, git_log, git_branch
-- **Git write tools** (require approval): git_commit, git_push, git_pull, git_stash
+
+**Available Tools by Category (29 total):**
+
+- **File Operations (7 tools):** Essential file system operations
+  - read_file, write_file, delete_file
+  - list_directory, find_files, search_files
+  - execute_command
+
+- **Git Operations (8 tools):** Version control
+  - **Read:** git_status, git_diff, git_log, git_branch
+  - **Write** (require approval): git_commit, git_push, git_pull, git_stash
+
+- **System Monitoring (5 tools):** System inspection and resource monitoring
+  - get_system_info, check_resources, list_processes
+  - check_port, get_env_vars
+
+- **Docker Management (5 tools):** Container operations
+  - docker_ps, docker_inspect, docker_logs
+  - docker_exec, docker_images
+
+- **Network Testing (4 tools):** Connectivity and debugging
+  - ping, http_request, dns_lookup, netstat
 
 **IMPORTANT NOTE ON FILE EDITING:**
 - There is **NO edit_file or patch tool** available in the tool system
@@ -211,6 +230,38 @@ src/hrisa_code/          # Main package
   - Projects explicitly requesting modular structure
 - **Default recommendation:** Use flat structure unless project requirements dictate otherwise
 - **Architecture > Documentation:** Models will follow pyproject.toml structure even if CLAUDE.md says otherwise
+
+**CRITICAL: DO NOT CREATE src/ DIRECTORY UNLESS EXPLICITLY REQUESTED:**
+- **Default file location: PROJECT ROOT** (same level as pyproject.toml)
+- **NEVER create `src/` directory** unless the user explicitly requests it
+- **Common mistake from V12 test:** Model created `src/cli.py`, `src/models.py` despite flat pyproject.toml
+- **Correct structure for simple projects:**
+  ```
+  project_root/
+    pyproject.toml
+    cli.py          ← AT ROOT
+    models.py       ← AT ROOT
+    db.py           ← AT ROOT
+    tests/
+  ```
+- **WRONG structure (do NOT do this):**
+  ```
+  project_root/
+    pyproject.toml
+    src/            ← DON'T CREATE THIS
+      cli.py        ← WRONG LOCATION
+      models.py     ← WRONG LOCATION
+  ```
+- **Why this matters:**
+  - Verification expects files at root when pyproject.toml uses flat structure
+  - Creating src/ causes verification failures even if code is valid
+  - Flat structure is simpler and matches most Python projects
+- **When src/ IS appropriate:**
+  - User explicitly requests "src layout"
+  - Project explicitly has src/ already (check with find_files first)
+  - Complex library with multiple packages needing separation
+- **V12 Test Lesson:** Python "best practices" instinct to create src/ overrides project structure
+- **Rule of thumb:** If pyproject.toml says `cli:app` (flat), create `cli.py` at root, NOT `src/cli.py`
 
 ## Development Practices
 

@@ -148,13 +148,26 @@ class ConversationManager:
 
             # Verify the tool exists in our tool definitions
             if tool_name not in AVAILABLE_TOOLS:
-                self.console.print(
-                    f"[yellow]→ Warning: Unknown tool '{tool_name}' - skipping[/yellow]"
+                # Try to find similar tool names
+                close_matches = difflib.get_close_matches(
+                    tool_name, AVAILABLE_TOOLS.keys(), n=1, cutoff=0.6
                 )
-                available = ", ".join(sorted(AVAILABLE_TOOLS.keys())[:5])
-                self.console.print(
-                    f"[dim]   Available tools: {available}, ...[/dim]"
-                )
+
+                if close_matches:
+                    self.console.print(
+                        f"[yellow]→ Warning: Unknown tool '{tool_name}' - skipping[/yellow]"
+                    )
+                    self.console.print(
+                        f"[yellow]   💡 Did you mean '{close_matches[0]}'?[/yellow]"
+                    )
+                else:
+                    self.console.print(
+                        f"[yellow]→ Warning: Unknown tool '{tool_name}' - skipping[/yellow]"
+                    )
+                    available = ", ".join(sorted(AVAILABLE_TOOLS.keys())[:5])
+                    self.console.print(
+                        f"[dim]   Available tools: {available}, ...[/dim]"
+                    )
                 continue
 
             # Convert to Ollama's tool call format
