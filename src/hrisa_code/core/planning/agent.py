@@ -708,13 +708,18 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
         return expected
 
     def _find_file_in_common_locations(self, filename: str) -> Optional[str]:
-        """Find a file in common project locations.
+        """Find a file in common project locations with recursive search.
 
         Checks multiple common Python project structures:
         - Root directory (flat structure)
-        - src/ directory (src layout)
-        - app/ directory (app layout)
-        - project_name/ directory (package layout)
+        - src/ directory (src layout) - recursively searches nested subdirectories
+        - app/ directory (app layout) - recursively searches nested subdirectories
+        - project_name/ directory (package layout) - recursively searches nested subdirectories
+
+        This handles cases where models create nested structures like:
+        - src/task_manager/cli.py
+        - app/myproject/models.py
+        - myproject/submodule/db.py
 
         Args:
             filename: Base filename to search for (e.g., "cli.py")
@@ -722,24 +727,27 @@ Remember: Be thorough, proactive, and autonomous. Don't ask for permission for e
         Returns:
             Full path to file if found, None otherwise
         """
-        # Common locations to check (in order of preference)
-        search_paths = [
-            filename,  # Root directory
-            os.path.join("src", filename),  # src layout
-            os.path.join("app", filename),  # app layout
-        ]
+        # First check root directory (fast path)
+        if os.path.exists(filename):
+            return filename
 
-        # Also check for the file in any immediate subdirectories
-        # This catches patterns like task_manager/cli.py
+        # Recursively search common layout directories
+        common_dirs = ["src", "app"]
+        for directory in common_dirs:
+            if os.path.exists(directory):
+                for root, dirs, files in os.walk(directory):
+                    if filename in files:
+                        return os.path.join(root, filename)
+
+        # Also recursively search immediate subdirectories
+        # This catches patterns like task_manager/cli.py or myproject/models.py
         if os.path.exists("."):
             for item in os.listdir("."):
-                if os.path.isdir(item) and not item.startswith("."):
-                    search_paths.append(os.path.join(item, filename))
-
-        # Check each path
-        for path in search_paths:
-            if os.path.exists(path):
-                return path
+                # Skip common non-project directories
+                if os.path.isdir(item) and not item.startswith(".") and item not in ["src", "app", "tests", "docs", "__pycache__", "venv", ".venv", "node_modules"]:
+                    for root, dirs, files in os.walk(item):
+                        if filename in files:
+                            return os.path.join(root, filename)
 
         return None
 
