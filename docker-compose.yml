@@ -21,7 +21,7 @@ services:
     #           count: all
     #           capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD", "ollama", "list"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -48,6 +48,10 @@ services:
       - hrisa_history:/home/hrisa/.hrisa
     environment:
       - OLLAMA_HOST=http://ollama:11434
+      # Verification settings
+      - REQUIRED_MODELS=qwen2.5-coder:7b,llama3.2:latest
+      - AUTO_PULL_MODELS=false
+      - SKIP_VERIFICATION=false
     stdin_open: true
     tty: true
     networks:
@@ -56,6 +60,42 @@ services:
     command: hrisa chat --model codellama
     profiles:
       - cli
+
+  # Hrisa Code Web UI
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: hrisa-web
+    depends_on:
+      ollama:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source code for live reloading
+      - ./src:/app/src
+      # Mount workspace for agents to access files
+      - ./workspace:/workspace
+      # Persist configuration
+      - hrisa_config:/home/hrisa/.config/hrisa-code
+      # Persist conversation history
+      - hrisa_history:/home/hrisa/.hrisa
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      # Verification settings
+      - REQUIRED_MODELS=qwen2.5-coder:7b,llama3.2:latest
+      - AUTO_PULL_MODELS=false
+      - SKIP_VERIFICATION=false
+    networks:
+      - hrisa-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # Helper service to pull models
   ollama-pull:
@@ -69,9 +109,30 @@ services:
     networks:
       - hrisa-network
     entrypoint: /bin/sh
-    command: -c "ollama pull codellama && ollama pull deepseek-coder:6.7b"
+    command: -c "ollama pull qwen2.5-coder:7b && ollama pull llama3.2:latest"
     profiles:
       - setup
+
+  # Verification service
+  verify:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hrisa-verify
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ./workspace:/workspace
+      - hrisa_config:/home/hrisa/.config/hrisa-code
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - REQUIRED_MODELS=qwen2.5-coder:7b,llama3.2:latest
+    networks:
+      - hrisa-network
+    command: check
+    profiles:
+      - verify
 
 volumes:
   ollama_data:

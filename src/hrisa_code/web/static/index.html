@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hrisa Code - Agents Dashboard</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Hrisa Code Agents Dashboard</h1>
+            <div class="header-stats">
+                <div class="stat">
+                    <span class="stat-label">Running:</span>
+                    <span class="stat-value" id="stat-running">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Stuck:</span>
+                    <span class="stat-value stuck" id="stat-stuck">0</span>
+                </div>
+                <div class="stat">
+                    <span class="stat-label">Completed:</span>
+                    <span class="stat-value completed" id="stat-completed">0</span>
+                </div>
+                <div class="connection-status" id="connection-status">
+                    <span class="status-dot connecting"></span>
+                    <span>Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <button class="btn btn-primary btn-block" id="create-agent-btn">
+                    Create New Agent
+                </button>
+
+                <div class="filter-section">
+                    <h3>Filters</h3>
+                    <div class="filter-group">
+                        <label>
+                            <input type="checkbox" class="status-filter" value="running" checked>
+                            Running
+                        </label>
+                        <label>
+                            <input type="checkbox" class="status-filter" value="stuck" checked>
+                            Stuck
+                        </label>
+                        <label>
+                            <input type="checkbox" class="status-filter" value="completed">
+                            Completed
+                        </label>
+                        <label>
+                            <input type="checkbox" class="status-filter" value="failed">
+                            Failed
+                        </label>
+                    </div>
+                </div>
+
+                <div class="quick-actions">
+                    <h3>Quick Actions</h3>
+                    <button class="btn btn-secondary btn-small" id="refresh-btn">Refresh</button>
+                    <button class="btn btn-secondary btn-small" id="clear-completed-btn">Clear Completed</button>
+                </div>
+            </aside>
+
+            <!-- Agent List -->
+            <main class="agent-list-container">
+                <div class="agent-list" id="agent-list">
+                    <div class="empty-state">
+                        <p>No agents yet. Create one to get started!</p>
+                    </div>
+                </div>
+            </main>
+
+            <!-- Agent Detail Panel -->
+            <aside class="detail-panel" id="detail-panel">
+                <div class="detail-panel-header">
+                    <h2>Agent Details</h2>
+                    <button class="btn-close" id="close-detail-btn">✕</button>
+                </div>
+                <div class="detail-panel-content" id="detail-content">
+                    <p class="empty-state">Select an agent to view details</p>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Create Agent Modal -->
+    <div class="modal" id="create-agent-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Agent</h2>
+                <button class="btn-close" id="modal-close-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="create-agent-form">
+                    <div class="form-group">
+                        <label for="task-input">Task Description *</label>
+                        <textarea
+                            id="task-input"
+                            rows="4"
+                            placeholder="Describe the task for the agent...&#10;Example: Analyze the codebase and generate a comprehensive README.md"
+                            required
+                        ></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="working-dir-input">Working Directory</label>
+                        <input
+                            type="text"
+                            id="working-dir-input"
+                            placeholder="Leave empty for current directory"
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="model-input">Model</label>
+                        <input
+                            type="text"
+                            id="model-input"
+                            placeholder="Leave empty for default model"
+                        >
+                        <small>e.g., qwen2.5-coder:32b, codellama</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tags-input">Tags (comma-separated)</label>
+                        <input
+                            type="text"
+                            id="tags-input"
+                            placeholder="e.g., documentation, analysis"
+                        >
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Create & Start</button>
+                        <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instruction Modal -->
+    <div class="modal" id="instruction-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Send Instruction</h2>
+                <button class="btn-close" id="instruction-modal-close-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="instruction-form">
+                    <div class="form-group">
+                        <label for="instruction-input">Instruction</label>
+                        <textarea
+                            id="instruction-input"
+                            rows="4"
+                            placeholder="Enter your instruction for the agent..."
+                            required
+                        ></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Send</button>
+                        <button type="button" class="btn btn-secondary" id="instruction-modal-cancel-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
