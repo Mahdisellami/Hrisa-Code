@@ -13,6 +13,7 @@ from hrisa_code.core.config import Config
 from hrisa_code.core.planning.agent import AgentLoop
 from hrisa_code.core.conversation import ConversationManager, OllamaClient
 from hrisa_code.core.conversation.ollama_client import OllamaConfig
+from hrisa_code.web.roles import get_role_system_prompt
 
 
 class AgentStatus(Enum):
@@ -63,6 +64,7 @@ class AgentInfo:
     model: str
     progress: AgentProgress
     messages: List[AgentMessage]
+    role: Optional[str] = None
     output: str = ""
     error: Optional[str] = None
     stuck_reason: Optional[str] = None
@@ -157,6 +159,7 @@ class WebAgentManager:
         working_dir: Optional[Path] = None,
         model: Optional[str] = None,
         tags: Optional[List[str]] = None,
+        role: Optional[str] = None,
     ) -> str:
         """Create a new agent for a task.
 
@@ -165,6 +168,7 @@ class WebAgentManager:
             working_dir: Working directory (uses cwd if None)
             model: Ollama model to use (uses config default if None)
             tags: Optional tags for categorization
+            role: Agent role/persona (e.g., 'architect', 'coder', 'tester')
 
         Returns:
             Agent ID
@@ -194,6 +198,7 @@ class WebAgentManager:
             model=model or self.config.model.name,
             progress=AgentProgress(),
             messages=[],
+            role=role or "general",
             tags=tags or [],
         )
 
@@ -227,7 +232,7 @@ class WebAgentManager:
         await self._notify_status_change(agent_id, agent_info)
 
         # Create agent instance with custom callbacks
-        # Create OllamaConfig and ConversationManager with agent-specific model
+        # Create OllamaConfig and ConversationManager with agent-specific model and role
         ollama_config = OllamaConfig(
             model=agent_info.model or self.config.model.name,
             host=self.config.ollama.host,
@@ -236,9 +241,13 @@ class WebAgentManager:
             top_k=self.config.model.top_k,
         )
 
+        # Get role-specific system prompt
+        role_system_prompt = get_role_system_prompt(agent_info.role or "general")
+
         conversation_manager = ConversationManager(
             ollama_config=ollama_config,
             working_directory=agent_info.working_dir,
+            system_prompt=role_system_prompt,
         )
         agent = AgentLoop(
             conversation_manager=conversation_manager,

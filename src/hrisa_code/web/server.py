@@ -20,6 +20,7 @@ from hrisa_code.web.agent_manager import (
     AgentMessage,
     AgentProgress,
 )
+from hrisa_code.web.roles import list_roles, AgentRole
 
 
 # Request/Response Models
@@ -29,6 +30,7 @@ class CreateAgentRequest(BaseModel):
     task: str = Field(..., description="Task description for the agent")
     working_dir: Optional[str] = Field(None, description="Working directory path")
     model: Optional[str] = Field(None, description="Ollama model to use")
+    role: Optional[str] = Field("general", description="Agent role/persona (e.g., 'architect', 'coder', 'tester')")
     tags: Optional[List[str]] = Field(default_factory=list, description="Tags for categorization")
 
 
@@ -47,6 +49,7 @@ class AgentResponse(BaseModel):
     created_at: str
     working_dir: str
     model: str
+    role: Optional[str]
     progress: Dict
     output: str
     error: Optional[str]
@@ -120,6 +123,7 @@ def _agent_info_to_response(info: AgentInfo) -> AgentResponse:
         created_at=info.created_at.isoformat(),
         working_dir=str(info.working_dir),
         model=info.model,
+        role=info.role,
         progress={
             "total_steps": info.progress.total_steps,
             "completed_steps": info.progress.completed_steps,
@@ -265,6 +269,22 @@ async def health():
     }
 
 
+@app.get("/api/roles")
+async def get_roles():
+    """Get available agent roles."""
+    roles = list_roles()
+    return [
+        {
+            "id": role.id,
+            "name": role.name,
+            "description": role.description,
+            "color": role.color,
+            "icon": role.icon,
+        }
+        for role in roles
+    ]
+
+
 @app.get("/api/stats", response_model=StatsResponse)
 async def get_stats():
     """Get system statistics."""
@@ -348,6 +368,7 @@ async def create_agent(request: CreateAgentRequest):
             task=request.task,
             working_dir=working_dir,
             model=request.model,
+            role=request.role,
             tags=request.tags,
         )
 

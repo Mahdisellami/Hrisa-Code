@@ -7,6 +7,7 @@ const state = {
     agents: new Map(),
     selectedAgentId: null,
     statusFilters: new Set(['running', 'stuck']),
+    roles: [],
     ws: null,
     wsReconnectAttempts: 0,
     wsMaxReconnectAttempts: 5,
@@ -140,6 +141,24 @@ function updateConnectionStatus(status) {
 }
 
 // API Functions
+async function loadRoles() {
+    try {
+        const response = await fetch(`${API_BASE}/roles`);
+        if (!response.ok) throw new Error('Failed to fetch roles');
+        state.roles = await response.json();
+
+        // Populate role dropdown
+        const roleSelect = document.getElementById('role-input');
+        if (roleSelect) {
+            roleSelect.innerHTML = state.roles.map(role =>
+                `<option value="${role.id}">${role.icon} ${role.name}</option>`
+            ).join('');
+        }
+    } catch (error) {
+        console.error('Error loading roles:', error);
+    }
+}
+
 async function fetchAgents() {
     try {
         const response = await fetch(`${API_BASE}/agents`);
@@ -159,7 +178,7 @@ async function fetchAgents() {
     }
 }
 
-async function createAgent(task, workingDir, model, tags) {
+async function createAgent(task, workingDir, model, role, tags) {
     try {
         const response = await fetch(`${API_BASE}/agents`, {
             method: 'POST',
@@ -168,6 +187,7 @@ async function createAgent(task, workingDir, model, tags) {
                 task,
                 working_dir: workingDir || null,
                 model: model || null,
+                role: role || 'general',
                 tags: tags || [],
             }),
         });
@@ -265,6 +285,11 @@ async function fetchAgentMessages(agentId) {
 }
 
 // Rendering Functions
+function getRoleInfo(roleId) {
+    const role = state.roles.find(r => r.id === roleId);
+    return role || { id: 'general', name: 'General', icon: '⚙️', color: '#6b7280' };
+}
+
 function renderAgentList() {
     const filteredAgents = Array.from(state.agents.values())
         .filter(agent => state.statusFilters.has(agent.status))
@@ -275,13 +300,18 @@ function renderAgentList() {
         return;
     }
 
-    elements.agentList.innerHTML = filteredAgents.map(agent => `
+    elements.agentList.innerHTML = filteredAgents.map(agent => {
+        const roleInfo = getRoleInfo(agent.role);
+        return `
         <div class="agent-card ${state.selectedAgentId === agent.id ? 'selected' : ''}"
              data-agent-id="${agent.id}"
              onclick="selectAgent('${agent.id}')">
             <div class="agent-card-header">
                 <div class="agent-id">${agent.id.substring(0, 8)}</div>
                 <div class="agent-status ${agent.status}">${agent.status}</div>
+            </div>
+            <div class="agent-role" style="background: ${roleInfo.color}20; color: ${roleInfo.color}; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; margin: 8px 0; display: inline-block;">
+                ${roleInfo.icon} ${roleInfo.name}
             </div>
             <div class="agent-task">${escapeHtml(agent.task.substring(0, 150))}${agent.task.length > 150 ? '...' : ''}</div>
             <div class="agent-meta">
@@ -303,7 +333,8 @@ function renderAgentList() {
                 </div>
             ` : ''}
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function updateAgentCard(agentId) {
@@ -329,6 +360,7 @@ async function renderAgentDetail(agentId) {
     if (!agent) return;
 
     const messages = await fetchAgentMessages(agentId);
+    const roleInfo = getRoleInfo(agent.role);
 
     elements.detailContent.innerHTML = `
         <div class="detail-section">
@@ -342,6 +374,14 @@ async function renderAgentDetail(agentId) {
                     <span class="detail-info-label">Status:</span>
                     <span class="detail-info-value">
                         <span class="agent-status ${agent.status}">${agent.status}</span>
+                    </span>
+                </div>
+                <div class="detail-info-item">
+                    <span class="detail-info-label">Role:</span>
+                    <span class="detail-info-value">
+                        <span style="background: ${roleInfo.color}20; color: ${roleInfo.color}; padding: 4px 8px; border-radius: 4px; display: inline-block;">
+                            ${roleInfo.icon} ${roleInfo.name}
+                        </span>
                     </span>
                 </div>
                 <div class="detail-info-item">
@@ -535,6 +575,7 @@ elements.createAgentForm.addEventListener('submit', async (e) => {
     const task = document.getElementById('task-input').value;
     const workingDir = document.getElementById('working-dir-input').value;
     const model = document.getElementById('model-input').value;
+    const role = document.getElementById('role-input').value;
     const tagsInput = document.getElementById('tags-input').value;
     const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()) : [];
 
@@ -543,7 +584,7 @@ elements.createAgentForm.addEventListener('submit', async (e) => {
     elements.createAgentForm.reset();
 
     try {
-        await createAgent(task, workingDir, model, tags);
+        await createAgent(task, workingDir, model, role, tags);
     } catch (error) {
         // Error already handled in createAgent
     }
@@ -615,6 +656,7 @@ document.querySelectorAll('.modal').forEach(modal => {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    loadRoles();
     connectWebSocket();
     fetchAgents();
 
