@@ -20,6 +20,7 @@ from hrisa_code.web.agent_manager import (
     AgentMessage,
     AgentProgress,
     AgentLog,
+    AgentArtifact,
 )
 from hrisa_code.web.roles import list_roles, AgentRole
 
@@ -32,6 +33,7 @@ class CreateAgentRequest(BaseModel):
     working_dir: Optional[str] = Field(None, description="Working directory path")
     model: Optional[str] = Field(None, description="Ollama model to use")
     role: Optional[str] = Field("general", description="Agent role/persona (e.g., 'architect', 'coder', 'tester')")
+    parent_agent_id: Optional[str] = Field(None, description="Parent agent to inherit artifacts from")
     tags: Optional[List[str]] = Field(default_factory=list, description="Tags for categorization")
 
 
@@ -39,6 +41,18 @@ class SendInstructionRequest(BaseModel):
     """Request to send instruction to an agent."""
 
     instruction: str = Field(..., description="User instruction")
+
+
+class CreateArtifactRequest(BaseModel):
+    """Request to create an artifact."""
+
+    name: str = Field(..., description="Artifact name")
+    type: str = Field(..., description="Artifact type (code, document, data, etc.)")
+    content: str = Field(..., description="Artifact content")
+    description: Optional[str] = Field(None, description="Artifact description")
+    metadata: Optional[Dict] = Field(None, description="Artifact metadata")
+    file_path: Optional[str] = Field(None, description="File path")
+    language: Optional[str] = Field(None, description="Programming language for code artifacts")
 
 
 class AgentResponse(BaseModel):
@@ -76,6 +90,20 @@ class AgentLogResponse(BaseModel):
     level: str
     message: str
     metadata: Optional[Dict]
+
+
+class AgentArtifactResponse(BaseModel):
+    """Response containing agent artifact."""
+
+    id: str
+    name: str
+    type: str
+    content: str
+    created_at: str
+    description: Optional[str]
+    metadata: Optional[Dict]
+    file_path: Optional[str]
+    language: Optional[str]
 
 
 class StatsResponse(BaseModel):
@@ -393,6 +421,54 @@ async def get_agent_logs(
     ]
 
 
+@app.get("/api/agents/{agent_id}/artifacts", response_model=List[AgentArtifactResponse])
+async def get_agent_artifacts(agent_id: str):
+    """Get agent artifacts."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    artifacts = agent_manager.get_artifacts(agent_id)
+
+    return [
+        AgentArtifactResponse(
+            id=artifact.id,
+            name=artifact.name,
+            type=artifact.type,
+            content=artifact.content,
+            created_at=artifact.created_at.isoformat(),
+            description=artifact.description,
+            metadata=artifact.metadata,
+            file_path=artifact.file_path,
+            language=artifact.language,
+        )
+        for artifact in artifacts
+    ]
+
+
+@app.post("/api/agents/{agent_id}/artifacts")
+async def create_agent_artifact(agent_id: str, request: CreateArtifactRequest):
+    """Create an artifact for an agent."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        artifact_id = await agent_manager.add_artifact(
+            agent_id=agent_id,
+            name=request.name,
+            type=request.type,
+            content=request.content,
+            description=request.description,
+            metadata=request.metadata,
+            file_path=request.file_path,
+            language=request.language,
+        )
+        return {"artifact_id": artifact_id, "status": "created"}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/agents", response_model=AgentResponse)
 async def create_agent(request: CreateAgentRequest):
     """Create a new agent."""
@@ -407,6 +483,7 @@ async def create_agent(request: CreateAgentRequest):
             working_dir=working_dir,
             model=request.model,
             role=request.role,
+            parent_agent_id=request.parent_agent_id,
             tags=request.tags,
         )
 

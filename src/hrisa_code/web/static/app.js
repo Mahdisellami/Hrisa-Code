@@ -295,6 +295,17 @@ async function fetchAgentLogs(agentId) {
     }
 }
 
+async function fetchAgentArtifacts(agentId) {
+    try {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/artifacts`);
+        if (!response.ok) throw new Error('Failed to fetch artifacts');
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching artifacts:', error);
+        return [];
+    }
+}
+
 // Rendering Functions
 function getRoleInfo(roleId) {
     const role = state.roles.find(r => r.id === roleId);
@@ -372,6 +383,7 @@ async function renderAgentDetail(agentId) {
 
     const messages = await fetchAgentMessages(agentId);
     const logs = await fetchAgentLogs(agentId);
+    const artifacts = await fetchAgentArtifacts(agentId);
     const roleInfo = getRoleInfo(agent.role);
 
     elements.detailContent.innerHTML = `
@@ -485,6 +497,54 @@ async function renderAgentDetail(agentId) {
                     </div>
                 `;
                 }).join('') : '<div class="empty-state"><p>No logs yet</p></div>'}
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <h3>Artifacts (${artifacts.length})</h3>
+            <div class="artifacts-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
+                ${artifacts.length > 0 ? artifacts.map(artifact => {
+                    const typeIcons = {
+                        'code': '💻',
+                        'document': '📄',
+                        'data': '📊',
+                        'diagram': '📐',
+                        'file': '📁',
+                        'json': '📋',
+                        'markdown': '📝'
+                    };
+                    const icon = typeIcons[artifact.type] || '📦';
+                    const typeColors = {
+                        'code': 'var(--brand-500)',
+                        'document': 'var(--terracotta-500)',
+                        'data': 'var(--sand-700)',
+                        'diagram': '#8b5cf6',
+                        'file': 'var(--sand-600)',
+                        'json': '#10b981',
+                        'markdown': '#f59e0b'
+                    };
+                    const color = typeColors[artifact.type] || 'var(--sand-600)';
+                    return `
+                    <div class="artifact-card" style="background: var(--sand-100); border: 1px solid var(--sand-300); border-radius: 8px; padding: 12px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 1.5em;">${icon}</span>
+                                <div>
+                                    <div style="font-weight: 600; color: var(--sand-900);">${escapeHtml(artifact.name)}</div>
+                                    <div style="font-size: 0.85em; color: ${color};">${artifact.type}${artifact.language ? ` (${artifact.language})` : ''}</div>
+                                </div>
+                            </div>
+                        </div>
+                        ${artifact.description ? `<div style="font-size: 0.9em; color: var(--sand-700); margin-bottom: 8px;">${escapeHtml(artifact.description)}</div>` : ''}
+                        <div style="background: var(--sand-50); border-radius: 4px; padding: 8px; max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 0.85em; color: var(--sand-800);">
+                            ${escapeHtml(artifact.content.substring(0, 300))}${artifact.content.length > 300 ? '...' : ''}
+                        </div>
+                        <div style="margin-top: 8px; font-size: 0.8em; color: var(--sand-600);">
+                            Created: ${formatTime(artifact.created_at)}
+                        </div>
+                    </div>
+                `;
+                }).join('') : '<div class="empty-state"><p>No artifacts yet</p></div>'}
             </div>
         </div>
 

@@ -50,6 +50,21 @@ class AgentLog:
 
 
 @dataclass
+class AgentArtifact:
+    """An artifact produced by an agent."""
+
+    id: str
+    name: str
+    type: str  # 'code', 'document', 'data', 'diagram', 'file', 'json', 'markdown'
+    content: str
+    created_at: datetime
+    description: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    file_path: Optional[str] = None  # For file artifacts
+    language: Optional[str] = None  # For code artifacts (python, javascript, etc.)
+
+
+@dataclass
 class AgentProgress:
     """Progress information for an agent."""
 
@@ -75,11 +90,13 @@ class AgentInfo:
     progress: AgentProgress
     messages: List[AgentMessage]
     logs: List[AgentLog] = field(default_factory=list)
+    artifacts: List[AgentArtifact] = field(default_factory=list)
     role: Optional[str] = None
     output: str = ""
     error: Optional[str] = None
     stuck_reason: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+    parent_agent_id: Optional[str] = None  # For tracking artifact inheritance
 
 
 class WebAgentManager:
@@ -171,6 +188,7 @@ class WebAgentManager:
         model: Optional[str] = None,
         tags: Optional[List[str]] = None,
         role: Optional[str] = None,
+        parent_agent_id: Optional[str] = None,
     ) -> str:
         """Create a new agent for a task.
 
@@ -180,6 +198,7 @@ class WebAgentManager:
             model: Ollama model to use (uses config default if None)
             tags: Optional tags for categorization
             role: Agent role/persona (e.g., 'architect', 'coder', 'tester')
+            parent_agent_id: Parent agent to inherit artifacts from
 
         Returns:
             Agent ID
@@ -211,7 +230,26 @@ class WebAgentManager:
             messages=[],
             role=role or "general",
             tags=tags or [],
+            parent_agent_id=parent_agent_id,
         )
+
+        # Inherit artifacts from parent agent if specified
+        if parent_agent_id and parent_agent_id in self.agents:
+            parent_agent = self.agents[parent_agent_id]
+            agent_info.artifacts = [
+                AgentArtifact(
+                    id=artifact.id,
+                    name=artifact.name,
+                    type=artifact.type,
+                    content=artifact.content,
+                    created_at=artifact.created_at,
+                    description=f"Inherited from parent agent {parent_agent_id[:8]}",
+                    metadata=artifact.metadata,
+                    file_path=artifact.file_path,
+                    language=artifact.language,
+                )
+                for artifact in parent_agent.artifacts
+            ]
 
         self.agents[agent_id] = agent_info
 
@@ -321,6 +359,73 @@ class WebAgentManager:
             metadata=metadata,
         )
         agent_info.logs.append(log)
+
+    async def add_artifact(
+        self,
+        agent_id: str,
+        name: str,
+        type: str,
+        content: str,
+        description: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        file_path: Optional[str] = None,
+        language: Optional[str] = None,
+    ) -> str:
+        """Add an artifact for an agent.
+
+        Args:
+            agent_id: The agent ID
+            name: Artifact name
+            type: Artifact type (code, document, data, etc.)
+            content: Artifact content
+            description: Optional description
+            metadata: Optional metadata
+            file_path: Optional file path
+            language: Optional language for code artifacts
+
+        Returns:
+            Artifact ID
+        """
+        agent_info = self.agents.get(agent_id)
+        if not agent_info:
+            raise ValueError(f"Agent {agent_id} not found")
+
+        artifact_id = str(uuid.uuid4())
+        artifact = AgentArtifact(
+            id=artifact_id,
+            name=name,
+            type=type,
+            content=content,
+            created_at=datetime.now(),
+            description=description,
+            metadata=metadata,
+            file_path=file_path,
+            language=language,
+        )
+        agent_info.artifacts.append(artifact)
+
+        await self._add_log(
+            agent_id,
+            "info",
+            f"Created artifact: {name} ({type})",
+            {"artifact_id": artifact_id},
+        )
+
+        return artifact_id
+
+    def get_artifacts(self, agent_id: str) -> List[AgentArtifact]:
+        """Get all artifacts for an agent.
+
+        Args:
+            agent_id: The agent ID
+
+        Returns:
+            List of artifacts
+        """
+        agent_info = self.agents.get(agent_id)
+        if not agent_info:
+            return []
+        return agent_info.artifacts
 
     async def _run_agent(self, agent_id: str, agent: AgentLoop) -> None:
         """Run an agent until completion or error.
