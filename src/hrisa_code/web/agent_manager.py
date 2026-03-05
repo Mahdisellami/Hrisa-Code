@@ -40,6 +40,16 @@ class AgentMessage:
 
 
 @dataclass
+class AgentLog:
+    """A log entry from agent execution."""
+
+    timestamp: datetime
+    level: str  # 'info', 'error', 'debug', 'tool', 'iteration'
+    message: str
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@dataclass
 class AgentProgress:
     """Progress information for an agent."""
 
@@ -64,6 +74,7 @@ class AgentInfo:
     model: str
     progress: AgentProgress
     messages: List[AgentMessage]
+    logs: List[AgentLog] = field(default_factory=list)
     role: Optional[str] = None
     output: str = ""
     error: Optional[str] = None
@@ -290,6 +301,27 @@ class WebAgentManager:
         task = asyncio.create_task(self._run_agent(agent_id, agent))
         self.agent_tasks[agent_id] = task
 
+    async def _add_log(self, agent_id: str, level: str, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        """Add a log entry for an agent.
+
+        Args:
+            agent_id: The agent ID
+            level: Log level
+            message: Log message
+            metadata: Optional metadata
+        """
+        agent_info = self.agents.get(agent_id)
+        if not agent_info:
+            return
+
+        log = AgentLog(
+            timestamp=datetime.now(),
+            level=level,
+            message=message,
+            metadata=metadata,
+        )
+        agent_info.logs.append(log)
+
     async def _run_agent(self, agent_id: str, agent: AgentLoop) -> None:
         """Run an agent until completion or error.
 
@@ -300,6 +332,11 @@ class WebAgentManager:
         agent_info = self.agents[agent_id]
 
         try:
+            # Log agent start
+            await self._add_log(agent_id, "info", f"Agent started with role: {agent_info.role or 'general'}")
+            await self._add_log(agent_id, "info", f"Using model: {agent_info.model}")
+            await self._add_log(agent_id, "info", f"Working directory: {agent_info.working_dir}")
+
             # Add initial user message
             initial_message = AgentMessage(
                 timestamp=datetime.now(),
@@ -309,6 +346,8 @@ class WebAgentManager:
             agent_info.messages.append(initial_message)
             await self._notify_message(agent_id, initial_message)
 
+            await self._add_log(agent_id, "info", "Executing task...")
+
             # Run agent
             result = await agent.execute_task(agent_info.task)
 
@@ -317,9 +356,12 @@ class WebAgentManager:
             agent_info.status = AgentStatus.COMPLETED
             agent_info.progress.completed_steps = agent_info.progress.total_steps
 
+            await self._add_log(agent_id, "info", "Task completed successfully")
+
         except Exception as e:
             agent_info.status = AgentStatus.FAILED
             agent_info.error = str(e)
+            await self._add_log(agent_id, "error", f"Agent failed: {str(e)}")
 
         finally:
             # Cleanup

@@ -284,6 +284,17 @@ async function fetchAgentMessages(agentId) {
     }
 }
 
+async function fetchAgentLogs(agentId) {
+    try {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/logs`);
+        if (!response.ok) throw new Error('Failed to fetch logs');
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching logs:', error);
+        return [];
+    }
+}
+
 // Rendering Functions
 function getRoleInfo(roleId) {
     const role = state.roles.find(r => r.id === roleId);
@@ -360,6 +371,7 @@ async function renderAgentDetail(agentId) {
     if (!agent) return;
 
     const messages = await fetchAgentMessages(agentId);
+    const logs = await fetchAgentLogs(agentId);
     const roleInfo = getRoleInfo(agent.role);
 
     elements.detailContent.innerHTML = `
@@ -447,6 +459,32 @@ async function renderAgentDetail(agentId) {
                     <span class="detail-info-label">Last Activity:</span>
                     <span class="detail-info-value">${formatDate(agent.progress.last_activity)}</span>
                 </div>
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <h3>Execution Logs (${logs.length})</h3>
+            <div class="log-list" style="max-height: 300px; overflow-y: auto; background: var(--sand-100); padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.9em;">
+                ${logs.length > 0 ? logs.map(log => {
+                    const levelColors = {
+                        'info': 'var(--sand-800)',
+                        'error': 'var(--accent-danger)',
+                        'debug': 'var(--sand-600)',
+                        'tool': 'var(--brand-500)',
+                        'iteration': 'var(--terracotta-500)'
+                    };
+                    const color = levelColors[log.level] || 'var(--sand-700)';
+                    return `
+                    <div class="log-entry" style="margin-bottom: 8px; padding: 6px; background: var(--sand-50); border-left: 3px solid ${color};">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                            <span style="color: ${color}; font-weight: 600;">[${log.level.toUpperCase()}]</span>
+                            <span style="color: var(--sand-600); font-size: 0.85em;">${formatTime(log.timestamp)}</span>
+                        </div>
+                        <div style="color: var(--sand-900);">${escapeHtml(log.message)}</div>
+                        ${log.metadata ? `<div style="color: var(--sand-600); font-size: 0.85em; margin-top: 4px;">${JSON.stringify(log.metadata)}</div>` : ''}
+                    </div>
+                `;
+                }).join('') : '<div class="empty-state"><p>No logs yet</p></div>'}
             </div>
         </div>
 

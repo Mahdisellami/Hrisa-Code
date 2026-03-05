@@ -19,6 +19,7 @@ from hrisa_code.web.agent_manager import (
     AgentInfo,
     AgentMessage,
     AgentProgress,
+    AgentLog,
 )
 from hrisa_code.web.roles import list_roles, AgentRole
 
@@ -66,6 +67,15 @@ class AgentMessageResponse(BaseModel):
     content: str
     tool_calls: Optional[List[Dict]]
     tool_results: Optional[List[Dict]]
+
+
+class AgentLogResponse(BaseModel):
+    """Response containing agent log entry."""
+
+    timestamp: str
+    level: str
+    message: str
+    metadata: Optional[Dict]
 
 
 class StatsResponse(BaseModel):
@@ -353,6 +363,34 @@ async def get_agent_messages(
     messages = agent.messages[offset : offset + limit]
 
     return [_agent_message_to_response(msg) for msg in messages]
+
+
+@app.get("/api/agents/{agent_id}/logs", response_model=List[AgentLogResponse])
+async def get_agent_logs(
+    agent_id: str,
+    offset: int = Query(0, ge=0, description="Log offset"),
+    limit: int = Query(1000, ge=1, le=10000, description="Maximum logs"),
+):
+    """Get agent logs."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent = agent_manager.get_agent(agent_id)
+
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    logs = agent.logs[offset : offset + limit]
+
+    return [
+        AgentLogResponse(
+            timestamp=log.timestamp.isoformat(),
+            level=log.level,
+            message=log.message,
+            metadata=log.metadata,
+        )
+        for log in logs
+    ]
 
 
 @app.post("/api/agents", response_model=AgentResponse)
