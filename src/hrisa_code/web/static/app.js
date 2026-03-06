@@ -3773,6 +3773,397 @@ function formatDuration(seconds) {
     }
 }
 
+// System Metrics Dashboard - Comprehensive Overview
+async function showSystemMetricsDashboard() {
+    const listContainer = document.getElementById('agent-list');
+    const agents = Array.from(state.agents.values());
+    const teams = state.teams || [];
+
+    // Fetch model metrics
+    let modelMetrics = [];
+    try {
+        const response = await fetch(`${API_BASE}/models/metrics`);
+        modelMetrics = await response.json();
+    } catch (error) {
+        console.error('Failed to fetch model metrics:', error);
+    }
+
+    // Calculate comprehensive system metrics
+    const now = Date.now();
+    const last24h = now - (24 * 60 * 60 * 1000);
+    const last7d = now - (7 * 24 * 60 * 60 * 1000);
+
+    // Agent stats
+    const agentStats = {
+        total: agents.length,
+        running: agents.filter(a => a.status === 'running').length,
+        completed: agents.filter(a => a.status === 'completed').length,
+        failed: agents.filter(a => a.status === 'failed').length,
+        stuck: agents.filter(a => a.status === 'stuck').length,
+        recent24h: agents.filter(a => new Date(a.created_at).getTime() > last24h).length,
+        recent7d: agents.filter(a => new Date(a.created_at).getTime() > last7d).length
+    };
+
+    // Performance stats
+    const totalToolCalls = agents.reduce((sum, a) => sum + a.progress.tool_calls, 0);
+    const totalMessages = agents.reduce((sum, a) => sum + a.messages.length, 0);
+    const totalArtifacts = agents.reduce((sum, a) => sum + a.artifacts.length, 0);
+    const totalErrors = agents.reduce((sum, a) => sum + a.progress.errors, 0);
+    const totalLoopDetections = agents.reduce((sum, a) => sum + a.progress.loop_detections, 0);
+
+    const successRate = agentStats.total > 0
+        ? (agentStats.completed / agentStats.total) * 100
+        : 0;
+    const errorRate = totalToolCalls > 0
+        ? (totalErrors / totalToolCalls) * 100
+        : 0;
+
+    // Time-based metrics
+    const avgDuration = agents.length > 0
+        ? agents.reduce((sum, a) => sum + (now - new Date(a.created_at).getTime()) / 1000, 0) / agents.length
+        : 0;
+
+    // Model stats
+    const modelUsage = {};
+    agents.forEach(agent => {
+        modelUsage[agent.model] = (modelUsage[agent.model] || 0) + 1;
+    });
+    const topModels = Object.entries(modelUsage)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+
+    // Team stats
+    const teamStats = {
+        total: teams.length,
+        active: teams.filter(t => t.status === 'active').length,
+        avgMembersPerTeam: teams.length > 0
+            ? teams.reduce((sum, t) => sum + (t.member_agent_ids?.length || 0), 0) / teams.length
+            : 0
+    };
+
+    // System health indicators
+    const healthScore = calculateSystemHealth(agentStats, successRate, errorRate, totalLoopDetections);
+
+    const dashboardHTML = `
+        <div style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="margin: 0; font-size: 24px; font-weight: 700;">System Metrics Dashboard</h2>
+                <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: ${healthScore.color}20; border-radius: 8px; border: 2px solid ${healthScore.color};">
+                        <span style="font-size: 20px;">${healthScore.icon}</span>
+                        <div>
+                            <div style="font-size: 10px; text-transform: uppercase; color: var(--sand-600); font-weight: 600;">System Health</div>
+                            <div style="font-size: 16px; font-weight: 700; color: ${healthScore.color};">${healthScore.label}</div>
+                        </div>
+                    </div>
+                    <button class="btn btn-secondary btn-small" onclick="fetchAgents(); showSystemMetricsDashboard();">🔄 Refresh</button>
+                </div>
+            </div>
+
+            <!-- Key Performance Indicators -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 20px; border-radius: 12px; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.9; margin-bottom: 8px;">Total Agents</div>
+                    <div style="font-size: 36px; font-weight: 700;">${agentStats.total}</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">↑ ${agentStats.recent24h} in last 24h</div>
+                </div>
+                <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 20px; border-radius: 12px; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.9; margin-bottom: 8px;">Success Rate</div>
+                    <div style="font-size: 36px; font-weight: 700;">${successRate.toFixed(0)}%</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">${agentStats.completed} completed</div>
+                </div>
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 20px; border-radius: 12px; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.9; margin-bottom: 8px;">Active Now</div>
+                    <div style="font-size: 36px; font-weight: 700;">${agentStats.running}</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">${agentStats.stuck} stuck</div>
+                </div>
+                <div style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); padding: 20px; border-radius: 12px; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.9; margin-bottom: 8px;">Tool Calls</div>
+                    <div style="font-size: 36px; font-weight: 700;">${totalToolCalls.toLocaleString()}</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">${(totalToolCalls / Math.max(agentStats.total, 1)).toFixed(0)} per agent</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px;">
+                <!-- Agent Status Distribution -->
+                <div style="background: var(--sand-100); border-radius: 12px; padding: 20px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Agent Status Distribution</h3>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        ${[
+                            { label: 'Running', count: agentStats.running, color: '#3b82f6', icon: '🏃' },
+                            { label: 'Completed', count: agentStats.completed, color: '#10b981', icon: '✅' },
+                            { label: 'Stuck', count: agentStats.stuck, color: '#f59e0b', icon: '⚠️' },
+                            { label: 'Failed', count: agentStats.failed, color: '#ef4444', icon: '❌' }
+                        ].map(status => {
+                            const percentage = agentStats.total > 0 ? (status.count / agentStats.total) * 100 : 0;
+                            return `
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-size: 20px;">${status.icon}</span>
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                            <span style="font-size: 13px; font-weight: 600; color: var(--sand-700);">${status.label}</span>
+                                            <span style="font-size: 13px; font-weight: 600; color: ${status.color};">${status.count} (${percentage.toFixed(0)}%)</span>
+                                        </div>
+                                        <div style="background: var(--sand-200); border-radius: 4px; height: 8px; overflow: hidden;">
+                                            <div style="background: ${status.color}; height: 100%; width: ${percentage}%; transition: width 0.3s;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div style="background: var(--sand-100); border-radius: 12px; padding: 20px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Quick Stats</h3>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        ${[
+                            { icon: '💬', label: 'Messages', value: totalMessages.toLocaleString() },
+                            { icon: '📄', label: 'Artifacts', value: totalArtifacts.toLocaleString() },
+                            { icon: '⚠️', label: 'Errors', value: `${totalErrors} (${errorRate.toFixed(1)}%)` },
+                            { icon: '🔄', label: 'Loop Detections', value: totalLoopDetections.toLocaleString() },
+                            { icon: '⏱️', label: 'Avg Duration', value: formatDuration(avgDuration) },
+                            { icon: '👥', label: 'Teams', value: `${teamStats.active}/${teamStats.total}` }
+                        ].map(stat => `
+                            <div style="background: white; border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 18px;">${stat.icon}</span>
+                                    <span style="font-size: 12px; color: var(--sand-600);">${stat.label}</span>
+                                </div>
+                                <span style="font-size: 14px; font-weight: 700; color: var(--sand-900);">${stat.value}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+                <!-- Top Models -->
+                <div style="background: var(--sand-100); border-radius: 12px; padding: 20px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Top Models by Usage</h3>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        ${topModels.length > 0 ? topModels.map(([ model, count], idx) => {
+                            const percentage = (count / agentStats.total) * 100;
+                            const modelInfo = modelMetrics.find(m => m.model_name === model);
+                            return `
+                                <div style="background: white; border-radius: 8px; padding: 12px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <span style="font-size: 18px; font-weight: 700; color: var(--sand-400);">#${idx + 1}</span>
+                                            <span style="font-size: 13px; font-weight: 600; color: var(--sand-900);">${model}</span>
+                                        </div>
+                                        <span style="font-size: 13px; font-weight: 600; color: #3b82f6;">${count} (${percentage.toFixed(0)}%)</span>
+                                    </div>
+                                    ${modelInfo ? `
+                                        <div style="font-size: 10px; color: var(--sand-600); display: flex; gap: 12px;">
+                                            <span>Success: ${modelInfo.success_rate.toFixed(0)}%</span>
+                                            <span>Avg Time: ${modelInfo.average_response_time.toFixed(1)}s</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                        }).join('') : '<p style="color: var(--sand-600); text-align: center;">No model data</p>'}
+                    </div>
+                </div>
+
+                <!-- Activity Timeline (Last 24h) -->
+                <div style="background: var(--sand-100); border-radius: 12px; padding: 20px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Activity Timeline (24h)</h3>
+                    <div style="display: flex; align-items: end; gap: 4px; height: 150px;">
+                        ${Array.from({ length: 24 }, (_, i) => {
+                            const hourStart = last24h + (i * 60 * 60 * 1000);
+                            const hourEnd = hourStart + (60 * 60 * 1000);
+                            const hourAgents = agents.filter(a => {
+                                const created = new Date(a.created_at).getTime();
+                                return created >= hourStart && created < hourEnd;
+                            });
+                            const maxCount = Math.max(...Array.from({ length: 24 }, (_, j) => {
+                                const hStart = last24h + (j * 60 * 60 * 1000);
+                                const hEnd = hStart + (60 * 60 * 1000);
+                                return agents.filter(a => {
+                                    const c = new Date(a.created_at).getTime();
+                                    return c >= hStart && c < hEnd;
+                                }).length;
+                            }), 1);
+                            const height = (hourAgents.length / maxCount) * 100;
+                            return `
+                                <div
+                                    style="flex: 1; background: linear-gradient(to top, #3b82f6, #60a5fa); border-radius: 4px 4px 0 0; height: ${height}%; min-height: 4px; transition: all 0.3s; cursor: pointer;"
+                                    title="${new Date(hourStart).toLocaleTimeString([], { hour: '2-digit' })}: ${hourAgents.length} agents"
+                                    onmouseover="this.style.background='linear-gradient(to top, #2563eb, #3b82f6)'"
+                                    onmouseout="this.style.background='linear-gradient(to top, #3b82f6, #60a5fa)'"
+                                ></div>
+                            `;
+                        }).join('')}
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 10px; color: var(--sand-600);">
+                        <span>${new Date(last24h).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>Now</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Recommendations -->
+            ${generateSystemRecommendations(agentStats, successRate, errorRate, totalLoopDetections, healthScore)}
+        </div>
+    `;
+
+    listContainer.innerHTML = dashboardHTML;
+}
+
+// Calculate system health score
+function calculateSystemHealth(agentStats, successRate, errorRate, loopDetections) {
+    let score = 100;
+    let issues = [];
+
+    // Success rate impact
+    if (successRate < 50) {
+        score -= 30;
+        issues.push('Low success rate');
+    } else if (successRate < 70) {
+        score -= 15;
+        issues.push('Moderate success rate');
+    }
+
+    // Error rate impact
+    if (errorRate > 10) {
+        score -= 20;
+        issues.push('High error rate');
+    } else if (errorRate > 5) {
+        score -= 10;
+        issues.push('Moderate error rate');
+    }
+
+    // Stuck agents impact
+    const stuckRate = agentStats.total > 0 ? (agentStats.stuck / agentStats.total) * 100 : 0;
+    if (stuckRate > 20) {
+        score -= 25;
+        issues.push('Many stuck agents');
+    } else if (stuckRate > 10) {
+        score -= 12;
+        issues.push('Some stuck agents');
+    }
+
+    // Loop detections impact
+    if (loopDetections > agentStats.total * 0.5) {
+        score -= 15;
+        issues.push('Frequent loop detections');
+    }
+
+    // Determine health level
+    let health;
+    if (score >= 80) {
+        health = { label: 'Excellent', color: '#10b981', icon: '💚', level: 'excellent' };
+    } else if (score >= 60) {
+        health = { label: 'Good', color: '#3b82f6', icon: '💙', level: 'good' };
+    } else if (score >= 40) {
+        health = { label: 'Fair', color: '#f59e0b', icon: '💛', level: 'fair' };
+    } else {
+        health = { label: 'Poor', color: '#ef4444', icon: '💔', level: 'poor' };
+    }
+
+    health.score = Math.max(0, score);
+    health.issues = issues;
+
+    return health;
+}
+
+// Generate system recommendations
+function generateSystemRecommendations(agentStats, successRate, errorRate, loopDetections, healthScore) {
+    const recommendations = [];
+
+    if (healthScore.score >= 80) {
+        recommendations.push({
+            type: 'success',
+            icon: '✅',
+            title: 'System Running Smoothly',
+            message: 'All metrics are within healthy ranges. Keep up the great work!'
+        });
+    }
+
+    if (successRate < 70) {
+        recommendations.push({
+            type: 'warning',
+            icon: '⚠️',
+            title: 'Low Success Rate Detected',
+            message: 'Consider reviewing task complexity and model selection. Failed agents may need clearer instructions.'
+        });
+    }
+
+    if (errorRate > 5) {
+        recommendations.push({
+            type: 'warning',
+            icon: '🔧',
+            title: 'High Error Rate',
+            message: 'Review agent logs for common errors. Consider enabling model fallback to improve reliability.'
+        });
+    }
+
+    const stuckRate = agentStats.total > 0 ? (agentStats.stuck / agentStats.total) * 100 : 0;
+    if (stuckRate > 10) {
+        recommendations.push({
+            type: 'warning',
+            icon: '⏸️',
+            title: 'Stuck Agents Need Attention',
+            message: `${agentStats.stuck} agents are stuck. Review loop detections and consider manual intervention or timeout adjustments.`
+        });
+    }
+
+    if (loopDetections > agentStats.total * 0.3) {
+        recommendations.push({
+            type: 'info',
+            icon: '🔄',
+            title: 'Frequent Loop Detections',
+            message: 'Agents may be repeating actions. Review task instructions and ensure clear success criteria.'
+        });
+    }
+
+    if (agentStats.running > 10) {
+        recommendations.push({
+            type: 'info',
+            icon: '⚡',
+            title: 'High Concurrent Load',
+            message: `${agentStats.running} agents running concurrently. Monitor system resources and consider priority queuing.`
+        });
+    }
+
+    if (recommendations.length === 0) {
+        recommendations.push({
+            type: 'info',
+            icon: '📊',
+            title: 'No Issues Detected',
+            message: 'System metrics look healthy. Continue monitoring for optimal performance.'
+        });
+    }
+
+    const colorMap = {
+        success: '#10b981',
+        warning: '#f59e0b',
+        info: '#3b82f6',
+        error: '#ef4444'
+    };
+
+    return `
+        <div style="background: var(--sand-100); border-radius: 12px; padding: 20px;">
+            <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">System Recommendations</h3>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                ${recommendations.map(rec => `
+                    <div style="background: white; border-left: 4px solid ${colorMap[rec.type]}; border-radius: 8px; padding: 16px;">
+                        <div style="display: flex; align-items: start; gap: 12px;">
+                            <span style="font-size: 24px; flex-shrink: 0;">${rec.icon}</span>
+                            <div style="flex: 1;">
+                                <div style="font-size: 14px; font-weight: 600; color: var(--sand-900); margin-bottom: 4px;">${rec.title}</div>
+                                <div style="font-size: 12px; color: var(--sand-600); line-height: 1.5;">${rec.message}</div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
 // Override openModal to populate forms when opening modals
 const originalOpenModal = window.openModal || openModal;
 window.openModal = function(modalId) {
