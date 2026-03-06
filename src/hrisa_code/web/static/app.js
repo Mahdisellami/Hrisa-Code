@@ -2035,6 +2035,288 @@ function switchToAgentsView() {
     renderAgentList();
 }
 
+// Advanced Visualization Functions
+async function showAgentNetworkGraph() {
+    const listContainer = document.getElementById('agent-list');
+
+    const agents = Array.from(state.agents.values());
+    const teams = state.teams;
+
+    if (agents.length === 0) {
+        listContainer.innerHTML = '<div class="empty-state"><p>No agents to visualize</p></div>';
+        return;
+    }
+
+    // Create graph visualization
+    const graphHTML = `
+        <div style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">Agent Network Graph</h2>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-secondary btn-small" onclick="switchToAgentsView()">Back to List</button>
+                </div>
+            </div>
+
+            <div style="background: var(--sand-100); border: 1px solid var(--sand-300); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                <div style="display: flex; gap: 24px; font-size: 13px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background: var(--brand-500);"></div>
+                        <span>Running</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background: #10b981;"></div>
+                        <span>Completed</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background: #f59e0b;"></div>
+                        <span>Stuck</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background: #ef4444;"></div>
+                        <span>Failed</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <div style="width: 12px; height: 12px; border-radius: 50%; background: #6b7280;"></div>
+                        <span>Pending</span>
+                    </div>
+                    <div style="margin-left: 20px;">→ Parent-Child</div>
+                    <div>⟷ Team Members</div>
+                    <div>💬 Messages</div>
+                </div>
+            </div>
+
+            <div id="network-graph-container" style="background: white; border: 2px solid var(--sand-300); border-radius: 8px; min-height: 600px; position: relative; overflow: hidden;">
+                <svg id="network-graph-svg" width="100%" height="600" style="display: block;"></svg>
+            </div>
+
+            <div id="network-stats" style="margin-top: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            </div>
+        </div>
+    `;
+
+    listContainer.innerHTML = graphHTML;
+
+    // Render the network graph
+    renderNetworkGraph(agents, teams);
+}
+
+function renderNetworkGraph(agents, teams) {
+    const svg = document.getElementById('network-graph-svg');
+    if (!svg) return;
+
+    const width = svg.clientWidth || 800;
+    const height = 600;
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+
+    // Clear existing content
+    svg.innerHTML = '';
+
+    // Build graph data structure
+    const nodes = [];
+    const edges = [];
+
+    // Create nodes for each agent
+    agents.forEach(agent => {
+        nodes.push({
+            id: agent.id,
+            label: agent.id.substring(0, 8),
+            status: agent.status,
+            role: agent.role,
+            team_id: agent.team_id,
+            x: Math.random() * (width - 100) + 50,
+            y: Math.random() * (height - 100) + 50,
+        });
+    });
+
+    // Create edges for parent-child relationships
+    agents.forEach(agent => {
+        if (agent.parent_agent_id) {
+            edges.push({
+                source: agent.parent_agent_id,
+                target: agent.id,
+                type: 'parent-child',
+            });
+        }
+    });
+
+    // Create edges for team relationships
+    teams.forEach(team => {
+        if (team.status === 'active') {
+            const teamMembers = [team.lead_agent_id, ...team.member_agent_ids].filter(id => id);
+            for (let i = 0; i < teamMembers.length; i++) {
+                for (let j = i + 1; j < teamMembers.length; j++) {
+                    edges.push({
+                        source: teamMembers[i],
+                        target: teamMembers[j],
+                        type: 'team',
+                    });
+                }
+            }
+        }
+    });
+
+    // Simple force-directed layout (basic clustering)
+    const iterations = 100;
+    for (let iter = 0; iter < iterations; iter++) {
+        // Apply forces
+        nodes.forEach(node => {
+            let fx = 0, fy = 0;
+
+            // Repulsion from other nodes
+            nodes.forEach(other => {
+                if (node.id !== other.id) {
+                    const dx = node.x - other.x;
+                    const dy = node.y - other.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    const force = 500 / (dist * dist);
+                    fx += (dx / dist) * force;
+                    fy += (dy / dist) * force;
+                }
+            });
+
+            // Attraction to connected nodes
+            edges.forEach(edge => {
+                if (edge.source === node.id || edge.target === node.id) {
+                    const other = nodes.find(n => n.id === (edge.source === node.id ? edge.target : edge.source));
+                    if (other) {
+                        const dx = other.x - node.x;
+                        const dy = other.y - node.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                        const force = dist * 0.01;
+                        fx += (dx / dist) * force;
+                        fy += (dy / dist) * force;
+                    }
+                }
+            });
+
+            // Apply force
+            node.x += fx * 0.1;
+            node.y += fy * 0.1;
+
+            // Keep within bounds
+            node.x = Math.max(40, Math.min(width - 40, node.x));
+            node.y = Math.max(40, Math.min(height - 40, node.y));
+        });
+    }
+
+    // Render edges
+    edges.forEach(edge => {
+        const source = nodes.find(n => n.id === edge.source);
+        const target = nodes.find(n => n.id === edge.target);
+        if (!source || !target) return;
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', source.x);
+        line.setAttribute('y1', source.y);
+        line.setAttribute('x2', target.x);
+        line.setAttribute('y2', target.y);
+
+        if (edge.type === 'parent-child') {
+            line.setAttribute('stroke', '#3b82f6');
+            line.setAttribute('stroke-width', '2');
+            line.setAttribute('marker-end', 'url(#arrowhead)');
+        } else if (edge.type === 'team') {
+            line.setAttribute('stroke', '#10b981');
+            line.setAttribute('stroke-width', '1');
+            line.setAttribute('stroke-dasharray', '4,4');
+        }
+
+        svg.appendChild(line);
+    });
+
+    // Define arrowhead marker
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    marker.setAttribute('id', 'arrowhead');
+    marker.setAttribute('markerWidth', '10');
+    marker.setAttribute('markerHeight', '10');
+    marker.setAttribute('refX', '9');
+    marker.setAttribute('refY', '3');
+    marker.setAttribute('orient', 'auto');
+    const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    polygon.setAttribute('points', '0 0, 10 3, 0 6');
+    polygon.setAttribute('fill', '#3b82f6');
+    marker.appendChild(polygon);
+    defs.appendChild(marker);
+    svg.insertBefore(defs, svg.firstChild);
+
+    // Render nodes
+    nodes.forEach(node => {
+        const statusColors = {
+            'running': 'var(--brand-500)',
+            'completed': '#10b981',
+            'stuck': '#f59e0b',
+            'failed': '#ef4444',
+            'pending': '#6b7280',
+        };
+        const color = statusColors[node.status] || '#6b7280';
+
+        // Node circle
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', node.x);
+        circle.setAttribute('cy', node.y);
+        circle.setAttribute('r', '20');
+        circle.setAttribute('fill', color);
+        circle.setAttribute('stroke', 'white');
+        circle.setAttribute('stroke-width', '3');
+        circle.style.cursor = 'pointer';
+        circle.onclick = () => selectAgent(node.id);
+
+        // Add hover effect
+        circle.onmouseover = function() {
+            this.setAttribute('r', '24');
+            this.setAttribute('stroke-width', '4');
+        };
+        circle.onmouseout = function() {
+            this.setAttribute('r', '20');
+            this.setAttribute('stroke-width', '3');
+        };
+
+        svg.appendChild(circle);
+
+        // Node label
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', node.x);
+        text.setAttribute('y', node.y + 35);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '11');
+        text.setAttribute('font-weight', '600');
+        text.setAttribute('fill', 'var(--sand-800)');
+        text.textContent = node.label;
+        text.style.pointerEvents = 'none';
+        svg.appendChild(text);
+    });
+
+    // Render statistics
+    const statsContainer = document.getElementById('network-stats');
+    if (statsContainer) {
+        const totalNodes = nodes.length;
+        const totalEdges = edges.length;
+        const parentChildEdges = edges.filter(e => e.type === 'parent-child').length;
+        const teamEdges = edges.filter(e => e.type === 'team').length;
+
+        statsContainer.innerHTML = `
+            <div style="background: var(--sand-100); padding: 16px; border-radius: 8px;">
+                <div style="font-size: 11px; color: var(--sand-600); margin-bottom: 4px;">Total Agents</div>
+                <div style="font-size: 24px; font-weight: 600; color: var(--sand-900);">${totalNodes}</div>
+            </div>
+            <div style="background: var(--sand-100); padding: 16px; border-radius: 8px;">
+                <div style="font-size: 11px; color: var(--sand-600); margin-bottom: 4px;">Connections</div>
+                <div style="font-size: 24px; font-weight: 600; color: var(--sand-900);">${totalEdges}</div>
+            </div>
+            <div style="background: var(--sand-100); padding: 16px; border-radius: 8px;">
+                <div style="font-size: 11px; color: var(--sand-600); margin-bottom: 4px;">Workflows</div>
+                <div style="font-size: 24px; font-weight: 600; color: #3b82f6;">${parentChildEdges}</div>
+            </div>
+            <div style="background: var(--sand-100); padding: 16px; border-radius: 8px;">
+                <div style="font-size: 11px; color: var(--sand-600); margin-bottom: 4px;">Team Links</div>
+                <div style="font-size: 24px; font-weight: 600; color: #10b981;">${teamEdges}</div>
+            </div>
+        `;
+    }
+}
+
 // Model Fallback Functions
 async function fetchFallbackConfig() {
     try {
