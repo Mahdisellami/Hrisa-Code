@@ -41,6 +41,84 @@ const elements = {
     clearCompletedBtn: document.getElementById('clear-completed-btn'),
 };
 
+// Toast Notification System
+const toastQueue = [];
+let toastIdCounter = 0;
+
+function showToast(message, type = 'info', title = null, duration = 4000) {
+    const toastId = `toast-${toastIdCounter++}`;
+    const container = document.getElementById('toast-container');
+
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+
+    const titles = {
+        success: title || 'Success',
+        error: title || 'Error',
+        warning: title || 'Warning',
+        info: title || 'Info'
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.id = toastId;
+    toast.innerHTML = `
+        <div class="toast-icon">${icons[type] || icons.info}</div>
+        <div class="toast-content">
+            <div class="toast-title">${titles[type]}</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="closeToast('${toastId}')" aria-label="Close">✕</button>
+    `;
+
+    container.appendChild(toast);
+    toastQueue.push(toastId);
+
+    // Auto-remove after duration
+    if (duration > 0) {
+        setTimeout(() => {
+            closeToast(toastId);
+        }, duration);
+    }
+
+    return toastId;
+}
+
+function closeToast(toastId) {
+    const toast = document.getElementById(toastId);
+    if (!toast) return;
+
+    toast.classList.add('removing');
+    setTimeout(() => {
+        toast.remove();
+        const index = toastQueue.indexOf(toastId);
+        if (index > -1) {
+            toastQueue.splice(index, 1);
+        }
+    }, 200);
+}
+
+// Shorthand toast functions
+function toastSuccess(message, title = null) {
+    return showToast(message, 'success', title);
+}
+
+function toastError(message, title = null) {
+    return showToast(message, 'error', title);
+}
+
+function toastWarning(message, title = null) {
+    return showToast(message, 'warning', title);
+}
+
+function toastInfo(message, title = null) {
+    return showToast(message, 'info', title);
+}
+
 // WebSocket Connection
 function connectWebSocket() {
     try {
@@ -3019,10 +3097,10 @@ async function saveFallbackConfig() {
 
     const result = await updateFallbackConfig(config);
     if (result) {
-        alert('Fallback configuration saved successfully!');
+        toastSuccess('Fallback configuration saved successfully!');
         await showFallbackSettings(); // Refresh the view
     } else {
-        alert('Failed to save fallback configuration');
+        toastError('Failed to save fallback configuration');
     }
 }
 
@@ -3326,7 +3404,7 @@ async function confirmResetAllMetrics() {
 
 async function showModelDetails(modelName) {
     // Switch to detail panel and show model-specific metrics
-    alert(`Model details for ${modelName} - Full detail view coming soon!`);
+    toastInfo(`Model details for ${modelName} - Full detail view coming soon!`, 'Model Details');
 }
 
 // Priority and Scheduling Functions
@@ -3486,7 +3564,7 @@ async function updateAgentPriority(agentId, priority) {
             selectAgent(agentId); // Refresh detail view
         }
     } catch (error) {
-        alert(`Failed to update priority: ${error.message}`);
+        toastError(`Failed to update priority: ${error.message}`);
     }
 }
 
@@ -4197,10 +4275,10 @@ async function exportSession() {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
 
-        alert('Session exported successfully!');
+        toastSuccess('Session exported successfully!', 'Export Complete');
     } catch (error) {
         console.error('Export error:', error);
-        alert(`Export failed: ${error.message}`);
+        toastError(`Export failed: ${error.message}`, 'Export Failed');
     }
 }
 
@@ -4220,10 +4298,10 @@ async function exportAnalytics() {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
 
-        alert('Analytics exported successfully!');
+        toastSuccess('Analytics exported successfully!', 'Export Complete');
     } catch (error) {
         console.error('Export error:', error);
-        alert(`Export failed: ${error.message}`);
+        toastError(`Export failed: ${error.message}`, 'Export Failed');
     }
 }
 
@@ -4244,10 +4322,10 @@ async function exportAgentData(agentId, format = 'json') {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
 
-        alert(`Agent data exported as ${format.toUpperCase()}!`);
+        toastSuccess(`Agent data exported as ${format.toUpperCase()}!`, 'Export Complete');
     } catch (error) {
         console.error('Export error:', error);
-        alert(`Export failed: ${error.message}`);
+        toastError(`Export failed: ${error.message}`, 'Export Failed');
     }
 }
 
@@ -4267,10 +4345,10 @@ async function exportAgentLogs(agentId) {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
 
-        alert('Agent logs exported successfully!');
+        toastSuccess('Agent logs exported successfully!', 'Export Complete');
     } catch (error) {
         console.error('Export error:', error);
-        alert(`Export failed: ${error.message}`);
+        toastError(`Export failed: ${error.message}`, 'Export Failed');
     }
 }
 
@@ -4311,8 +4389,9 @@ document.getElementById('create-team-form')?.addEventListener('submit', async (e
         await createTeam(name, description, sharedGoal, leadAgentId, memberAgentIds);
         closeModal('create-team-modal');
         document.getElementById('create-team-form').reset();
+        toastSuccess('Team created successfully!', 'Team Created');
     } catch (error) {
-        alert(`Failed to create team: ${error.message}`);
+        toastError(`Failed to create team: ${error.message}`, 'Team Creation Failed');
     }
 });
 
