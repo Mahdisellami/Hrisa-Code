@@ -1,6 +1,7 @@
 """Ollama client for interacting with local LLMs."""
 
 from typing import AsyncIterator, Dict, List, Optional, Any
+import asyncio
 import ollama
 from ollama import AsyncClient
 from pydantic import BaseModel
@@ -22,6 +23,12 @@ class OllamaConfig(BaseModel):
     temperature: float = 0.7
     top_p: float = 0.9
     top_k: int = 40
+    # Performance optimization parameters
+    num_ctx: int = 4096  # Context window (reduced from default 8192)
+    num_predict: int = 2048  # Max tokens to generate (prevents runaway)
+    num_thread: int = 4  # Limit CPU threads (reduce from auto-detect)
+    repeat_penalty: float = 1.1  # Avoid repetition
+    timeout: int = 180  # Request timeout in seconds (3 minutes)
 
 
 class OllamaClient:
@@ -78,29 +85,44 @@ class OllamaClient:
         for msg in self.conversation_history:
             messages.append({"role": msg.role, "content": msg.content})
 
-        # Make the request
+        # Make the request with performance optimizations
         options = {
             "temperature": self.config.temperature,
             "top_p": self.config.top_p,
             "top_k": self.config.top_k,
+            "num_ctx": self.config.num_ctx,
+            "num_predict": self.config.num_predict,
+            "num_thread": self.config.num_thread,
+            "repeat_penalty": self.config.repeat_penalty,
         }
 
         # Try with tools first, fall back without tools if not supported
         try:
-            response = await self.client.chat(
-                model=self.config.model,
-                messages=messages,
-                tools=tools if tools else None,
-                options=options,
+            response = await asyncio.wait_for(
+                self.client.chat(
+                    model=self.config.model,
+                    messages=messages,
+                    tools=tools if tools else None,
+                    options=options,
+                ),
+                timeout=self.config.timeout
             )
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Ollama request timed out after {self.config.timeout} seconds")
         except Exception as e:
             # If tools not supported, try without tools
             if "does not support tools" in str(e).lower() or "400" in str(e):
-                response = await self.client.chat(
-                    model=self.config.model,
-                    messages=messages,
-                    options=options,
-                )
+                try:
+                    response = await asyncio.wait_for(
+                        self.client.chat(
+                            model=self.config.model,
+                            messages=messages,
+                            options=options,
+                        ),
+                        timeout=self.config.timeout
+                    )
+                except asyncio.TimeoutError:
+                    raise TimeoutError(f"Ollama request timed out after {self.config.timeout} seconds")
             else:
                 raise
 
@@ -207,29 +229,44 @@ class OllamaClient:
         for msg in self.conversation_history:
             messages.append({"role": msg.role, "content": msg.content})
 
-        # Make the request
+        # Make the request with performance optimizations
         options = {
             "temperature": self.config.temperature,
             "top_p": self.config.top_p,
             "top_k": self.config.top_k,
+            "num_ctx": self.config.num_ctx,
+            "num_predict": self.config.num_predict,
+            "num_thread": self.config.num_thread,
+            "repeat_penalty": self.config.repeat_penalty,
         }
 
         # Try with tools first, fall back without tools if not supported
         try:
-            response = await self.client.chat(
-                model=self.config.model,
-                messages=messages,
-                tools=tools if tools else None,
-                options=options,
+            response = await asyncio.wait_for(
+                self.client.chat(
+                    model=self.config.model,
+                    messages=messages,
+                    tools=tools if tools else None,
+                    options=options,
+                ),
+                timeout=self.config.timeout
             )
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Ollama request timed out after {self.config.timeout} seconds")
         except Exception as e:
             # If tools not supported, try without tools
             if "does not support tools" in str(e).lower() or "400" in str(e):
-                response = await self.client.chat(
-                    model=self.config.model,
-                    messages=messages,
-                    options=options,
-                )
+                try:
+                    response = await asyncio.wait_for(
+                        self.client.chat(
+                            model=self.config.model,
+                            messages=messages,
+                            options=options,
+                        ),
+                        timeout=self.config.timeout
+                    )
+                except asyncio.TimeoutError:
+                    raise TimeoutError(f"Ollama request timed out after {self.config.timeout} seconds")
             else:
                 raise
 
@@ -264,11 +301,15 @@ class OllamaClient:
         for result in tool_results:
             messages.append(result)
 
-        # Make the request
+        # Make the request with performance optimizations
         options = {
             "temperature": self.config.temperature,
             "top_p": self.config.top_p,
             "top_k": self.config.top_k,
+            "num_ctx": self.config.num_ctx,
+            "num_predict": self.config.num_predict,
+            "num_thread": self.config.num_thread,
+            "repeat_penalty": self.config.repeat_penalty,
         }
 
         response = await self.client.chat(
