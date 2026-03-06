@@ -1658,7 +1658,7 @@ async def get_model_metrics(model_name: str):
 
 @app.get("/api/models/leaderboard")
 async def get_model_leaderboard(
-    sort_by: str = Query("success_rate", regex="^(success_rate|avg_response_time|total_requests|avg_tokens)$"),
+    sort_by: str = Query("success_rate", pattern="^(success_rate|avg_response_time|total_requests|avg_tokens)$"),
     limit: int = Query(10, ge=1, le=50),
 ):
     """Get model leaderboard sorted by a metric."""
@@ -2044,7 +2044,7 @@ async def export_session(
 @app.get("/api/export/agent/{agent_id}")
 async def export_agent(
     agent_id: str,
-    format: str = Query("json", regex="^(json|markdown)$", description="Export format"),
+    format: str = Query("json", pattern="^(json|markdown)$", description="Export format"),
 ):
     """Export single agent data in JSON or Markdown format."""
     if not agent_manager:
@@ -2296,7 +2296,7 @@ class WebhookCreateRequest(BaseModel):
     """Request to create a webhook."""
 
     name: str = Field(..., min_length=1, max_length=100, description="Webhook name")
-    url: str = Field(..., regex=r"^https?://", description="Webhook URL (must be http or https)")
+    url: str = Field(..., pattern=r"^https?://", description="Webhook URL (must be http or https)")
     events: List[str] = Field(..., min_items=1, description="At least one event required")
     secret: Optional[str] = Field(None, min_length=8, max_length=256, description="Optional secret for HMAC signing")
     headers: Optional[Dict[str, str]] = Field(None, description="Optional custom headers")
@@ -2331,7 +2331,7 @@ class NotificationChannelCreateRequest(BaseModel):
     """Request to create notification channel."""
 
     name: str = Field(..., min_length=1, max_length=100, description="Channel name")
-    type: str = Field(..., regex=r"^(slack|discord|email)$", description="Channel type: slack, discord, or email")
+    type: str = Field(..., pattern=r"^(slack|discord|email)$", description="Channel type: slack, discord, or email")
     config: Dict[str, Any] = Field(..., description="Channel-specific configuration")
     events: List[str] = Field(..., min_items=1, description="At least one event required")
 
