@@ -561,6 +561,7 @@ function renderAgentList() {
                 <div style="display: flex; gap: 6px; align-items: center;">
                     <div class="agent-status ${agent.status}">${agent.status}</div>
                     ${agent.current_state ? `<div style="background: var(--brand-500); color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em; font-weight: 600;">${agent.current_state.substring(0, 3).toUpperCase()}</div>` : ''}
+                    <div class="badge ${getPriorityBadgeClass(agent.priority)}" style="font-size: 0.7em;">P${agent.priority}</div>
                 </div>
             </div>
             <div class="agent-role" style="background: ${roleInfo.color}20; color: ${roleInfo.color}; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; margin: 8px 0; display: inline-block;">
@@ -653,6 +654,19 @@ async function renderAgentDetail(agentId) {
                     <span class="detail-info-label">Working Dir:</span>
                     <span class="detail-info-value">${agent.working_dir}</span>
                 </div>
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <h3>Priority & Scheduling</h3>
+            <div class="detail-info">
+                ${renderPriorityControls(agent.id, agent.priority)}
+                ${agent.scheduled_start_time ? `
+                    <div class="detail-info-item" style="margin-top: 12px;">
+                        <span class="detail-info-label">⏰ Scheduled Start:</span>
+                        <span class="detail-info-value">${formatDate(agent.scheduled_start_time)}</span>
+                    </div>
+                ` : ''}
             </div>
         </div>
 
@@ -2014,6 +2028,167 @@ function switchToAgentsView() {
     document.getElementById('create-team-btn').style.display = 'none';
     document.getElementById('create-agent-btn').style.display = 'block';
     renderAgentList();
+}
+
+// Priority and Scheduling Functions
+async function setAgentPriority(agentId, priority) {
+    try {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/priority`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ priority }),
+        });
+
+        if (response.ok) {
+            await fetchAgents();
+            return true;
+        } else {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to set priority');
+        }
+    } catch (error) {
+        console.error('Failed to set agent priority:', error);
+        throw error;
+    }
+}
+
+async function scheduleAgent(agentId, startTime) {
+    try {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/schedule`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ start_time: startTime }),
+        });
+
+        if (response.ok) {
+            await fetchAgents();
+            return true;
+        } else {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to schedule agent');
+        }
+    } catch (error) {
+        console.error('Failed to schedule agent:', error);
+        throw error;
+    }
+}
+
+async function fetchPriorityQueue() {
+    try {
+        const response = await fetch(`${API_BASE}/agents/priority-queue`);
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to fetch priority queue:', error);
+    }
+    return [];
+}
+
+async function bulkSetPriority(agentIds, priority) {
+    try {
+        const response = await fetch(`${API_BASE}/agents/bulk-priority`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agent_ids: agentIds, priority }),
+        });
+
+        if (response.ok) {
+            await fetchAgents();
+            return await response.json();
+        } else {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to bulk set priority');
+        }
+    } catch (error) {
+        console.error('Failed to bulk set priority:', error);
+        throw error;
+    }
+}
+
+function getPriorityBadgeClass(priority) {
+    if (priority <= 2) return 'priority-urgent';
+    if (priority <= 4) return 'priority-high';
+    if (priority <= 6) return 'priority-medium';
+    return 'priority-low';
+}
+
+function getPriorityLabel(priority) {
+    if (priority <= 2) return 'Urgent';
+    if (priority <= 4) return 'High';
+    if (priority <= 6) return 'Medium';
+    return 'Low';
+}
+
+async function showPriorityQueueView() {
+    const queue = await fetchPriorityQueue();
+    const listContainer = document.getElementById('agent-list');
+
+    if (queue.length === 0) {
+        listContainer.innerHTML = '<div class="empty-state"><p>No agents in priority queue</p></div>';
+        return;
+    }
+
+    const queueHTML = queue.map((agent, index) => `
+        <div class="agent-card priority-queue-card" onclick="selectAgent('${agent.id}')">
+            <div class="queue-position">#${index + 1}</div>
+            <div class="agent-card-header">
+                <h3>${escapeHtml(agent.task)}</h3>
+                <div class="priority-badges">
+                    <span class="badge badge-${agent.status}">${agent.status}</span>
+                    <span class="badge ${getPriorityBadgeClass(agent.priority)}">
+                        P${agent.priority}: ${getPriorityLabel(agent.priority)}
+                    </span>
+                </div>
+            </div>
+            <div class="agent-card-body">
+                <p class="agent-meta">Role: ${agent.role || 'general'}</p>
+                ${agent.scheduled_start_time ? `<p class="agent-meta">⏰ Scheduled: ${formatDate(agent.scheduled_start_time)}</p>` : ''}
+                <p class="agent-meta">Created: ${formatDate(agent.created_at)}</p>
+            </div>
+        </div>
+    `).join('');
+
+    listContainer.innerHTML = queueHTML;
+}
+
+function renderPriorityControls(agentId, currentPriority) {
+    const priorities = [
+        { value: 1, label: 'P1: Critical' },
+        { value: 2, label: 'P2: Urgent' },
+        { value: 3, label: 'P3: High' },
+        { value: 4, label: 'P4: High' },
+        { value: 5, label: 'P5: Medium (Default)' },
+        { value: 6, label: 'P6: Medium' },
+        { value: 7, label: 'P7: Low' },
+        { value: 8, label: 'P8: Low' },
+        { value: 9, label: 'P9: Very Low' },
+        { value: 10, label: 'P10: Lowest' },
+    ];
+
+    return `
+        <div class="priority-controls">
+            <label for="priority-select-${agentId}"><strong>Priority:</strong></label>
+            <select id="priority-select-${agentId}" class="priority-select" onchange="updateAgentPriority('${agentId}', this.value)">
+                ${priorities.map(p => `
+                    <option value="${p.value}" ${p.value === currentPriority ? 'selected' : ''}>
+                        ${p.label}
+                    </option>
+                `).join('')}
+            </select>
+        </div>
+    `;
+}
+
+async function updateAgentPriority(agentId, priority) {
+    try {
+        await setAgentPriority(agentId, parseInt(priority));
+        if (state.selectedAgentId === agentId) {
+            selectAgent(agentId); // Refresh detail view
+        }
+    } catch (error) {
+        alert(`Failed to update priority: ${error.message}`);
+    }
 }
 
 // Populate team creation form with available agents

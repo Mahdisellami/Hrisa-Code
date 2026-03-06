@@ -35,12 +35,17 @@
         <div class="main-content">
             <!-- Sidebar -->
             <aside class="sidebar">
-                <div class="view-toggle" style="display: flex; gap: 8px; margin-bottom: 16px;">
+                <div class="view-toggle" style="display: flex; gap: 8px; margin-bottom: 8px;">
                     <button class="btn btn-secondary btn-small active" id="view-agents-btn" onclick="switchToAgentsView()" style="flex: 1;">
                         Agents
                     </button>
                     <button class="btn btn-secondary btn-small" id="view-teams-btn" onclick="switchToTeamsView()" style="flex: 1;">
                         Teams
+                    </button>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <button class="btn btn-secondary btn-small btn-block" id="view-priority-queue-btn" onclick="showPriorityQueueView()" style="font-size: 0.85em;">
+                        🎯 Priority Queue
                     </button>
                 </div>
 
