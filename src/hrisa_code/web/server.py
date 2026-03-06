@@ -25,6 +25,7 @@ from hrisa_code.web.agent_manager import (
     AgentStateTransition,
     AgentMemory,
     InterAgentMessage,
+    AgentTeam,
 )
 from hrisa_code.web.roles import list_roles, AgentRole
 
@@ -154,6 +155,35 @@ class UpdateSharedArtifactRequest(BaseModel):
     """Request to update a shared artifact."""
 
     content: str = Field(..., description="New artifact content")
+
+
+class CreateTeamRequest(BaseModel):
+    """Request to create a new team."""
+
+    name: str = Field(..., description="Team name")
+    description: str = Field(..., description="Team description")
+    shared_goal: str = Field(..., description="Team's shared objective")
+    lead_agent_id: Optional[str] = Field(None, description="Team lead agent ID")
+    member_agent_ids: Optional[List[str]] = Field(default_factory=list, description="Initial member agent IDs")
+
+
+class AddTeamMemberRequest(BaseModel):
+    """Request to add a member to a team."""
+
+    agent_id: str = Field(..., description="Agent ID to add to team")
+
+
+class TeamResponse(BaseModel):
+    """Response containing team information."""
+
+    id: str
+    name: str
+    description: str
+    created_at: str
+    lead_agent_id: Optional[str]
+    member_agent_ids: List[str]
+    shared_goal: str
+    status: str
 
 
 class AgentMessageResponse(BaseModel):
@@ -1253,6 +1283,141 @@ async def update_shared_artifact(agent_id: str, artifact_id: str, request: Updat
         return {"status": "updated", "artifact_id": artifact_id}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# Team Management Endpoints
+@app.post("/api/teams")
+async def create_team(request: CreateTeamRequest):
+    """Create a new team of agents."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    team_id = agent_manager.create_team(
+        name=request.name,
+        description=request.description,
+        shared_goal=request.shared_goal,
+        lead_agent_id=request.lead_agent_id,
+        member_agent_ids=request.member_agent_ids,
+    )
+
+    team = agent_manager.get_team(team_id)
+    if not team:
+        raise HTTPException(status_code=500, detail="Failed to create team")
+
+    return TeamResponse(
+        id=team.id,
+        name=team.name,
+        description=team.description,
+        created_at=team.created_at.isoformat(),
+        lead_agent_id=team.lead_agent_id,
+        member_agent_ids=team.member_agent_ids,
+        shared_goal=team.shared_goal,
+        status=team.status,
+    )
+
+
+@app.get("/api/teams")
+async def list_teams(status: Optional[str] = None):
+    """List all teams, optionally filtered by status."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    teams = agent_manager.list_teams(status=status)
+
+    return [
+        TeamResponse(
+            id=team.id,
+            name=team.name,
+            description=team.description,
+            created_at=team.created_at.isoformat(),
+            lead_agent_id=team.lead_agent_id,
+            member_agent_ids=team.member_agent_ids,
+            shared_goal=team.shared_goal,
+            status=team.status,
+        )
+        for team in teams
+    ]
+
+
+@app.get("/api/teams/{team_id}")
+async def get_team(team_id: str):
+    """Get team details."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    team = agent_manager.get_team(team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    return TeamResponse(
+        id=team.id,
+        name=team.name,
+        description=team.description,
+        created_at=team.created_at.isoformat(),
+        lead_agent_id=team.lead_agent_id,
+        member_agent_ids=team.member_agent_ids,
+        shared_goal=team.shared_goal,
+        status=team.status,
+    )
+
+
+@app.get("/api/teams/{team_id}/members")
+async def get_team_members(team_id: str):
+    """Get all agents in a team."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    team = agent_manager.get_team(team_id)
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    agents = agent_manager.get_team_members(team_id)
+
+    return {
+        "team_id": team_id,
+        "lead": _agent_info_to_response(agents[0]) if agents and team.lead_agent_id else None,
+        "members": [_agent_info_to_response(agent) for agent in agents[1:]] if len(agents) > 1 else [],
+        "total_members": len(agents),
+    }
+
+
+@app.post("/api/teams/{team_id}/members")
+async def add_team_member(team_id: str, request: AddTeamMemberRequest):
+    """Add a member to a team."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        agent_manager.add_agent_to_team(team_id, request.agent_id)
+        return {"status": "added", "team_id": team_id, "agent_id": request.agent_id}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.delete("/api/teams/{team_id}/members/{agent_id}")
+async def remove_team_member(team_id: str, agent_id: str):
+    """Remove a member from a team."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        agent_manager.remove_agent_from_team(team_id, agent_id)
+        return {"status": "removed", "team_id": team_id, "agent_id": agent_id}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/api/teams/{team_id}/disband")
+async def disband_team(team_id: str):
+    """Disband a team."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        agent_manager.disband_team(team_id)
+        return {"status": "disbanded", "team_id": team_id}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 # WebSocket endpoint
