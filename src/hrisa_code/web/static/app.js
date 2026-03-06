@@ -85,10 +85,10 @@ function showToast(message, type = 'info', title = null, duration = 4000) {
     const container = document.getElementById('toast-container');
 
     const icons = {
-        success: '✅',
-        error: '❌',
-        warning: '⚠️',
-        info: 'ℹ️'
+        success: '<span class="material-icons">check_circle</span>',
+        error: '<span class="material-icons">error</span>',
+        warning: '<span class="material-icons">warning</span>',
+        info: '<span class="material-icons">info</span>'
     };
 
     const titles = {
@@ -523,10 +523,10 @@ async function renderInterAgentMessages(agentId) {
     };
 
     const messageTypeIcons = {
-        'request': '📨',
-        'response': '📬',
-        'notification': '🔔',
-        'question': '❓',
+        'request': '<span class="material-icons">send</span>',
+        'response': '<span class="material-icons">inbox</span>',
+        'notification': '<span class="material-icons">notifications</span>',
+        'question': '<span class="material-icons">help</span>',
     };
 
     const messageTypeColors = {
@@ -540,7 +540,7 @@ async function renderInterAgentMessages(agentId) {
         <div style="background: var(--sand-50); border-radius: 8px; padding: 16px; max-height: 400px; overflow-y: auto;">
             ${messages.map(msg => {
                 const isIncoming = msg.to_agent_id === agentId;
-                const icon = messageTypeIcons[msg.message_type] || '💬';
+                const icon = messageTypeIcons[msg.message_type] || '<span class="material-icons">chat</span>';
                 const color = messageTypeColors[msg.message_type] || 'var(--sand-500)';
 
                 return `
@@ -571,7 +571,7 @@ async function renderInterAgentMessages(agentId) {
 // Rendering Functions
 function getRoleInfo(roleId) {
     const role = state.roles.find(r => r.id === roleId);
-    return role || { id: 'general', name: 'General', icon: '⚙️', color: '#6b7280' };
+    return role || { id: 'general', name: 'General', icon: '<span class="material-icons">settings</span>', color: '#6b7280' };
 }
 
 function renderPagination() {
@@ -709,9 +709,9 @@ function renderAgentList() {
             </div>
             <div class="agent-task">${escapeHtml(agent.task.substring(0, 150))}${agent.task.length > 150 ? '...' : ''}</div>
             <div class="agent-meta">
-                <span>🤖 ${agent.model}</span>
-                <span>📁 ${agent.working_dir.split('/').pop()}</span>
-                <span>💬 ${agent.message_count}</span>
+                <span><span class="material-icons" style="font-size: 14px; vertical-align: middle;">smart_toy</span> ${agent.model}</span>
+                <span><span class="material-icons" style="font-size: 14px; vertical-align: middle;">folder</span> ${agent.working_dir.split('/').pop()}</span>
+                <span><span class="material-icons" style="font-size: 14px; vertical-align: middle;">chat</span> ${agent.message_count}</span>
             </div>
             ${agent.progress.total_steps > 0 ? `
                 <div class="agent-progress">
@@ -720,9 +720,9 @@ function renderAgentList() {
                              style="width: ${(agent.progress.completed_steps / agent.progress.total_steps * 100)}%"></div>
                     </div>
                     <div class="progress-stats">
-                        <span>📊 ${agent.progress.completed_steps}/${agent.progress.total_steps} steps</span>
-                        <span>🔧 ${agent.progress.tool_calls} tools</span>
-                        ${agent.progress.loop_detections > 0 ? `<span>🔄 ${agent.progress.loop_detections} loops</span>` : ''}
+                        <span><span class="material-icons" style="font-size: 14px; vertical-align: middle;">bar_chart</span> ${agent.progress.completed_steps}/${agent.progress.total_steps} steps</span>
+                        <span><span class="material-icons" style="font-size: 14px; vertical-align: middle;">build</span> ${agent.progress.tool_calls} tools</span>
+                        ${agent.progress.loop_detections > 0 ? `<span><span class="material-icons" style="font-size: 14px; vertical-align: middle;">sync</span> ${agent.progress.loop_detections} loops</span>` : ''}
                     </div>
                 </div>
             ` : ''}
@@ -899,22 +899,22 @@ async function renderAgentDetail(agentId) {
                 <h3>Artifacts (${artifacts.length})</h3>
                 ${artifacts.length > 0 ? `
                     <button class="btn btn-secondary btn-small" onclick="downloadAllArtifacts('${agent.id}')" style="font-size: 0.85em; padding: 6px 12px;">
-                        📦 Download All
+                        <span class="material-icons" style="font-size: 16px; vertical-align: middle;">inventory_2</span> Download All
                     </button>
                 ` : ''}
             </div>
             <div class="artifacts-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
                 ${artifacts.length > 0 ? artifacts.map(artifact => {
                     const typeIcons = {
-                        'code': '💻',
-                        'document': '📄',
-                        'data': '📊',
-                        'diagram': '📐',
-                        'file': '📁',
-                        'json': '📋',
-                        'markdown': '📝'
+                        'code': '<span class="material-icons">code</span>',
+                        'document': '<span class="material-icons">description</span>',
+                        'data': '<span class="material-icons">bar_chart</span>',
+                        'diagram': '<span class="material-icons">schema</span>',
+                        'file': '<span class="material-icons">folder</span>',
+                        'json': '<span class="material-icons">data_object</span>',
+                        'markdown': '<span class="material-icons">article</span>'
                     };
-                    const icon = typeIcons[artifact.type] || '📦';
+                    const icon = typeIcons[artifact.type] || '<span class="material-icons">inventory_2</span>';
                     const typeColors = {
                         'code': 'var(--brand-500)',
                         'document': 'var(--terracotta-500)',
@@ -940,7 +940,7 @@ async function renderAgentDetail(agentId) {
                                 style="background: var(--brand-500); color: white; border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 0.85em;"
                                 title="Download artifact"
                             >
-                                ⬇️
+                                <span class="material-icons" style="font-size: 16px;">download</span>
                             </button>
                         </div>
                         ${artifact.description ? `<div style="font-size: 0.9em; color: var(--sand-700); margin-bottom: 8px;">${escapeHtml(artifact.description)}</div>` : ''}
@@ -1093,22 +1093,22 @@ async function renderAgentDetail(agentId) {
         <div class="detail-actions">
             ${agent.status === 'running' || agent.status === 'stuck' ? `
                 <button class="btn btn-primary" onclick="openInstructionModal('${agent.id}')">
-                    💬 Send Instruction
+                    <span class="material-icons" style="font-size: 16px; vertical-align: middle;">chat</span> Send Instruction
                 </button>
                 <button class="btn btn-danger" onclick="confirmCancelAgent('${agent.id}')">
-                    ⏹️ Cancel
+                    <span class="material-icons" style="font-size: 16px; vertical-align: middle;">stop</span> Cancel
                 </button>
             ` : ''}
             ${agent.status === 'completed' || agent.status === 'failed' ? `
                 <button class="btn btn-primary" onclick="openChainModal('${agent.id}')">
-                    🔗 Create Follow-up Agent
+                    <span class="material-icons" style="font-size: 16px; vertical-align: middle;">link</span> Create Follow-up Agent
                 </button>
                 <button class="btn btn-secondary" onclick="replayAgent('${agent.id}')">
-                    🔄 Replay
+                    <span class="material-icons" style="font-size: 16px; vertical-align: middle;">replay</span> Replay
                 </button>
             ` : ''}
             <button class="btn btn-secondary" onclick="confirmDeleteAgent('${agent.id}')">
-                🗑️ Delete
+                <span class="material-icons" style="font-size: 16px; vertical-align: middle;">delete</span> Delete
             </button>
         </div>
 
@@ -1116,13 +1116,13 @@ async function renderAgentDetail(agentId) {
             <h3>Export Options</h3>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                 <button class="btn btn-secondary btn-small" onclick="exportAgentData('${agent.id}', 'json')">
-                    📄 Export JSON
+                    <span class="material-icons" style="font-size: 16px; vertical-align: middle;">description</span> Export JSON
                 </button>
                 <button class="btn btn-secondary btn-small" onclick="exportAgentData('${agent.id}', 'markdown')">
-                    📝 Export Markdown
+                    <span class="material-icons" style="font-size: 16px; vertical-align: middle;">article</span> Export Markdown
                 </button>
                 <button class="btn btn-secondary btn-small" onclick="exportAgentLogs('${agent.id}')">
-                    📋 Export Logs
+                    <span class="material-icons" style="font-size: 16px; vertical-align: middle;">list_alt</span> Export Logs
                 </button>
             </div>
         </div>
@@ -1280,7 +1280,7 @@ function renderMemoryTimeline(agentMemory, agentState) {
         allItems.push({
             timestamp: new Date(decision.timestamp),
             type: 'decision',
-            icon: '🎯',
+            icon: '<span class="material-icons">gps_fixed</span>',
             color: 'var(--terracotta-500)',
             bgColor: 'var(--terracotta-50)',
             title: decision.type || 'Decision',
@@ -1294,7 +1294,7 @@ function renderMemoryTimeline(agentMemory, agentState) {
         allItems.push({
             timestamp: new Date(output.timestamp),
             type: 'output',
-            icon: '📤',
+            icon: '<span class="material-icons">output</span>',
             color: 'var(--brand-500)',
             bgColor: 'var(--brand-50)',
             title: output.type || 'Output',
@@ -1308,7 +1308,7 @@ function renderMemoryTimeline(agentMemory, agentState) {
         allItems.push({
             timestamp: new Date(transition.timestamp),
             type: 'state',
-            icon: '🔄',
+            icon: '<span class="material-icons">sync</span>',
             color: 'var(--purple-500)',
             bgColor: 'var(--purple-50)',
             title: 'State Change',
@@ -1357,21 +1357,21 @@ function renderMemoryTimeline(agentMemory, agentState) {
                             onclick="filterTimeline('decision')"
                             style="padding: 4px 8px; font-size: 0.8em;"
                         >
-                            🎯 Decisions
+                            <span class="material-icons" style="font-size: 14px; vertical-align: middle;">gps_fixed</span> Decisions
                         </button>
                         <button
                             class="btn btn-small ${timelineState.filter === 'output' ? 'btn-primary' : 'btn-secondary'}"
                             onclick="filterTimeline('output')"
                             style="padding: 4px 8px; font-size: 0.8em;"
                         >
-                            📤 Outputs
+                            <span class="material-icons" style="font-size: 14px; vertical-align: middle;">output</span> Outputs
                         </button>
                         <button
                             class="btn btn-small ${timelineState.filter === 'state' ? 'btn-primary' : 'btn-secondary'}"
                             onclick="filterTimeline('state')"
                             style="padding: 4px 8px; font-size: 0.8em;"
                         >
-                            🔄 States
+                            <span class="material-icons" style="font-size: 14px; vertical-align: middle;">sync</span> States
                         </button>
                     </div>
                 </div>
@@ -1778,14 +1778,14 @@ async function loadSessionsList() {
                             class="btn btn-primary btn-small"
                             style="font-size: 0.85em; padding: 6px 12px;"
                         >
-                            📂 Load
+                            <span class="material-icons" style="font-size: 16px; vertical-align: middle;">folder_open</span> Load
                         </button>
                         <button
                             onclick="deleteSession('${session.id}')"
                             class="btn btn-secondary btn-small"
                             style="font-size: 0.85em; padding: 6px 12px;"
                         >
-                            🗑️
+                            <span class="material-icons" style="font-size: 16px; vertical-align: middle;">delete</span>
                         </button>
                     </div>
                 </div>
@@ -2065,7 +2065,7 @@ function renderTeamList() {
             return `
                 <div class="agent-card" onclick="showTeamDetail('${team.id}')">
                     <div class="agent-card-header">
-                        <h3>👥 ${escapeHtml(team.name)}</h3>
+                        <h3><span class="material-icons" style="font-size: 20px; vertical-align: middle;">groups</span> ${escapeHtml(team.name)}</h3>
                         <span class="badge badge-active">${memberCount} members</span>
                     </div>
                     <div class="agent-card-body">
@@ -2091,7 +2091,7 @@ async function showTeamDetail(teamId) {
 
     let html = `
         <div class="detail-section">
-            <h3>👥 Team: ${escapeHtml(team.name)}</h3>
+            <h3><span class="material-icons" style="font-size: 20px; vertical-align: middle;">groups</span> Team: ${escapeHtml(team.name)}</h3>
             <p><strong>Goal:</strong> ${escapeHtml(team.shared_goal)}</p>
             <p><strong>Description:</strong> ${escapeHtml(team.description)}</p>
             <p><strong>Status:</strong> <span class="badge badge-${team.status}">${team.status}</span></p>
@@ -2106,7 +2106,7 @@ async function showTeamDetail(teamId) {
         html += `
             <div class="team-member">
                 <div class="team-member-header">
-                    <strong>👑 Team Lead</strong>
+                    <strong><span class="material-icons" style="font-size: 18px; vertical-align: middle;">stars</span> Team Lead</strong>
                 </div>
                 <div class="agent-card mini" onclick="showAgentDetailFromTeam('${members.lead.id}')">
                     <div class="agent-card-header">
@@ -2572,12 +2572,12 @@ async function showActivityTimeline() {
                 <div style="padding-left: 60px;">
                     ${recentActivities.map((activity, index) => {
                         const typeConfig = {
-                            'agent_created': { icon: '✨', color: '#3b82f6', label: 'Agent Created' },
-                            'agent_completed': { icon: '✅', color: '#10b981', label: 'Completed' },
-                            'agent_failed': { icon: '❌', color: '#ef4444', label: 'Failed' },
-                            'activity': { icon: '⚡', color: 'var(--brand-500)', label: 'Activity' },
-                            'error': { icon: '🚨', color: '#ef4444', label: 'Error' },
-                            'stuck': { icon: '⏸️', color: '#f59e0b', label: 'Stuck' },
+                            'agent_created': { icon: '<span class="material-icons" style="font-size: 14px;">stars</span>', color: '#3b82f6', label: 'Agent Created' },
+                            'agent_completed': { icon: '<span class="material-icons" style="font-size: 14px;">check_circle</span>', color: '#10b981', label: 'Completed' },
+                            'agent_failed': { icon: '<span class="material-icons" style="font-size: 14px;">error</span>', color: '#ef4444', label: 'Failed' },
+                            'activity': { icon: '<span class="material-icons" style="font-size: 14px;">bolt</span>', color: 'var(--brand-500)', label: 'Activity' },
+                            'error': { icon: '<span class="material-icons" style="font-size: 14px;">warning</span>', color: '#ef4444', label: 'Error' },
+                            'stuck': { icon: '<span class="material-icons" style="font-size: 14px;">pause_circle</span>', color: '#f59e0b', label: 'Stuck' },
                         };
                         const config = typeConfig[activity.type] || { icon: '●', color: '#6b7280', label: 'Event' };
 
@@ -2697,7 +2697,7 @@ async function showAgentNetworkGraph() {
                     </div>
                     <div style="margin-left: 20px;">→ Parent-Child</div>
                     <div>⟷ Team Members</div>
-                    <div>💬 Messages</div>
+                    <div><span class="material-icons" style="font-size: 14px; vertical-align: middle;">chat</span> Messages</div>
                 </div>
             </div>
 
@@ -3212,7 +3212,7 @@ function renderModelSelector(containerId, selectedModel = null) {
             const selected = model.name === selectedModel ? 'selected' : '';
             const qualityBadge = model.quality_tier === 'excellent' ? '⭐' :
                                 model.quality_tier === 'good' ? '✓' : '';
-            const speedBadge = model.speed_tier === 'fast' ? '⚡' :
+            const speedBadge = model.speed_tier === 'fast' ? '<span class="material-icons" style="font-size: 14px;">bolt</span>' :
                               model.speed_tier === 'medium' ? '◆' : '◇';
             html += `<option value="${model.name}" ${selected} data-info='${JSON.stringify(model)}'>${qualityBadge} ${speedBadge} ${model.name}${model.parameter_count ? ` (${model.parameter_count})` : ''}</option>`;
         });
@@ -3297,7 +3297,7 @@ async function autoRecommendModel() {
         // Show recommendation banner
         const banner = document.getElementById('model-recommendation-banner');
         if (banner) {
-            banner.textContent = `💡 Recommended: ${recommendation.recommended_model} - ${recommendation.reason}`;
+            banner.innerHTML = `<span class="material-icons" style="font-size: 14px; vertical-align: middle;">lightbulb</span> Recommended: ${recommendation.recommended_model} - ${recommendation.reason}`;
             banner.style.display = 'block';
             banner.style.background = 'var(--brand-50)';
             banner.style.color = 'var(--brand-700)';
@@ -3732,7 +3732,7 @@ async function showResourceUsageView() {
         <div style="padding: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                 <h2 style="margin: 0; font-size: 24px; font-weight: 700;">Resource Usage Dashboard</h2>
-                <button class="btn btn-secondary btn-small" onclick="fetchAgents()">🔄 Refresh</button>
+                <button class="btn btn-secondary btn-small" onclick="fetchAgents()"><span class="material-icons" style="font-size: 16px; vertical-align: middle;">refresh</span> Refresh</button>
             </div>
 
             <!-- Summary Cards -->
@@ -3782,11 +3782,11 @@ async function showResourceUsageView() {
                                             ${escapeHtml(m.agent.task.substring(0, 80))}${m.agent.task.length > 80 ? '...' : ''}
                                         </div>
                                         <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--sand-600);">
-                                            <span title="Tool calls">🔧 ${m.toolCalls}</span>
-                                            <span title="Messages">💬 ${m.messages}</span>
-                                            <span title="Artifacts">📄 ${m.artifacts}</span>
-                                            <span title="Runtime">⏱️ ${formatDuration(m.duration)}</span>
-                                            <span title="Tool call rate">📊 ${m.toolCallRate.toFixed(1)} calls/min</span>
+                                            <span title="Tool calls"><span class="material-icons" style="font-size: 12px; vertical-align: middle;">build</span> ${m.toolCalls}</span>
+                                            <span title="Messages"><span class="material-icons" style="font-size: 12px; vertical-align: middle;">chat</span> ${m.messages}</span>
+                                            <span title="Artifacts"><span class="material-icons" style="font-size: 12px; vertical-align: middle;">description</span> ${m.artifacts}</span>
+                                            <span title="Runtime"><span class="material-icons" style="font-size: 12px; vertical-align: middle;">schedule</span> ${formatDuration(m.duration)}</span>
+                                            <span title="Tool call rate"><span class="material-icons" style="font-size: 12px; vertical-align: middle;">bar_chart</span> ${m.toolCallRate.toFixed(1)} calls/min</span>
                                         </div>
                                     </div>
                                     <div style="text-align: right; margin-left: 16px;">
@@ -3830,25 +3830,25 @@ async function showResourceUsageView() {
                             {
                                 label: 'Avg Tool Calls/Minute',
                                 value: totalDuration > 0 ? (totalToolCalls / (totalDuration / 60)).toFixed(2) : '0',
-                                icon: '🔧',
+                                icon: '<span class="material-icons">build</span>',
                                 color: '#3b82f6'
                             },
                             {
                                 label: 'Avg Messages/Agent',
                                 value: (totalMessages / agents.length).toFixed(1),
-                                icon: '💬',
+                                icon: '<span class="material-icons">chat</span>',
                                 color: '#10b981'
                             },
                             {
                                 label: 'Artifact Creation Rate',
                                 value: totalDuration > 0 ? ((totalArtifacts / (totalDuration / 3600)).toFixed(2) + '/hr') : '0/hr',
-                                icon: '📄',
+                                icon: '<span class="material-icons">description</span>',
                                 color: '#f59e0b'
                             },
                             {
                                 label: 'Avg Error Rate',
                                 value: (agentMetrics.reduce((sum, m) => sum + m.errorRate, 0) / agentMetrics.length).toFixed(1) + '%',
-                                icon: '⚠️',
+                                icon: '<span class="material-icons">warning</span>',
                                 color: '#ef4444'
                             }
                         ].map(metric => `
@@ -4011,7 +4011,7 @@ async function showSystemMetricsDashboard() {
                             <div style="font-size: 16px; font-weight: 700; color: ${healthScore.color};">${healthScore.label}</div>
                         </div>
                     </div>
-                    <button class="btn btn-secondary btn-small" onclick="fetchAgents(); showSystemMetricsDashboard();">🔄 Refresh</button>
+                    <button class="btn btn-secondary btn-small" onclick="fetchAgents(); showSystemMetricsDashboard();"><span class="material-icons" style="font-size: 16px; vertical-align: middle;">refresh</span> Refresh</button>
                 </div>
             </div>
 
@@ -4045,10 +4045,10 @@ async function showSystemMetricsDashboard() {
                     <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Agent Status Distribution</h3>
                     <div style="display: flex; flex-direction: column; gap: 12px;">
                         ${[
-                            { label: 'Running', count: agentStats.running, color: '#3b82f6', icon: '🏃' },
-                            { label: 'Completed', count: agentStats.completed, color: '#10b981', icon: '✅' },
-                            { label: 'Stuck', count: agentStats.stuck, color: '#f59e0b', icon: '⚠️' },
-                            { label: 'Failed', count: agentStats.failed, color: '#ef4444', icon: '❌' }
+                            { label: 'Running', count: agentStats.running, color: '#3b82f6', icon: '<span class="material-icons">play_circle</span>' },
+                            { label: 'Completed', count: agentStats.completed, color: '#10b981', icon: '<span class="material-icons">check_circle</span>' },
+                            { label: 'Stuck', count: agentStats.stuck, color: '#f59e0b', icon: '<span class="material-icons">warning</span>' },
+                            { label: 'Failed', count: agentStats.failed, color: '#ef4444', icon: '<span class="material-icons">error</span>' }
                         ].map(status => {
                             const percentage = agentStats.total > 0 ? (status.count / agentStats.total) * 100 : 0;
                             return `
@@ -4074,12 +4074,12 @@ async function showSystemMetricsDashboard() {
                     <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Quick Stats</h3>
                     <div style="display: flex; flex-direction: column; gap: 12px;">
                         ${[
-                            { icon: '💬', label: 'Messages', value: totalMessages.toLocaleString() },
-                            { icon: '📄', label: 'Artifacts', value: totalArtifacts.toLocaleString() },
-                            { icon: '⚠️', label: 'Errors', value: `${totalErrors} (${errorRate.toFixed(1)}%)` },
-                            { icon: '🔄', label: 'Loop Detections', value: totalLoopDetections.toLocaleString() },
-                            { icon: '⏱️', label: 'Avg Duration', value: formatDuration(avgDuration) },
-                            { icon: '👥', label: 'Teams', value: `${teamStats.active}/${teamStats.total}` }
+                            { icon: '<span class="material-icons">chat</span>', label: 'Messages', value: totalMessages.toLocaleString() },
+                            { icon: '<span class="material-icons">description</span>', label: 'Artifacts', value: totalArtifacts.toLocaleString() },
+                            { icon: '<span class="material-icons">warning</span>', label: 'Errors', value: `${totalErrors} (${errorRate.toFixed(1)}%)` },
+                            { icon: '<span class="material-icons">sync</span>', label: 'Loop Detections', value: totalLoopDetections.toLocaleString() },
+                            { icon: '<span class="material-icons">schedule</span>', label: 'Avg Duration', value: formatDuration(avgDuration) },
+                            { icon: '<span class="material-icons">groups</span>', label: 'Teams', value: `${teamStats.active}/${teamStats.total}` }
                         ].map(stat => `
                             <div style="background: white; border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center;">
                                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -4209,13 +4209,13 @@ function calculateSystemHealth(agentStats, successRate, errorRate, loopDetection
     // Determine health level
     let health;
     if (score >= 80) {
-        health = { label: 'Excellent', color: '#10b981', icon: '💚', level: 'excellent' };
+        health = { label: 'Excellent', color: '#10b981', icon: '<span class="material-icons">favorite</span>', level: 'excellent' };
     } else if (score >= 60) {
-        health = { label: 'Good', color: '#3b82f6', icon: '💙', level: 'good' };
+        health = { label: 'Good', color: '#3b82f6', icon: '<span class="material-icons">thumb_up</span>', level: 'good' };
     } else if (score >= 40) {
-        health = { label: 'Fair', color: '#f59e0b', icon: '💛', level: 'fair' };
+        health = { label: 'Fair', color: '#f59e0b', icon: '<span class="material-icons">warning</span>', level: 'fair' };
     } else {
-        health = { label: 'Poor', color: '#ef4444', icon: '💔', level: 'poor' };
+        health = { label: 'Poor', color: '#ef4444', icon: '<span class="material-icons">heart_broken</span>', level: 'poor' };
     }
 
     health.score = Math.max(0, score);
@@ -4231,7 +4231,7 @@ function generateSystemRecommendations(agentStats, successRate, errorRate, loopD
     if (healthScore.score >= 80) {
         recommendations.push({
             type: 'success',
-            icon: '✅',
+            icon: '<span class="material-icons">check_circle</span>',
             title: 'System Running Smoothly',
             message: 'All metrics are within healthy ranges. Keep up the great work!'
         });
@@ -4240,7 +4240,7 @@ function generateSystemRecommendations(agentStats, successRate, errorRate, loopD
     if (successRate < 70) {
         recommendations.push({
             type: 'warning',
-            icon: '⚠️',
+            icon: '<span class="material-icons">warning</span>',
             title: 'Low Success Rate Detected',
             message: 'Consider reviewing task complexity and model selection. Failed agents may need clearer instructions.'
         });
@@ -4249,7 +4249,7 @@ function generateSystemRecommendations(agentStats, successRate, errorRate, loopD
     if (errorRate > 5) {
         recommendations.push({
             type: 'warning',
-            icon: '🔧',
+            icon: '<span class="material-icons">build</span>',
             title: 'High Error Rate',
             message: 'Review agent logs for common errors. Consider enabling model fallback to improve reliability.'
         });
@@ -4259,7 +4259,7 @@ function generateSystemRecommendations(agentStats, successRate, errorRate, loopD
     if (stuckRate > 10) {
         recommendations.push({
             type: 'warning',
-            icon: '⏸️',
+            icon: '<span class="material-icons">pause_circle</span>',
             title: 'Stuck Agents Need Attention',
             message: `${agentStats.stuck} agents are stuck. Review loop detections and consider manual intervention or timeout adjustments.`
         });
@@ -4268,7 +4268,7 @@ function generateSystemRecommendations(agentStats, successRate, errorRate, loopD
     if (loopDetections > agentStats.total * 0.3) {
         recommendations.push({
             type: 'info',
-            icon: '🔄',
+            icon: '<span class="material-icons">sync</span>',
             title: 'Frequent Loop Detections',
             message: 'Agents may be repeating actions. Review task instructions and ensure clear success criteria.'
         });
@@ -4277,7 +4277,7 @@ function generateSystemRecommendations(agentStats, successRate, errorRate, loopD
     if (agentStats.running > 10) {
         recommendations.push({
             type: 'info',
-            icon: '⚡',
+            icon: '<span class="material-icons">bolt</span>',
             title: 'High Concurrent Load',
             message: `${agentStats.running} agents running concurrently. Monitor system resources and consider priority queuing.`
         });
@@ -4286,7 +4286,7 @@ function generateSystemRecommendations(agentStats, successRate, errorRate, loopD
     if (recommendations.length === 0) {
         recommendations.push({
             type: 'info',
-            icon: '📊',
+            icon: '<span class="material-icons">bar_chart</span>',
             title: 'No Issues Detected',
             message: 'System metrics look healthy. Continue monitoring for optimal performance.'
         });
@@ -4633,7 +4633,7 @@ async function showIntegrationsView() {
     const integrationsHTML = `
         <div style="padding: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                <h2 style="margin: 0; font-size: 24px; font-weight: 700;">🔌 Integrations</h2>
+                <h2 style="margin: 0; font-size: 24px; font-weight: 700;"><span class="material-icons" style="font-size: 24px; vertical-align: middle;">extension</span> Integrations</h2>
                 <div style="display: flex; gap: 8px;">
                     <button class="btn btn-primary btn-small" onclick="openCreateWebhookModal()">+ Add Webhook</button>
                     <button class="btn btn-primary btn-small" onclick="openCreateNotificationModal()">+ Add Notification</button>
@@ -4671,9 +4671,9 @@ async function showIntegrationsView() {
                                     </div>
                                 </div>
                                 <div style="display: flex; gap: 16px; font-size: 11px; color: var(--sand-600); padding-top: 8px; border-top: 1px solid var(--sand-200);">
-                                    <span title="Total triggers">🔔 ${webhook.trigger_count}</span>
-                                    <span title="Failed triggers">❌ ${webhook.failure_count}</span>
-                                    <span title="Last triggered">${webhook.last_triggered ? '⏱️ ' + formatDate(webhook.last_triggered) : '⏱️ Never'}</span>
+                                    <span title="Total triggers"><span class="material-icons" style="font-size: 12px; vertical-align: middle;">notifications</span> ${webhook.trigger_count}</span>
+                                    <span title="Failed triggers"><span class="material-icons" style="font-size: 12px; vertical-align: middle;">error</span> ${webhook.failure_count}</span>
+                                    <span title="Last triggered">${webhook.last_triggered ? '<span class="material-icons" style="font-size: 12px; vertical-align: middle;">schedule</span> ' + formatDate(webhook.last_triggered) : '<span class="material-icons" style="font-size: 12px; vertical-align: middle;">schedule</span> Never'}</span>
                                 </div>
                             </div>
                         `).join('')}
@@ -4691,9 +4691,9 @@ async function showIntegrationsView() {
                     <div style="display: grid; gap: 12px;">
                         ${channels.map(channel => {
                             const typeIcons = {
-                                'slack': '💬',
-                                'discord': '💎',
-                                'email': '📧'
+                                'slack': '<span class="material-icons">tag</span>',
+                                'discord': '<span class="material-icons">forum</span>',
+                                'email': '<span class="material-icons">email</span>'
                             };
                             const typeColors = {
                                 'slack': '#4A154B',
@@ -4705,7 +4705,7 @@ async function showIntegrationsView() {
                                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                                         <div style="flex: 1;">
                                             <div style="font-size: 16px; font-weight: 600; color: var(--sand-900); margin-bottom: 4px;">
-                                                ${typeIcons[channel.type] || '🔔'} ${escapeHtml(channel.name)}
+                                                ${typeIcons[channel.type] || '<span class="material-icons">notifications</span>'} ${escapeHtml(channel.name)}
                                                 ${!channel.enabled ? '<span style="font-size: 11px; background: var(--sand-300); color: var(--sand-700); padding: 2px 6px; border-radius: 4px; margin-left: 8px;">Disabled</span>' : ''}
                                             </div>
                                             <div style="font-size: 12px; color: var(--sand-600); margin-bottom: 8px;">
@@ -4723,9 +4723,9 @@ async function showIntegrationsView() {
                                         </div>
                                     </div>
                                     <div style="display: flex; gap: 16px; font-size: 11px; color: var(--sand-600); padding-top: 8px; border-top: 1px solid var(--sand-200);">
-                                        <span title="Total sent">📨 ${channel.send_count}</span>
-                                        <span title="Failed sends">❌ ${channel.failure_count}</span>
-                                        <span title="Last sent">${channel.last_sent ? '⏱️ ' + formatDate(channel.last_sent) : '⏱️ Never'}</span>
+                                        <span title="Total sent"><span class="material-icons" style="font-size: 14px; vertical-align: middle;">send</span> ${channel.send_count}</span>
+                                        <span title="Failed sends"><span class="material-icons" style="font-size: 14px; vertical-align: middle;">error</span> ${channel.failure_count}</span>
+                                        <span title="Last sent">${channel.last_sent ? '<span class="material-icons" style="font-size: 14px; vertical-align: middle;">schedule</span> ' + formatDate(channel.last_sent) : '<span class="material-icons" style="font-size: 14px; vertical-align: middle;">schedule</span> Never'}</span>
                                     </div>
                                 </div>
                             `;
