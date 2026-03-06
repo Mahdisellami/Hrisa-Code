@@ -4395,6 +4395,162 @@ document.getElementById('create-team-form')?.addEventListener('submit', async (e
     }
 });
 
+// Keyboard Shortcuts
+const shortcuts = {
+    'n': () => openModal('create-agent-modal'), // New agent
+    'r': () => fetchAgents(), // Refresh
+    'Escape': () => {
+        // Close modals or detail panel
+        const openModal = document.querySelector('.modal.open');
+        if (openModal) {
+            closeModal(openModal.id);
+        } else if (elements.detailPanel.classList.contains('open')) {
+            closeDetailPanel();
+        }
+    },
+    's': () => exportSession(), // Export session
+    'a': () => exportAnalytics(), // Export analytics
+    '/': (e) => {
+        e.preventDefault();
+        const searchInput = document.getElementById('agent-search-input');
+        if (searchInput) searchInput.focus();
+    },
+    'h': () => showKeyboardShortcutsHelp(), // Show help
+    '1': () => switchView('priority'), // Priority queue
+    '2': () => showModelPerformanceDashboard(), // Model performance
+    '3': () => showAgentNetworkGraph(), // Network graph
+    '4': () => showActivityTimeline(), // Activity timeline
+    '5': () => showPerformanceCharts(), // Performance charts
+    '6': () => showResourceUsageView(), // Resource usage
+    '7': () => showSystemMetricsDashboard(), // System dashboard
+    't': () => switchToTeamsView(), // Teams view
+    'g': () => switchToAgentsView(), // Agents view (go to agents)
+};
+
+function handleKeyboardShortcut(e) {
+    // Ignore shortcuts when typing in input fields
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        // Allow Escape to work in inputs
+        if (e.key !== 'Escape') return;
+    }
+
+    // Check for Ctrl/Cmd + key combinations
+    const key = e.key.toLowerCase();
+
+    // Handle Ctrl/Cmd + R (prevent default browser refresh, use our refresh)
+    if ((e.ctrlKey || e.metaKey) && key === 'r') {
+        e.preventDefault();
+        fetchAgents();
+        toastInfo('Agents refreshed', 'Refresh');
+        return;
+    }
+
+    // Handle Ctrl/Cmd + S (prevent default save, use export session)
+    if ((e.ctrlKey || e.metaKey) && key === 's') {
+        e.preventDefault();
+        exportSession();
+        return;
+    }
+
+    // Handle Ctrl/Cmd + N (prevent default new window, use new agent)
+    if ((e.ctrlKey || e.metaKey) && key === 'n') {
+        e.preventDefault();
+        openModal('create-agent-modal');
+        return;
+    }
+
+    // Handle regular shortcuts
+    if (shortcuts[e.key]) {
+        // Don't prevent default for Escape
+        if (e.key !== 'Escape' && e.key !== '/') {
+            e.preventDefault();
+        }
+        shortcuts[e.key](e);
+    }
+}
+
+function showKeyboardShortcutsHelp() {
+    const helpHTML = `
+        <div style="padding: 20px; max-width: 600px;">
+            <h2 style="margin: 0 0 20px 0; font-size: 24px; font-weight: 700;">⌨️ Keyboard Shortcuts</h2>
+
+            <div style="display: grid; gap: 16px;">
+                <div style="background: var(--sand-100); padding: 16px; border-radius: 8px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">General</h3>
+                    <div style="display: grid; gap: 8px; font-size: 14px;">
+                        ${renderShortcut('N', 'Create new agent')}
+                        ${renderShortcut('R', 'Refresh agent list')}
+                        ${renderShortcut('Esc', 'Close modal or detail panel')}
+                        ${renderShortcut('H', 'Show this help')}
+                        ${renderShortcut('/', 'Focus search')}
+                    </div>
+                </div>
+
+                <div style="background: var(--sand-100); padding: 16px; border-radius: 8px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">Export</h3>
+                    <div style="display: grid; gap: 8px; font-size: 14px;">
+                        ${renderShortcut('S', 'Export session')}
+                        ${renderShortcut('A', 'Export analytics')}
+                    </div>
+                </div>
+
+                <div style="background: var(--sand-100); padding: 16px; border-radius: 8px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">Views</h3>
+                    <div style="display: grid; gap: 8px; font-size: 14px;">
+                        ${renderShortcut('G', 'Go to agents view')}
+                        ${renderShortcut('T', 'Go to teams view')}
+                        ${renderShortcut('1', 'Priority queue')}
+                        ${renderShortcut('2', 'Model performance')}
+                        ${renderShortcut('3', 'Network graph')}
+                        ${renderShortcut('4', 'Activity timeline')}
+                        ${renderShortcut('5', 'Performance charts')}
+                        ${renderShortcut('6', 'Resource usage')}
+                        ${renderShortcut('7', 'System dashboard')}
+                    </div>
+                </div>
+
+                <div style="background: var(--sand-100); padding: 16px; border-radius: 8px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 16px; font-weight: 600;">With Ctrl/Cmd</h3>
+                    <div style="display: grid; gap: 8px; font-size: 14px;">
+                        ${renderShortcut('Ctrl/Cmd + N', 'Create new agent')}
+                        ${renderShortcut('Ctrl/Cmd + R', 'Refresh')}
+                        ${renderShortcut('Ctrl/Cmd + S', 'Export session')}
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; text-align: center;">
+                <button class="btn btn-primary" onclick="closeDetailPanel()">Close</button>
+            </div>
+        </div>
+    `;
+
+    elements.detailContent.innerHTML = helpHTML;
+    openDetailPanel();
+}
+
+function renderShortcut(key, description) {
+    return `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: var(--sand-700);">${description}</span>
+            <kbd style="background: white; border: 1px solid var(--sand-300); border-radius: 4px; padding: 4px 8px; font-family: monospace; font-size: 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">${key}</kbd>
+        </div>
+    `;
+}
+
+function switchView(viewName) {
+    switch (viewName) {
+        case 'priority':
+            showPriorityQueueView();
+            break;
+        default:
+            toastInfo(`View ${viewName} not implemented`, 'View Switch');
+    }
+}
+
+// Initialize keyboard shortcuts
+document.addEventListener('keydown', handleKeyboardShortcut);
+
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
     loadRoles();
@@ -4408,4 +4564,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         fetchAgents();
         fetchTeams();
     }, 10000);
+
+    // Show keyboard shortcuts help on first load (optional - comment out if too intrusive)
+    // setTimeout(() => {
+    //     toastInfo('Press H to view keyboard shortcuts', 'Tip', 6000);
+    // }, 2000);
 });
