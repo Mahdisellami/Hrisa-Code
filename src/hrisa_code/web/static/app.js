@@ -2036,6 +2036,206 @@ function switchToAgentsView() {
 }
 
 // Advanced Visualization Functions
+async function showActivityTimeline() {
+    const listContainer = document.getElementById('agent-list');
+    const agents = Array.from(state.agents.values());
+
+    if (agents.length === 0) {
+        listContainer.innerHTML = '<div class="empty-state"><p>No agent activity to display</p></div>';
+        return;
+    }
+
+    // Collect all activities from all agents
+    const activities = [];
+
+    agents.forEach(agent => {
+        // Agent creation
+        activities.push({
+            timestamp: new Date(agent.created_at),
+            type: 'agent_created',
+            agent_id: agent.id,
+            agent_status: agent.status,
+            data: { task: agent.task, model: agent.model, role: agent.role },
+        });
+
+        // State transitions (if available via memory or stored)
+        if (agent.progress.last_activity) {
+            activities.push({
+                timestamp: new Date(agent.progress.last_activity),
+                type: 'activity',
+                agent_id: agent.id,
+                agent_status: agent.status,
+                data: {
+                    current_state: agent.current_state,
+                    tool_calls: agent.progress.tool_calls,
+                    completed_steps: agent.progress.completed_steps,
+                },
+            });
+        }
+
+        // Error events
+        if (agent.error) {
+            activities.push({
+                timestamp: new Date(agent.progress.last_activity || agent.created_at),
+                type: 'error',
+                agent_id: agent.id,
+                agent_status: agent.status,
+                data: { error: agent.error },
+            });
+        }
+
+        // Stuck events
+        if (agent.stuck_reason) {
+            activities.push({
+                timestamp: new Date(agent.progress.last_activity || agent.created_at),
+                type: 'stuck',
+                agent_id: agent.id,
+                agent_status: agent.status,
+                data: { reason: agent.stuck_reason },
+            });
+        }
+
+        // Completion
+        if (agent.status === 'completed' || agent.status === 'failed') {
+            activities.push({
+                timestamp: new Date(agent.progress.last_activity || agent.created_at),
+                type: agent.status === 'completed' ? 'agent_completed' : 'agent_failed',
+                agent_id: agent.id,
+                agent_status: agent.status,
+                data: { output: agent.output },
+            });
+        }
+    });
+
+    // Sort by timestamp (newest first)
+    activities.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Limit to most recent 100 activities
+    const recentActivities = activities.slice(0, 100);
+
+    // Render timeline
+    const timelineHTML = `
+        <div style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">Activity Timeline</h2>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-secondary btn-small" onclick="switchToAgentsView()">Back to List</button>
+                </div>
+            </div>
+
+            <div style="background: var(--sand-100); border: 1px solid var(--sand-300); border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+                <div style="display: flex; gap: 24px; font-size: 13px; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: #3b82f6;"></span>
+                        <span>Agent Created</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: #10b981;"></span>
+                        <span>Completed</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: var(--brand-500);"></span>
+                        <span>Activity</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: #f59e0b;"></span>
+                        <span>Stuck</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="display: inline-block; width: 12px; height: 12px; border-radius: 2px; background: #ef4444;"></span>
+                        <span>Error/Failed</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="position: relative;">
+                <!-- Timeline line -->
+                <div style="position: absolute; left: 30px; top: 0; bottom: 0; width: 2px; background: var(--sand-300);"></div>
+
+                <!-- Timeline items -->
+                <div style="padding-left: 60px;">
+                    ${recentActivities.map((activity, index) => {
+                        const typeConfig = {
+                            'agent_created': { icon: '✨', color: '#3b82f6', label: 'Agent Created' },
+                            'agent_completed': { icon: '✅', color: '#10b981', label: 'Completed' },
+                            'agent_failed': { icon: '❌', color: '#ef4444', label: 'Failed' },
+                            'activity': { icon: '⚡', color: 'var(--brand-500)', label: 'Activity' },
+                            'error': { icon: '🚨', color: '#ef4444', label: 'Error' },
+                            'stuck': { icon: '⏸️', color: '#f59e0b', label: 'Stuck' },
+                        };
+                        const config = typeConfig[activity.type] || { icon: '●', color: '#6b7280', label: 'Event' };
+
+                        return `
+                            <div style="position: relative; margin-bottom: 24px;">
+                                <!-- Timeline dot -->
+                                <div style="position: absolute; left: -44px; top: 4px; width: 24px; height: 24px; border-radius: 50%; background: ${config.color}; border: 3px solid white; display: flex; align-items: center; justify-content: center; font-size: 12px;">
+                                    ${config.icon}
+                                </div>
+
+                                <!-- Timeline content -->
+                                <div style="background: white; border: 1px solid var(--sand-300); border-left: 4px solid ${config.color}; border-radius: 6px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <span style="font-weight: 600; color: var(--sand-900);">${config.label}</span>
+                                            <span style="font-size: 12px; color: var(--sand-600); cursor: pointer;" onclick="selectAgent('${activity.agent_id}')" title="Click to view agent">
+                                                Agent: ${activity.agent_id.substring(0, 8)}
+                                            </span>
+                                        </div>
+                                        <span style="font-size: 12px; color: var(--sand-600);">${formatTime(activity.timestamp.toISOString())}</span>
+                                    </div>
+
+                                    ${activity.type === 'agent_created' ? `
+                                        <div style="font-size: 13px; color: var(--sand-700);">
+                                            <strong>Task:</strong> ${escapeHtml(activity.data.task.substring(0, 100))}${activity.data.task.length > 100 ? '...' : ''}
+                                        </div>
+                                        <div style="font-size: 12px; color: var(--sand-600); margin-top: 4px;">
+                                            Model: ${activity.data.model} | Role: ${activity.data.role || 'general'}
+                                        </div>
+                                    ` : ''}
+
+                                    ${activity.type === 'activity' ? `
+                                        <div style="font-size: 13px; color: var(--sand-700);">
+                                            State: <strong>${activity.data.current_state}</strong> |
+                                            Tool Calls: ${activity.data.tool_calls} |
+                                            Steps: ${activity.data.completed_steps}
+                                        </div>
+                                    ` : ''}
+
+                                    ${activity.type === 'error' ? `
+                                        <div style="background: #fef2f2; padding: 8px; border-radius: 4px; font-size: 12px; font-family: monospace; color: #991b1b;">
+                                            ${escapeHtml(activity.data.error.substring(0, 200))}${activity.data.error.length > 200 ? '...' : ''}
+                                        </div>
+                                    ` : ''}
+
+                                    ${activity.type === 'stuck' ? `
+                                        <div style="background: #fef3c7; padding: 8px; border-radius: 4px; font-size: 12px; color: #92400e;">
+                                            ${escapeHtml(activity.data.reason)}
+                                        </div>
+                                    ` : ''}
+
+                                    ${activity.type === 'agent_completed' && activity.data.output ? `
+                                        <div style="font-size: 13px; color: var(--sand-700);">
+                                            ${escapeHtml(activity.data.output.substring(0, 150))}${activity.data.output.length > 150 ? '...' : ''}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+
+                ${recentActivities.length === 100 ? `
+                    <div style="text-align: center; padding: 16px; color: var(--sand-600); font-size: 13px;">
+                        Showing most recent 100 activities
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+
+    listContainer.innerHTML = timelineHTML;
+}
+
 async function showAgentNetworkGraph() {
     const listContainer = document.getElementById('agent-list');
 
