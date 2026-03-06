@@ -592,6 +592,18 @@ async def root():
     return HTMLResponse(content="<h1>Hrisa Code Web UI</h1><p>Static files not found</p>", status_code=404)
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    """Serve favicon to avoid 404 errors."""
+    # Return a simple 1x1 transparent PNG
+    import base64
+    favicon_data = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+    )
+    from fastapi.responses import Response
+    return Response(content=favicon_data, media_type="image/png")
+
+
 @app.get("/health")
 async def health():
     """Health check endpoint."""
