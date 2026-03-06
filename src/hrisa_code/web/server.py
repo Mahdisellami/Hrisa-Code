@@ -87,16 +87,6 @@ class SessionResponse(BaseModel):
     total_artifacts: int
 
 
-class PaginatedAgentsResponse(BaseModel):
-    """Paginated response for agents list."""
-
-    agents: List[AgentResponse]
-    total: int
-    page: int
-    page_size: int
-    total_pages: int
-
-
 class AgentResponse(BaseModel):
     """Response containing agent information."""
 
@@ -117,6 +107,16 @@ class AgentResponse(BaseModel):
     parent_agent_id: Optional[str]
     child_agent_ids: List[str]
     workflow_step: int
+
+
+class PaginatedAgentsResponse(BaseModel):
+    """Paginated response for agents list."""
+
+    agents: List[AgentResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 
 class AgentMessageResponse(BaseModel):
