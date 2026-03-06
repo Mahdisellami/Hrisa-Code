@@ -460,37 +460,7 @@ async function renderAgentDetail(agentId) {
         ${agent.parent_agent_id || agent.child_agent_ids.length > 0 ? `
             <div class="detail-section">
                 <h3>Workflow Chain</h3>
-                <div style="background: var(--sand-100); border-radius: 8px; padding: 12px;">
-                    ${agent.parent_agent_id ? `
-                        <div style="margin-bottom: 12px;">
-                            <span style="color: var(--sand-700); font-size: 0.9em;">↑ Parent Agent:</span>
-                            <div style="background: var(--sand-50); border-left: 3px solid var(--brand-500); padding: 8px; margin-top: 4px; border-radius: 4px; cursor: pointer;" onclick="selectAgent('${agent.parent_agent_id}')">
-                                <span style="color: var(--brand-600); font-weight: 600;">${agent.parent_agent_id.substring(0, 8)}</span>
-                                <span style="color: var(--sand-600); margin-left: 8px; font-size: 0.85em;">Step ${agent.workflow_step - 1}</span>
-                            </div>
-                        </div>
-                    ` : ''}
-                    <div style="background: var(--terracotta-100); border-left: 3px solid var(--terracotta-500); padding: 8px; border-radius: 4px; margin-bottom: 12px;">
-                        <span style="color: var(--terracotta-700); font-weight: 600;">● Current Agent</span>
-                        <span style="color: var(--sand-600); margin-left: 8px; font-size: 0.85em;">Step ${agent.workflow_step}</span>
-                    </div>
-                    ${agent.child_agent_ids.length > 0 ? `
-                        <div>
-                            <span style="color: var(--sand-700); font-size: 0.9em;">↓ Child Agents (${agent.child_agent_ids.length}):</span>
-                            ${agent.child_agent_ids.map(childId => {
-                                const childAgent = state.agents.get(childId);
-                                const childStatus = childAgent ? childAgent.status : 'unknown';
-                                return `
-                                <div style="background: var(--sand-50); border-left: 3px solid var(--sand-400); padding: 8px; margin-top: 4px; border-radius: 4px; cursor: pointer;" onclick="selectAgent('${childId}')">
-                                    <span style="color: var(--sand-800); font-weight: 600;">${childId.substring(0, 8)}</span>
-                                    <span class="agent-status ${childStatus}" style="margin-left: 8px; font-size: 0.75em; padding: 2px 6px;">${childStatus}</span>
-                                    ${childAgent ? `<span style="color: var(--sand-600); margin-left: 8px; font-size: 0.85em;">Step ${childAgent.workflow_step}</span>` : ''}
-                                </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    ` : ''}
-                </div>
+                ${renderWorkflowTree(agent)}
             </div>
         ` : ''}
 
@@ -831,6 +801,67 @@ function renderStateFlowDiagram(agentState) {
                     `;
                 }).join('')}
             </div>
+        </div>
+    `;
+}
+
+function renderWorkflowTreeNode(agent, currentAgentId, level = 0) {
+    const isCurrent = agent.id === currentAgentId;
+    const roleInfo = getRoleInfo(agent.role);
+    const statusColor = {
+        'running': 'var(--brand-500)',
+        'completed': 'var(--success-500)',
+        'failed': 'var(--danger-500)',
+        'stuck': 'var(--warning-500)',
+        'pending': 'var(--sand-400)',
+    }[agent.status] || 'var(--sand-400)';
+
+    const indent = level * 32;
+    const hasChildren = agent.child_agent_ids && agent.child_agent_ids.length > 0;
+
+    return `
+        <div style="margin-left: ${indent}px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 10px; border-radius: 6px; background: ${isCurrent ? 'var(--terracotta-50)' : 'var(--sand-50)'}; border: 2px solid ${isCurrent ? 'var(--terracotta-400)' : 'var(--sand-200)'}; transition: all 0.2s;" onclick="selectAgent('${agent.id}')" onmouseover="this.style.borderColor='var(--brand-400)'" onmouseout="this.style.borderColor='${isCurrent ? 'var(--terracotta-400)' : 'var(--sand-200)'}'">
+                ${level > 0 ? `<span style="color: var(--sand-400); margin-right: 4px;">└─</span>` : ''}
+                <div style="width: 8px; height: 8px; border-radius: 50%; background: ${statusColor};"></div>
+                <span style="color: ${roleInfo.color}; font-size: 1.1em;">${roleInfo.icon}</span>
+                <div style="flex: 1;">
+                    <div style="font-weight: 600; color: var(--sand-800); font-size: 0.9em;">
+                        ${agent.id.substring(0, 8)}${isCurrent ? ' (Current)' : ''}
+                    </div>
+                    <div style="font-size: 0.8em; color: var(--sand-600); margin-top: 2px;">
+                        Step ${agent.workflow_step} • ${roleInfo.name} • ${agent.status}
+                    </div>
+                </div>
+                ${hasChildren ? `<span style="color: var(--sand-500); font-size: 0.85em;">${agent.child_agent_ids.length} child${agent.child_agent_ids.length > 1 ? 'ren' : ''}</span>` : ''}
+            </div>
+            ${hasChildren ? `
+                <div style="margin-top: 4px;">
+                    ${agent.child_agent_ids.map(childId => {
+                        const childAgent = state.agents.get(childId);
+                        return childAgent ? renderWorkflowTreeNode(childAgent, currentAgentId, level + 1) : '';
+                    }).join('')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+function renderWorkflowTree(agent) {
+    // Find the root agent (agent without parent)
+    let rootAgent = agent;
+    while (rootAgent.parent_agent_id) {
+        const parent = state.agents.get(rootAgent.parent_agent_id);
+        if (!parent) break;
+        rootAgent = parent;
+    }
+
+    return `
+        <div style="background: var(--sand-50); border-radius: 8px; padding: 16px; overflow-x: auto;">
+            <div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--sand-200);">
+                <span style="color: var(--sand-700); font-weight: 600; font-size: 0.9em;">Workflow Execution Tree</span>
+            </div>
+            ${renderWorkflowTreeNode(rootAgent, agent.id, 0)}
         </div>
     `;
 }
