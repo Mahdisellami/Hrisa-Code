@@ -230,6 +230,27 @@ class ModelComparisonResponse(BaseModel):
     metrics: Dict
 
 
+class ModelInfoResponse(BaseModel):
+    """Response containing model information."""
+
+    name: str
+    available: Optional[bool] = None
+    capabilities: List[str]
+    quality_tier: str
+    speed_tier: str
+    strengths: str
+    weaknesses: Optional[str]
+    parameter_count: Optional[str]
+    recommended_for: List[str]
+
+
+class ModelRecommendationResponse(BaseModel):
+    """Response containing model recommendation."""
+
+    recommended_model: Optional[str]
+    reason: str
+
+
 class AgentMessageResponse(BaseModel):
     """Response containing agent message."""
 
@@ -1649,6 +1670,113 @@ async def reset_all_model_metrics():
     agent_manager.reset_model_metrics()
 
     return {"status": "reset", "message": "All model metrics reset"}
+
+
+# Model Selection and Discovery Endpoints
+@app.get("/api/models/available")
+async def get_available_models(force_refresh: bool = Query(False)):
+    """Get list of available models from Ollama."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    models = await agent_manager.get_available_models(force_refresh=force_refresh)
+
+    return {"models": models, "count": len(models)}
+
+
+@app.get("/api/models/catalog")
+async def get_model_catalog():
+    """Get all models from the catalog with their information."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    catalog_models = agent_manager.get_all_catalog_models()
+
+    return [
+        ModelInfoResponse(
+            name=m["name"],
+            capabilities=m["capabilities"],
+            quality_tier=m["quality_tier"],
+            speed_tier=m["speed_tier"],
+            strengths=m["strengths"],
+            weaknesses=m["weaknesses"],
+            parameter_count=m["parameter_count"],
+            recommended_for=m["recommended_for"],
+        )
+        for m in catalog_models
+    ]
+
+
+@app.get("/api/models/available-with-info")
+async def get_available_models_with_info():
+    """Get available models with their catalog information."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    models_with_info = await agent_manager.get_available_models_with_info()
+
+    return [
+        ModelInfoResponse(
+            name=m["name"],
+            available=m["available"],
+            capabilities=m["capabilities"],
+            quality_tier=m["quality_tier"],
+            speed_tier=m["speed_tier"],
+            strengths=m["strengths"],
+            weaknesses=m["weaknesses"],
+            parameter_count=m["parameter_count"],
+            recommended_for=m["recommended_for"],
+        )
+        for m in models_with_info
+    ]
+
+
+@app.get("/api/models/{model_name}/info")
+async def get_model_info(model_name: str):
+    """Get information about a specific model."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    model_info = agent_manager.get_model_info(model_name)
+
+    if not model_info:
+        raise HTTPException(status_code=404, detail="Model not found in catalog")
+
+    return ModelInfoResponse(
+        name=model_info["name"],
+        capabilities=model_info["capabilities"],
+        quality_tier=model_info["quality_tier"],
+        speed_tier=model_info["speed_tier"],
+        strengths=model_info["strengths"],
+        weaknesses=model_info["weaknesses"],
+        parameter_count=model_info["parameter_count"],
+        recommended_for=model_info["recommended_for"],
+    )
+
+
+@app.post("/api/models/recommend")
+async def recommend_model_for_task(task_description: str):
+    """Get recommended model for a task."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    recommended = agent_manager.get_recommended_model_for_task(task_description)
+
+    if not recommended:
+        return ModelRecommendationResponse(
+            recommended_model=None,
+            reason="No specific recommendation, use default model",
+        )
+
+    model_info = agent_manager.get_model_info(recommended)
+    reason = f"Recommended for this task type"
+    if model_info:
+        reason = f"{model_info['strengths']}"
+
+    return ModelRecommendationResponse(
+        recommended_model=recommended,
+        reason=reason,
+    )
 
 
 # WebSocket endpoint
