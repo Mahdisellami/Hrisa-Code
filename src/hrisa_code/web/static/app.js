@@ -640,7 +640,12 @@ async function renderAgentDetail(agentId) {
         </div>
 
         <div class="detail-section">
-            <h3>Agent Memory</h3>
+            <h3>Memory Timeline</h3>
+            ${renderMemoryTimeline(agentMemory, agentState)}
+        </div>
+
+        <div class="detail-section">
+            <h3>Agent Memory (Detailed)</h3>
             <div style="background: var(--sand-100); border-radius: 8px; padding: 12px;">
                 <div style="margin-bottom: 16px;">
                     <h4 style="color: var(--sand-700); font-size: 0.9em; margin-bottom: 8px;">Working Memory (${agentMemory.working_memory.length})</h4>
@@ -867,6 +872,98 @@ function renderWorkflowTree(agent) {
                 <span style="color: var(--sand-700); font-weight: 600; font-size: 0.9em;">Workflow Execution Tree</span>
             </div>
             ${renderWorkflowTreeNode(rootAgent, agent.id, 0)}
+        </div>
+    `;
+}
+
+function renderMemoryTimeline(agentMemory, agentState) {
+    // Combine all memory items into a single timeline
+    const timelineItems = [];
+
+    // Add decisions
+    agentMemory.decisions.forEach(decision => {
+        timelineItems.push({
+            timestamp: new Date(decision.timestamp),
+            type: 'decision',
+            icon: '🎯',
+            color: 'var(--terracotta-500)',
+            bgColor: 'var(--terracotta-50)',
+            title: decision.type || 'Decision',
+            content: decision.description,
+            details: decision.rationale,
+        });
+    });
+
+    // Add intermediate outputs
+    agentMemory.intermediate_outputs.forEach(output => {
+        timelineItems.push({
+            timestamp: new Date(output.timestamp),
+            type: 'output',
+            icon: '📤',
+            color: 'var(--brand-500)',
+            bgColor: 'var(--brand-50)',
+            title: output.type || 'Output',
+            content: output.content.substring(0, 150),
+            details: output.content.length > 150 ? `...${output.content.length} chars total` : null,
+        });
+    });
+
+    // Add state transitions
+    agentState.transitions.forEach(transition => {
+        timelineItems.push({
+            timestamp: new Date(transition.timestamp),
+            type: 'state',
+            icon: '🔄',
+            color: 'var(--purple-500)',
+            bgColor: 'var(--purple-50)',
+            title: 'State Change',
+            content: `${transition.from_state || 'start'} → ${transition.to_state}`,
+            details: transition.reason,
+        });
+    });
+
+    // Sort by timestamp (newest first)
+    timelineItems.sort((a, b) => b.timestamp - a.timestamp);
+
+    if (timelineItems.length === 0) {
+        return '<div class="empty-state"><p>No timeline data available</p></div>';
+    }
+
+    return `
+        <div style="background: var(--sand-50); border-radius: 8px; padding: 16px; max-height: 500px; overflow-y: auto;">
+            <div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--sand-200); position: sticky; top: 0; background: var(--sand-50); z-index: 1;">
+                <span style="color: var(--sand-700); font-weight: 600; font-size: 0.9em;">Memory Timeline (${timelineItems.length} events)</span>
+            </div>
+            <div style="position: relative; padding-left: 32px;">
+                <!-- Timeline line -->
+                <div style="position: absolute; left: 16px; top: 0; bottom: 0; width: 2px; background: var(--sand-300);"></div>
+
+                ${timelineItems.map((item, index) => `
+                    <div style="position: relative; margin-bottom: 20px;">
+                        <!-- Timeline dot -->
+                        <div style="position: absolute; left: -24px; width: 16px; height: 16px; border-radius: 50%; background: ${item.color}; border: 3px solid var(--sand-50); z-index: 2;"></div>
+
+                        <!-- Timeline card -->
+                        <div style="background: ${item.bgColor}; border-left: 3px solid ${item.color}; border-radius: 6px; padding: 12px; transition: transform 0.2s;" onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform='translateX(0)'">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 1.2em;">${item.icon}</span>
+                                    <span style="color: ${item.color}; font-weight: 600; font-size: 0.9em;">${item.title}</span>
+                                </div>
+                                <span style="color: var(--sand-600); font-size: 0.75em;">${formatTime(item.timestamp.toISOString())}</span>
+                            </div>
+                            <div style="color: var(--sand-800); font-size: 0.9em; line-height: 1.4;">
+                                ${escapeHtml(item.content)}
+                            </div>
+                            ${item.details ? `
+                                <div style="color: var(--sand-600); font-size: 0.8em; margin-top: 6px; font-style: italic; border-top: 1px solid ${item.color}40; padding-top: 6px;">
+                                    ${escapeHtml(item.details)}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
         </div>
     `;
 }
