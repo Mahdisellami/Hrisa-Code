@@ -35,8 +35,20 @@
         <div class="main-content">
             <!-- Sidebar -->
             <aside class="sidebar">
+                <div class="view-toggle" style="display: flex; gap: 8px; margin-bottom: 16px;">
+                    <button class="btn btn-secondary btn-small active" id="view-agents-btn" onclick="switchToAgentsView()" style="flex: 1;">
+                        Agents
+                    </button>
+                    <button class="btn btn-secondary btn-small" id="view-teams-btn" onclick="switchToTeamsView()" style="flex: 1;">
+                        Teams
+                    </button>
+                </div>
+
                 <button class="btn btn-primary btn-block" id="create-agent-btn">
                     Create New Agent
+                </button>
+                <button class="btn btn-primary btn-block" id="create-team-btn" style="display: none;" onclick="openModal('create-team-modal')">
+                    Create New Team
                 </button>
 
                 <div class="filter-section">
@@ -283,6 +295,71 @@
                 <div id="sessions-list" style="max-height: 400px; overflow-y: auto;">
                     <p style="color: var(--sand-600); text-align: center;">Loading sessions...</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Team Modal -->
+    <div class="modal" id="create-team-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Team</h2>
+                <button class="btn-close" id="create-team-modal-close-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="create-team-form">
+                    <div class="form-group">
+                        <label for="team-name-input">Team Name *</label>
+                        <input
+                            type="text"
+                            id="team-name-input"
+                            placeholder="e.g., Frontend Development Team"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="team-description-input">Description *</label>
+                        <textarea
+                            id="team-description-input"
+                            rows="2"
+                            placeholder="Brief description of the team's purpose"
+                            required
+                        ></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="team-goal-input">Shared Goal *</label>
+                        <textarea
+                            id="team-goal-input"
+                            rows="3"
+                            placeholder="What is this team trying to accomplish together?"
+                            required
+                        ></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="team-lead-input">Team Lead (Optional)</label>
+                        <select id="team-lead-input">
+                            <option value="">No Lead</option>
+                            <!-- Options populated dynamically -->
+                        </select>
+                        <small>Select an existing agent to be the team lead</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Team Members (Optional)</label>
+                        <div id="team-members-list" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--sand-300); border-radius: 4px; padding: 8px;">
+                            <p style="color: var(--sand-600); text-align: center;">Loading agents...</p>
+                        </div>
+                        <small>Select agents to add to this team</small>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Create Team</button>
+                        <button type="button" class="btn btn-secondary" id="create-team-modal-cancel-btn">Cancel</button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>

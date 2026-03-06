@@ -16,6 +16,10 @@ const state = {
     pageSize: 50,
     totalPages: 1,
     totalAgents: 0,
+    // Teams
+    teams: [],
+    selectedTeamId: null,
+    viewMode: 'agents', // 'agents' or 'teams'
 };
 
 // DOM Elements
@@ -1724,6 +1728,14 @@ document.getElementById('chain-modal-cancel-btn').addEventListener('click', () =
     closeModal('chain-agent-modal');
 });
 
+document.getElementById('create-team-modal-close-btn')?.addEventListener('click', () => {
+    closeModal('create-team-modal');
+});
+
+document.getElementById('create-team-modal-cancel-btn')?.addEventListener('click', () => {
+    closeModal('create-team-modal');
+});
+
 // Status filters
 document.querySelectorAll('.status-filter').forEach(checkbox => {
     checkbox.addEventListener('change', (e) => {
@@ -1756,12 +1768,330 @@ function downloadAllArtifacts(agentId) {
     window.open(url, '_blank');
 }
 
+// Team Management Functions
+async function fetchTeams() {
+    try {
+        const response = await fetch(`${API_BASE}/teams`);
+        if (response.ok) {
+            state.teams = await response.json();
+            if (state.viewMode === 'teams') {
+                renderTeamList();
+            }
+        }
+    } catch (error) {
+        console.error('Failed to fetch teams:', error);
+    }
+}
+
+async function createTeam(name, description, sharedGoal, leadAgentId, memberAgentIds) {
+    try {
+        const response = await fetch(`${API_BASE}/teams`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name,
+                description,
+                shared_goal: sharedGoal,
+                lead_agent_id: leadAgentId || null,
+                member_agent_ids: memberAgentIds || [],
+            }),
+        });
+
+        if (response.ok) {
+            const team = await response.json();
+            await fetchTeams();
+            return team;
+        } else {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to create team');
+        }
+    } catch (error) {
+        console.error('Failed to create team:', error);
+        throw error;
+    }
+}
+
+async function getTeamMembers(teamId) {
+    try {
+        const response = await fetch(`${API_BASE}/teams/${teamId}/members`);
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to fetch team members:', error);
+    }
+    return null;
+}
+
+async function addAgentToTeam(teamId, agentId) {
+    try {
+        const response = await fetch(`${API_BASE}/teams/${teamId}/members`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ agent_id: agentId }),
+        });
+
+        if (response.ok) {
+            await fetchTeams();
+            await fetchAgents();
+            return true;
+        }
+    } catch (error) {
+        console.error('Failed to add agent to team:', error);
+    }
+    return false;
+}
+
+async function removeAgentFromTeam(teamId, agentId) {
+    try {
+        const response = await fetch(`${API_BASE}/teams/${teamId}/members/${agentId}`, {
+            method: 'DELETE',
+        });
+
+        if (response.ok) {
+            await fetchTeams();
+            await fetchAgents();
+            return true;
+        }
+    } catch (error) {
+        console.error('Failed to remove agent from team:', error);
+    }
+    return false;
+}
+
+async function disbandTeam(teamId) {
+    try {
+        const response = await fetch(`${API_BASE}/teams/${teamId}/disband`, {
+            method: 'POST',
+        });
+
+        if (response.ok) {
+            await fetchTeams();
+            await fetchAgents();
+            return true;
+        }
+    } catch (error) {
+        console.error('Failed to disband team:', error);
+    }
+    return false;
+}
+
+function renderTeamList() {
+    const listContainer = document.getElementById('agent-list');
+
+    if (state.teams.length === 0) {
+        listContainer.innerHTML = '<div class="empty-state"><p>No teams yet. Create one to get started!</p></div>';
+        return;
+    }
+
+    const teamCards = state.teams
+        .filter(team => team.status === 'active')
+        .map(team => {
+            const memberCount = team.member_agent_ids.length + (team.lead_agent_id ? 1 : 0);
+            return `
+                <div class="agent-card" onclick="showTeamDetail('${team.id}')">
+                    <div class="agent-card-header">
+                        <h3>👥 ${escapeHtml(team.name)}</h3>
+                        <span class="badge badge-active">${memberCount} members</span>
+                    </div>
+                    <div class="agent-card-body">
+                        <p class="agent-task">${escapeHtml(team.shared_goal)}</p>
+                        <p class="agent-description">${escapeHtml(team.description)}</p>
+                    </div>
+                    <div class="agent-card-footer">
+                        <span class="agent-meta">Created: ${formatDate(team.created_at)}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+    listContainer.innerHTML = teamCards;
+}
+
+async function showTeamDetail(teamId) {
+    state.selectedTeamId = teamId;
+    const team = state.teams.find(t => t.id === teamId);
+    if (!team) return;
+
+    const members = await getTeamMembers(teamId);
+
+    let html = `
+        <div class="detail-section">
+            <h3>👥 Team: ${escapeHtml(team.name)}</h3>
+            <p><strong>Goal:</strong> ${escapeHtml(team.shared_goal)}</p>
+            <p><strong>Description:</strong> ${escapeHtml(team.description)}</p>
+            <p><strong>Status:</strong> <span class="badge badge-${team.status}">${team.status}</span></p>
+            <p><strong>Created:</strong> ${formatDate(team.created_at)}</p>
+        </div>
+
+        <div class="detail-section">
+            <h3>Team Members (${members.total_members})</h3>
+    `;
+
+    if (members.lead) {
+        html += `
+            <div class="team-member">
+                <div class="team-member-header">
+                    <strong>👑 Team Lead</strong>
+                </div>
+                <div class="agent-card mini" onclick="showAgentDetailFromTeam('${members.lead.id}')">
+                    <div class="agent-card-header">
+                        <h4>${escapeHtml(members.lead.task)}</h4>
+                        <span class="badge badge-${members.lead.status}">${members.lead.status}</span>
+                    </div>
+                    <p class="agent-meta">Role: ${members.lead.role || 'general'}</p>
+                </div>
+            </div>
+        `;
+    }
+
+    if (members.members && members.members.length > 0) {
+        html += '<div class="team-member-header"><strong>Team Members</strong></div>';
+        members.members.forEach(agent => {
+            html += `
+                <div class="agent-card mini" onclick="showAgentDetailFromTeam('${agent.id}')">
+                    <div class="agent-card-header">
+                        <h4>${escapeHtml(agent.task)}</h4>
+                        <span class="badge badge-${agent.status}">${agent.status}</span>
+                    </div>
+                    <p class="agent-meta">Role: ${agent.role || 'general'}</p>
+                    <button class="btn btn-danger btn-small" onclick="event.stopPropagation(); removeTeamMember('${teamId}', '${agent.id}')">Remove</button>
+                </div>
+            `;
+        });
+    }
+
+    html += `
+        </div>
+        <div class="detail-actions">
+            <button class="btn btn-secondary" onclick="switchToAgentsView()">Back to Agents</button>
+            <button class="btn btn-danger" onclick="confirmDisbandTeam('${teamId}')">Disband Team</button>
+        </div>
+    `;
+
+    elements.detailContent.innerHTML = html;
+    elements.detailPanel.classList.add('open');
+}
+
+function showAgentDetailFromTeam(agentId) {
+    state.viewMode = 'agents';
+    renderAgentList();
+    selectAgent(agentId);
+}
+
+async function removeTeamMember(teamId, agentId) {
+    if (confirm('Remove this agent from the team?')) {
+        const success = await removeAgentFromTeam(teamId, agentId);
+        if (success) {
+            showTeamDetail(teamId);
+        }
+    }
+}
+
+async function confirmDisbandTeam(teamId) {
+    if (confirm('Are you sure you want to disband this team? This action cannot be undone.')) {
+        const success = await disbandTeam(teamId);
+        if (success) {
+            elements.detailPanel.classList.remove('open');
+            switchToTeamsView();
+        }
+    }
+}
+
+function switchToTeamsView() {
+    state.viewMode = 'teams';
+    document.getElementById('view-agents-btn').classList.remove('active');
+    document.getElementById('view-teams-btn').classList.add('active');
+    document.getElementById('create-agent-btn').style.display = 'none';
+    document.getElementById('create-team-btn').style.display = 'block';
+    renderTeamList();
+}
+
+function switchToAgentsView() {
+    state.viewMode = 'agents';
+    document.getElementById('view-teams-btn').classList.remove('active');
+    document.getElementById('view-agents-btn').classList.add('active');
+    document.getElementById('create-team-btn').style.display = 'none';
+    document.getElementById('create-agent-btn').style.display = 'block';
+    renderAgentList();
+}
+
+// Populate team creation form with available agents
+function populateTeamAgentSelections() {
+    const leadSelect = document.getElementById('team-lead-input');
+    const membersList = document.getElementById('team-members-list');
+
+    if (!leadSelect || !membersList) return;
+
+    const agents = Array.from(state.agents.values());
+
+    // Populate lead dropdown
+    leadSelect.innerHTML = '<option value="">No Lead</option>';
+    agents.forEach(agent => {
+        const option = document.createElement('option');
+        option.value = agent.id;
+        option.textContent = `${agent.id} - ${agent.task.substring(0, 50)}${agent.task.length > 50 ? '...' : ''}`;
+        leadSelect.appendChild(option);
+    });
+
+    // Populate members checkboxes
+    if (agents.length === 0) {
+        membersList.innerHTML = '<p style="color: var(--sand-600); text-align: center;">No agents available</p>';
+    } else {
+        membersList.innerHTML = agents.map(agent => `
+            <label style="display: block; padding: 4px 0; cursor: pointer;">
+                <input type="checkbox" class="team-member-checkbox" value="${agent.id}">
+                ${agent.id} - ${escapeHtml(agent.task.substring(0, 60))}${agent.task.length > 60 ? '...' : ''}
+            </label>
+        `).join('');
+    }
+}
+
+// Override openModal to populate team form when opening create-team-modal
+const originalOpenModal = window.openModal || openModal;
+window.openModal = function(modalId) {
+    if (modalId === 'create-team-modal') {
+        populateTeamAgentSelections();
+    }
+    if (typeof originalOpenModal === 'function') {
+        originalOpenModal(modalId);
+    } else {
+        document.getElementById(modalId).classList.add('open');
+    }
+};
+
+// Create Team Form Handler
+document.getElementById('create-team-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById('team-name-input').value;
+    const description = document.getElementById('team-description-input').value;
+    const sharedGoal = document.getElementById('team-goal-input').value;
+    const leadAgentId = document.getElementById('team-lead-input').value || null;
+
+    // Get selected member agent IDs
+    const memberCheckboxes = document.querySelectorAll('.team-member-checkbox:checked');
+    const memberAgentIds = Array.from(memberCheckboxes).map(cb => cb.value);
+
+    try {
+        await createTeam(name, description, sharedGoal, leadAgentId, memberAgentIds);
+        closeModal('create-team-modal');
+        document.getElementById('create-team-form').reset();
+    } catch (error) {
+        alert(`Failed to create team: ${error.message}`);
+    }
+});
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     loadRoles();
     connectWebSocket();
     fetchAgents();
+    fetchTeams();
 
-    // Refresh agents every 10 seconds
-    setInterval(fetchAgents, 10000);
+    // Refresh agents and teams every 10 seconds
+    setInterval(() => {
+        fetchAgents();
+        fetchTeams();
+    }, 10000);
 });
