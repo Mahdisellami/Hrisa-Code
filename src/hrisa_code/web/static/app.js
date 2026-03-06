@@ -1007,13 +1007,20 @@ function renderWorkflowTree(agent) {
     `;
 }
 
+// Timeline state for pagination
+const timelineState = {
+    items: [],
+    displayCount: 20,
+    filter: 'all', // 'all', 'decision', 'output', 'state'
+};
+
 function renderMemoryTimeline(agentMemory, agentState) {
     // Combine all memory items into a single timeline
-    const timelineItems = [];
+    const allItems = [];
 
     // Add decisions
     agentMemory.decisions.forEach(decision => {
-        timelineItems.push({
+        allItems.push({
             timestamp: new Date(decision.timestamp),
             type: 'decision',
             icon: '🎯',
@@ -1027,7 +1034,7 @@ function renderMemoryTimeline(agentMemory, agentState) {
 
     // Add intermediate outputs
     agentMemory.intermediate_outputs.forEach(output => {
-        timelineItems.push({
+        allItems.push({
             timestamp: new Date(output.timestamp),
             type: 'output',
             icon: '📤',
@@ -1041,7 +1048,7 @@ function renderMemoryTimeline(agentMemory, agentState) {
 
     // Add state transitions
     agentState.transitions.forEach(transition => {
-        timelineItems.push({
+        allItems.push({
             timestamp: new Date(transition.timestamp),
             type: 'state',
             icon: '🔄',
@@ -1054,49 +1061,138 @@ function renderMemoryTimeline(agentMemory, agentState) {
     });
 
     // Sort by timestamp (newest first)
-    timelineItems.sort((a, b) => b.timestamp - a.timestamp);
+    allItems.sort((a, b) => b.timestamp - a.timestamp);
 
-    if (timelineItems.length === 0) {
+    // Store in state
+    timelineState.items = allItems;
+
+    if (allItems.length === 0) {
         return '<div class="empty-state"><p>No timeline data available</p></div>';
     }
 
+    // Apply filter
+    const filteredItems = timelineState.filter === 'all'
+        ? allItems
+        : allItems.filter(item => item.type === timelineState.filter);
+
+    // Limit to displayCount
+    const displayedItems = filteredItems.slice(0, timelineState.displayCount);
+    const hasMore = filteredItems.length > timelineState.displayCount;
+
     return `
-        <div style="background: var(--sand-50); border-radius: 8px; padding: 16px; max-height: 500px; overflow-y: auto;">
+        <div style="background: var(--sand-50); border-radius: 8px; padding: 16px; max-height: 500px; overflow-y: auto;" id="memory-timeline-container">
+            <!-- Header with filters -->
             <div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--sand-200); position: sticky; top: 0; background: var(--sand-50); z-index: 1;">
-                <span style="color: var(--sand-700); font-weight: 600; font-size: 0.9em;">Memory Timeline (${timelineItems.length} events)</span>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="color: var(--sand-700); font-weight: 600; font-size: 0.9em;">
+                        Memory Timeline (${filteredItems.length} ${timelineState.filter === 'all' ? 'events' : timelineState.filter + 's'})
+                    </span>
+                    <div style="display: flex; gap: 4px;">
+                        <button
+                            class="btn btn-small ${timelineState.filter === 'all' ? 'btn-primary' : 'btn-secondary'}"
+                            onclick="filterTimeline('all')"
+                            style="padding: 4px 8px; font-size: 0.8em;"
+                        >
+                            All
+                        </button>
+                        <button
+                            class="btn btn-small ${timelineState.filter === 'decision' ? 'btn-primary' : 'btn-secondary'}"
+                            onclick="filterTimeline('decision')"
+                            style="padding: 4px 8px; font-size: 0.8em;"
+                        >
+                            🎯 Decisions
+                        </button>
+                        <button
+                            class="btn btn-small ${timelineState.filter === 'output' ? 'btn-primary' : 'btn-secondary'}"
+                            onclick="filterTimeline('output')"
+                            style="padding: 4px 8px; font-size: 0.8em;"
+                        >
+                            📤 Outputs
+                        </button>
+                        <button
+                            class="btn btn-small ${timelineState.filter === 'state' ? 'btn-primary' : 'btn-secondary'}"
+                            onclick="filterTimeline('state')"
+                            style="padding: 4px 8px; font-size: 0.8em;"
+                        >
+                            🔄 States
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div style="position: relative; padding-left: 32px;">
+
+            <div style="position: relative; padding-left: 32px;" id="timeline-items-container">
                 <!-- Timeline line -->
                 <div style="position: absolute; left: 16px; top: 0; bottom: 0; width: 2px; background: var(--sand-300);"></div>
 
-                ${timelineItems.map((item, index) => `
-                    <div style="position: relative; margin-bottom: 20px;">
-                        <!-- Timeline dot -->
-                        <div style="position: absolute; left: -24px; width: 16px; height: 16px; border-radius: 50%; background: ${item.color}; border: 3px solid var(--sand-50); z-index: 2;"></div>
+                ${displayedItems.map((item, index) => renderTimelineItem(item)).join('')}
 
-                        <!-- Timeline card -->
-                        <div style="background: ${item.bgColor}; border-left: 3px solid ${item.color}; border-radius: 6px; padding: 12px; transition: transform 0.2s;" onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform='translateX(0)'">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <span style="font-size: 1.2em;">${item.icon}</span>
-                                    <span style="color: ${item.color}; font-weight: 600; font-size: 0.9em;">${item.title}</span>
-                                </div>
-                                <span style="color: var(--sand-600); font-size: 0.75em;">${formatTime(item.timestamp.toISOString())}</span>
-                            </div>
-                            <div style="color: var(--sand-800); font-size: 0.9em; line-height: 1.4;">
-                                ${escapeHtml(item.content)}
-                            </div>
-                            ${item.details ? `
-                                <div style="color: var(--sand-600); font-size: 0.8em; margin-top: 6px; font-style: italic; border-top: 1px solid ${item.color}40; padding-top: 6px;">
-                                    ${escapeHtml(item.details)}
-                                </div>
-                            ` : ''}
-                        </div>
+                ${hasMore ? `
+                    <div style="text-align: center; margin-top: 16px;">
+                        <button
+                            class="btn btn-secondary btn-small"
+                            onclick="loadMoreTimelineItems()"
+                            style="padding: 8px 16px;"
+                        >
+                            Load More (${filteredItems.length - timelineState.displayCount} remaining)
+                        </button>
                     </div>
-                `).join('')}
+                ` : ''}
+
+                ${!hasMore && displayedItems.length > 0 ? `
+                    <div style="text-align: center; margin-top: 16px; color: var(--sand-600); font-size: 0.85em;">
+                        — End of timeline —
+                    </div>
+                ` : ''}
             </div>
         </div>
     `;
+}
+
+function renderTimelineItem(item) {
+    return `
+        <div style="position: relative; margin-bottom: 20px;">
+            <!-- Timeline dot -->
+            <div style="position: absolute; left: -24px; width: 16px; height: 16px; border-radius: 50%; background: ${item.color}; border: 3px solid var(--sand-50); z-index: 2;"></div>
+
+            <!-- Timeline card -->
+            <div style="background: ${item.bgColor}; border-left: 3px solid ${item.color}; border-radius: 6px; padding: 12px; transition: transform 0.2s;" onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform='translateX(0)'">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="font-size: 1.2em;">${item.icon}</span>
+                        <span style="color: ${item.color}; font-weight: 600; font-size: 0.9em;">${item.title}</span>
+                    </div>
+                    <span style="color: var(--sand-600); font-size: 0.75em;">${formatTime(item.timestamp.toISOString())}</span>
+                </div>
+                <div style="color: var(--sand-800); font-size: 0.9em; line-height: 1.4;">
+                    ${escapeHtml(item.content)}
+                </div>
+                ${item.details ? `
+                    <div style="color: var(--sand-600); font-size: 0.8em; margin-top: 6px; font-style: italic; border-top: 1px solid ${item.color}40; padding-top: 6px;">
+                        ${escapeHtml(item.details)}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+function filterTimeline(filter) {
+    timelineState.filter = filter;
+    timelineState.displayCount = 20; // Reset display count on filter change
+    // Re-render the timeline
+    const selectedAgent = state.agents.get(state.selectedAgentId);
+    if (selectedAgent) {
+        renderAgentDetail(state.selectedAgentId);
+    }
+}
+
+function loadMoreTimelineItems() {
+    timelineState.displayCount += 20;
+    // Re-render the timeline
+    const selectedAgent = state.agents.get(state.selectedAgentId);
+    if (selectedAgent) {
+        renderAgentDetail(state.selectedAgentId);
+    }
 }
 
 function renderProgressMetrics(agent, agentState, logs) {
