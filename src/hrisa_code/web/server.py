@@ -2295,11 +2295,11 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 class WebhookCreateRequest(BaseModel):
     """Request to create a webhook."""
 
-    name: str
-    url: str
-    events: List[str]
-    secret: Optional[str] = None
-    headers: Optional[Dict[str, str]] = None
+    name: str = Field(..., min_length=1, max_length=100, description="Webhook name")
+    url: str = Field(..., regex=r"^https?://", description="Webhook URL (must be http or https)")
+    events: List[str] = Field(..., min_items=1, description="At least one event required")
+    secret: Optional[str] = Field(None, min_length=8, max_length=256, description="Optional secret for HMAC signing")
+    headers: Optional[Dict[str, str]] = Field(None, description="Optional custom headers")
 
 
 class WebhookUpdateRequest(BaseModel):
@@ -2330,10 +2330,10 @@ class WebhookResponse(BaseModel):
 class NotificationChannelCreateRequest(BaseModel):
     """Request to create notification channel."""
 
-    name: str
-    type: str  # 'slack', 'discord', 'email'
-    config: Dict[str, Any]
-    events: List[str]
+    name: str = Field(..., min_length=1, max_length=100, description="Channel name")
+    type: str = Field(..., regex=r"^(slack|discord|email)$", description="Channel type: slack, discord, or email")
+    config: Dict[str, Any] = Field(..., description="Channel-specific configuration")
+    events: List[str] = Field(..., min_items=1, description="At least one event required")
 
 
 class NotificationChannelUpdateRequest(BaseModel):
@@ -2364,6 +2364,30 @@ async def create_webhook(request: WebhookCreateRequest):
     """Create a new webhook."""
     if not agent_manager:
         raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    # Validate event types
+    valid_events = {"agent.started", "agent.completed", "agent.failed", "agent.stuck"}
+    invalid_events = set(request.events) - valid_events
+    if invalid_events:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid event types: {', '.join(invalid_events)}. Valid events: {', '.join(valid_events)}"
+        )
+
+    # Validate URL is reachable (production consideration)
+    if not request.url.startswith(("http://", "https://")):
+        raise HTTPException(
+            status_code=400,
+            detail="Webhook URL must start with http:// or https://"
+        )
+
+    # Production: Enforce HTTPS only
+    # Uncomment for production:
+    # if not request.url.startswith("https://"):
+    #     raise HTTPException(
+    #         status_code=400,
+    #         detail="Webhook URL must use HTTPS in production"
+    #     )
 
     webhook_id = agent_manager.add_webhook(
         name=request.name,
@@ -2472,6 +2496,37 @@ async def create_notification_channel(request: NotificationChannelCreateRequest)
     """Create a notification channel."""
     if not agent_manager:
         raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    # Validate event types
+    valid_events = {"agent.started", "agent.completed", "agent.failed", "agent.stuck"}
+    invalid_events = set(request.events) - valid_events
+    if invalid_events:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid event types: {', '.join(invalid_events)}. Valid events: {', '.join(valid_events)}"
+        )
+
+    # Validate channel-specific configuration
+    if request.type in ("slack", "discord"):
+        if "webhook_url" not in request.config:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{request.type.capitalize()} channel requires 'webhook_url' in config"
+            )
+        if not request.config["webhook_url"].startswith("https://"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"{request.type.capitalize()} webhook URL must use HTTPS"
+            )
+
+    elif request.type == "email":
+        required_fields = ["to", "smtp_host", "smtp_port"]
+        missing_fields = [f for f in required_fields if f not in request.config]
+        if missing_fields:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Email channel requires: {', '.join(missing_fields)}"
+            )
 
     channel_id = agent_manager.add_notification_channel(
         name=request.name,
