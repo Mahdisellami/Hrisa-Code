@@ -3,14 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hrisa Code - Agents Dashboard</title>
+    <title>Agents Dashboard</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
     <div class="container">
         <!-- Header -->
         <header class="header">
-            <h1>Hrisa Code Agents Dashboard</h1>
+            <h1>Agents Dashboard</h1>
             <div class="header-stats">
                 <div class="stat">
                     <span class="stat-label">Running:</span>
@@ -32,9 +34,9 @@
                     class="btn btn-secondary btn-small"
                     onclick="showKeyboardShortcutsHelp()"
                     title="Keyboard Shortcuts (H)"
-                    style="margin-left: 12px; padding: 8px 12px;"
+                    style="margin-left: 12px; padding: 8px 12px; display: flex; align-items: center;"
                 >
-                    ⌨️
+                    <span class="material-icons" style="font-size: 18px;">keyboard</span>
                 </button>
             </div>
         </header>
@@ -52,32 +54,41 @@
                     </button>
                 </div>
                 <div style="margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px;">
-                    <button class="btn btn-secondary btn-small btn-block" id="view-priority-queue-btn" onclick="showPriorityQueueView()" style="font-size: 0.85em;">
-                        🎯 Priority Queue
+                    <button class="btn btn-secondary btn-small btn-block icon-btn" id="view-priority-queue-btn" onclick="showPriorityQueueView()" style="font-size: 0.85em;">
+                        <span class="material-icons">flag</span>
+                        <span>Priority Queue</span>
                     </button>
-                    <button class="btn btn-secondary btn-small btn-block" id="view-model-performance-btn" onclick="showModelPerformanceDashboard()" style="font-size: 0.85em;">
-                        📊 Model Performance
+                    <button class="btn btn-secondary btn-small btn-block icon-btn" id="view-model-performance-btn" onclick="showModelPerformanceDashboard()" style="font-size: 0.85em;">
+                        <span class="material-icons">insights</span>
+                        <span>Model Performance</span>
                     </button>
-                    <button class="btn btn-secondary btn-small btn-block" id="view-fallback-settings-btn" onclick="showFallbackSettings()" style="font-size: 0.85em;">
-                        🔄 Fallback Settings
+                    <button class="btn btn-secondary btn-small btn-block icon-btn" id="view-fallback-settings-btn" onclick="showFallbackSettings()" style="font-size: 0.85em;">
+                        <span class="material-icons">sync</span>
+                        <span>Fallback Settings</span>
                     </button>
-                    <button class="btn btn-secondary btn-small btn-block" id="view-network-graph-btn" onclick="showAgentNetworkGraph()" style="font-size: 0.85em;">
-                        🕸️ Network Graph
+                    <button class="btn btn-secondary btn-small btn-block icon-btn" id="view-network-graph-btn" onclick="showAgentNetworkGraph()" style="font-size: 0.85em;">
+                        <span class="material-icons">hub</span>
+                        <span>Network Graph</span>
                     </button>
-                    <button class="btn btn-secondary btn-small btn-block" id="view-activity-timeline-btn" onclick="showActivityTimeline()" style="font-size: 0.85em;">
-                        📅 Activity Timeline
+                    <button class="btn btn-secondary btn-small btn-block icon-btn" id="view-activity-timeline-btn" onclick="showActivityTimeline()" style="font-size: 0.85em;">
+                        <span class="material-icons">timeline</span>
+                        <span>Activity Timeline</span>
                     </button>
-                    <button class="btn btn-secondary btn-small btn-block" id="view-performance-charts-btn" onclick="showPerformanceCharts()" style="font-size: 0.85em;">
-                        📈 Performance Charts
+                    <button class="btn btn-secondary btn-small btn-block icon-btn" id="view-performance-charts-btn" onclick="showPerformanceCharts()" style="font-size: 0.85em;">
+                        <span class="material-icons">bar_chart</span>
+                        <span>Performance Charts</span>
                     </button>
-                    <button class="btn btn-secondary btn-small btn-block" id="view-resource-usage-btn" onclick="showResourceUsageView()" style="font-size: 0.85em;">
-                        💾 Resource Usage
+                    <button class="btn btn-secondary btn-small btn-block icon-btn" id="view-resource-usage-btn" onclick="showResourceUsageView()" style="font-size: 0.85em;">
+                        <span class="material-icons">storage</span>
+                        <span>Resource Usage</span>
                     </button>
-                    <button class="btn btn-secondary btn-small btn-block" id="view-system-metrics-btn" onclick="showSystemMetricsDashboard()" style="font-size: 0.85em;">
-                        🎛️ System Dashboard
+                    <button class="btn btn-secondary btn-small btn-block icon-btn" id="view-system-metrics-btn" onclick="showSystemMetricsDashboard()" style="font-size: 0.85em;">
+                        <span class="material-icons">dashboard</span>
+                        <span>System Dashboard</span>
                     </button>
-                    <button class="btn btn-secondary btn-small btn-block" id="view-integrations-btn" onclick="showIntegrationsView()" style="font-size: 0.85em;">
-                        🔌 Integrations
+                    <button class="btn btn-secondary btn-small btn-block icon-btn" id="view-integrations-btn" onclick="showIntegrationsView()" style="font-size: 0.85em;">
+                        <span class="material-icons">extension</span>
+                        <span>Integrations</span>
                     </button>
                 </div>
 
