@@ -109,6 +109,8 @@ class AgentResponse(BaseModel):
     parent_agent_id: Optional[str]
     child_agent_ids: List[str]
     workflow_step: int
+    priority: int
+    scheduled_start_time: Optional[str]
 
 
 class PaginatedAgentsResponse(BaseModel):
@@ -184,6 +186,25 @@ class TeamResponse(BaseModel):
     member_agent_ids: List[str]
     shared_goal: str
     status: str
+
+
+class SetPriorityRequest(BaseModel):
+    """Request to set agent priority."""
+
+    priority: int = Field(..., ge=1, le=10, description="Priority level (1=highest, 10=lowest)")
+
+
+class ScheduleAgentRequest(BaseModel):
+    """Request to schedule agent execution."""
+
+    start_time: str = Field(..., description="ISO format datetime for scheduled start")
+
+
+class BulkSetPriorityRequest(BaseModel):
+    """Request to set priority for multiple agents."""
+
+    agent_ids: List[str] = Field(..., description="List of agent IDs")
+    priority: int = Field(..., ge=1, le=10, description="Priority level (1=highest, 10=lowest)")
 
 
 class AgentMessageResponse(BaseModel):
@@ -319,6 +340,8 @@ def _agent_info_to_response(info: AgentInfo) -> AgentResponse:
         parent_agent_id=info.parent_agent_id,
         child_agent_ids=info.child_agent_ids,
         workflow_step=info.workflow_step,
+        priority=info.priority,
+        scheduled_start_time=info.scheduled_start_time.isoformat() if info.scheduled_start_time else None,
     )
 
 
@@ -1418,6 +1441,76 @@ async def disband_team(team_id: str):
         return {"status": "disbanded", "team_id": team_id}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# Priority and Scheduling Endpoints
+@app.post("/api/agents/{agent_id}/priority")
+async def set_agent_priority(agent_id: str, request: SetPriorityRequest):
+    """Set priority for an agent (1=highest, 10=lowest)."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        agent_manager.set_agent_priority(agent_id, request.priority)
+        return {"status": "updated", "agent_id": agent_id, "priority": request.priority}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/agents/{agent_id}/schedule")
+async def schedule_agent(agent_id: str, request: ScheduleAgentRequest):
+    """Schedule an agent to start at a specific time."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        from datetime import datetime
+
+        start_time = datetime.fromisoformat(request.start_time)
+        agent_manager.schedule_agent(agent_id, start_time)
+        return {"status": "scheduled", "agent_id": agent_id, "start_time": request.start_time}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/agents/priority-queue")
+async def get_priority_queue():
+    """Get list of agents sorted by priority."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agents = agent_manager.get_priority_queue()
+
+    return [
+        {
+            "id": agent.id,
+            "task": agent.task,
+            "status": agent.status.value,
+            "priority": agent.priority,
+            "scheduled_start_time": agent.scheduled_start_time.isoformat() if agent.scheduled_start_time else None,
+            "created_at": agent.created_at.isoformat(),
+            "role": agent.role,
+        }
+        for agent in agents
+    ]
+
+
+@app.post("/api/agents/bulk-priority")
+async def bulk_set_priority(request: BulkSetPriorityRequest):
+    """Set priority for multiple agents at once."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        updated_count = agent_manager.bulk_set_priority(request.agent_ids, request.priority)
+        return {
+            "status": "updated",
+            "updated_count": updated_count,
+            "requested_count": len(request.agent_ids),
+            "priority": request.priority,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # WebSocket endpoint
