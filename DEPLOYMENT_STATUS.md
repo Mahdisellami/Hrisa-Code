@@ -1,155 +1,60 @@
-# Deployment Status - March 6, 2026
+# Deployment Status Report
+**Generated**: 2026-03-06
+**Last Check**: Just now
 
-## ✅ What's Working
+## 📊 Current Status
 
-### Backend (Render)
-- ✅ **hrisa-backend**: DEPLOYED at `https://hrisa-backend.onrender.com`
-- ✅ **hrisa-ollama**: DEPLOYED (model downloaded and ready)
-- ✅ Backend is live and responding
+### Backend (Render.com)
+- **URL**: https://hrisa-backend.onrender.com
+- **Status**: ⚠️ **Running OLD CODE** (before auth system)
+- **Service ID**: srv-d6l94ia4d50c73b542lg
+
+**Endpoints:**
+- ✅ `/api/stats` - HTTP 200 (working)
+- ❌ `/api/auth/send-magic-link` - HTTP 404 (not deployed yet)
+- ❌ `/favicon.ico` - HTTP 404 (not deployed yet)
+
+**Analysis:**
+The backend is responding but running code from **before** the authentication system was added.
 
 ### Frontend (Vercel)
-- ✅ **Frontend**: DEPLOYED at `https://hrisa-code-app.vercel.app`
-- ✅ Static files serving correctly
-- ✅ Page loads with UI
+- **URL**: https://hrisa-mywebsite.vercel.app
+- **Status**: ✅ **Running with auth UI** (latest code)
 
 ---
 
-## ⚠️ What Needs Fixing
+## 🔧 Next Steps
 
-### Issue: API calls not reaching backend
+### 1. Trigger Render Deployment (DO THIS NOW)
 
-**Problem**: Frontend is trying to call `/api/*` on Vercel, but those requests aren't being proxied to Render backend.
+Go to: https://dashboard.render.com/web/srv-d6l94ia4d50c73b542lg
+Click **"Manual Deploy"** → **"Deploy latest commit"**
+Wait 5-10 minutes
 
-**Root Cause**: Vercel rewrites in `vercel.json` aren't working properly.
+### 2. After Deployment - Configure Environment
 
----
-
-## 🔧 Solution: Update Frontend to Use Backend URL Directly
-
-The frontend JavaScript needs to call the backend URL directly instead of relying on Vercel rewrites.
-
-### Fix Option 1: Update app.js to Use Backend URL
-
-**File**: `src/hrisa_code/web/static/app.js`
-
-**Change line ~1** where `API_BASE` is defined:
-
-```javascript
-// Current (broken):
-const API_BASE = '';  // or window.location.origin
-
-// Fixed:
-const API_BASE = 'https://hrisa-backend.onrender.com';
+Use automation script:
+```bash
+python scripts/deploy-to-render.py --service-id srv-d6l94ia4d50c73b542lg --database-id dpg-YOUR_DB_ID
 ```
 
-### Fix Option 2: Use Environment Variable in HTML
+Or manually add env vars from `.env.production`
 
-**File**: `src/hrisa_code/web/static/index.html`
-
-Add before loading app.js:
-
-```html
-<script>
-    window.BACKEND_URL = 'https://hrisa-backend.onrender.com';
-</script>
-<script src="app.js"></script>
-```
-
-Then in app.js:
-```javascript
-const API_BASE = window.BACKEND_URL || '';
-```
-
----
-
-## 🎯 Quick Fix Commands
-
-### Option A: Hardcode Backend URL (Fastest)
+### 3. Run Migrations (in Render Shell)
 
 ```bash
-# 1. Update app.js
-# Find line with: const API_BASE =
-# Change to: const API_BASE = 'https://hrisa-backend.onrender.com';
-
-# 2. Commit and push
-git add src/hrisa_code/web/static/app.js
-git commit -m "fix: Use backend URL directly in frontend"
-git push origin main
-
-# 3. Vercel will auto-deploy in 30-60 seconds
-```
-
-### Option B: Update CORS First (Also Important)
-
-```bash
-# In Render dashboard:
-# 1. Go to hrisa-backend → Environment
-# 2. Find ALLOWED_ORIGINS
-# 3. Set value to: https://hrisa-code-app.vercel.app
-# 4. Click Save Changes
+alembic upgrade head
+python scripts/create_admin.py admin@yourdomain.com
 ```
 
 ---
 
-## 📋 Step-by-Step Fix Tomorrow
+## 📋 Status Checklist
 
-1. **Find API_BASE in app.js**:
-   ```bash
-   grep -n "API_BASE" src/hrisa_code/web/static/app.js
-   ```
+- ✅ Code committed and pushed
+- ⏳ Waiting for Render to deploy
+- ❌ Env vars not configured
+- ❌ Database not connected
+- ❌ Migrations not run
 
-2. **Update it to**:
-   ```javascript
-   const API_BASE = 'https://hrisa-backend.onrender.com';
-   ```
-
-3. **Commit and push**:
-   ```bash
-   git add src/hrisa_code/web/static/app.js
-   git commit -m "fix: Point frontend to backend URL"
-   git push origin main
-   ```
-
-4. **Update CORS in Render**:
-   - Dashboard → hrisa-backend → Environment
-   - `ALLOWED_ORIGINS` = `https://hrisa-code-app.vercel.app`
-   - Save
-
-5. **Test**:
-   - Visit: https://hrisa-code-app.vercel.app
-   - Should see agents list load
-   - Can create new agents
-
----
-
-## 🎉 What We Accomplished Today
-
-- ✅ Complete feature implementation (Categories 4-7)
-- ✅ 30+ tests written
-- ✅ Comprehensive documentation
-- ✅ Backend deployed to Render
-- ✅ Ollama service deployed with model
-- ✅ Frontend deployed to Vercel
-- ✅ Fixed 6+ deployment issues:
-  - Blueprint YAML syntax
-  - Database plan deprecation
-  - Docker curl installation
-  - Python version format
-  - Pydantic v2 compatibility
-  - Missing imports
-
-**Just need 1 small fix**: Connect frontend to backend URL!
-
----
-
-## 📞 Support
-
-- Backend health: `curl https://hrisa-backend.onrender.com/health`
-- Frontend: https://hrisa-code-app.vercel.app
-- Repository: https://github.com/Mahdisellami/Hrisa-Code
-
----
-
-**Estimated time to fix tomorrow**: 5 minutes
-
-**The hard work is done - both services are deployed and working!**
+**Action Required**: Trigger manual deployment in Render Dashboard
