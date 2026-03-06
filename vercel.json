@@ -1,0 +1,57 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "name": "hrisa-code-ui",
+  "builds": [
+    {
+      "src": "src/hrisa_code/web/static/**",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/static/(.*)",
+      "dest": "/src/hrisa_code/web/static/$1"
+    },
+    {
+      "src": "/(.*\\.(js|css|html))",
+      "dest": "/src/hrisa_code/web/static/$1"
+    },
+    {
+      "src": "/",
+      "dest": "/src/hrisa_code/web/static/index.html"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "${BACKEND_URL}/api/:path*"
+    },
+    {
+      "source": "/ws/:path*",
+      "destination": "${BACKEND_URL}/ws/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ]
+    }
+  ],
+  "env": {
+    "BACKEND_URL": "@backend-url"
+  }
+}

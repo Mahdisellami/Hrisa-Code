@@ -117,6 +117,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Troubleshooting guide with common issues
   - Complete API reference
 
+- **PRODUCTION.md**: Production deployment guide (400+ lines)
+  - Pre-deployment checklist and security considerations
+  - Environment variable documentation
+  - 4 deployment options (Vercel+Render, Docker Compose, Kubernetes, AWS ECS)
+  - nginx configuration with SSL/TLS
+  - Monitoring, logging, and backup strategies
+  - Performance tuning and troubleshooting
+  - Complete health check examples
+
+#### 🚀 Deployment Infrastructure
+- **Vercel Configuration** (vercel.json):
+  - Static file serving with CDN optimization
+  - API proxy rewrites to backend
+  - WebSocket proxy configuration
+  - Security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection)
+  - Environment variable management
+
+- **Render Configuration** (render.yaml):
+  - Ollama service (Private Service with persistent disk)
+  - FastAPI backend (Web Service with auto-deploy)
+  - PostgreSQL database (optional)
+  - Internal service communication
+  - Health check configuration
+  - Environment variable injection
+
+- **Docker Support**:
+  - `docker/Dockerfile.ollama` - Custom Ollama image for Render
+  - `docker/entrypoint.sh` - Automatic model pulling on startup
+  - Health checks and service readiness probes
+  - 20 GB persistent volume for model storage
+
+- **CI/CD Pipeline** (.github/workflows/deploy.yml):
+  - Automated testing (linting, type checking, unit tests)
+  - Frontend deployment to Vercel on push to main
+  - Backend deployment trigger for Render
+  - Slack notifications for deployment status
+  - Coverage reporting to Codecov
+
+- **Deployment Documentation**:
+  - **VERCEL_RENDER.md**: Complete step-by-step guide (1000+ lines)
+    - Architecture overview with request flow diagram
+    - Prerequisites and account setup
+    - Part-by-part deployment instructions
+    - Environment variable configuration
+    - CORS setup and verification
+    - Custom domain configuration
+    - Monitoring and maintenance procedures
+    - Cost estimation ($32-57/month)
+    - Troubleshooting guide with solutions
+
+  - **DEPLOYMENT_CHECKLIST.md**: Quick reference checklist
+    - Pre-deployment tasks (tests, secrets, configs)
+    - Render deployment steps (Ollama + Backend)
+    - Vercel deployment steps (Frontend)
+    - Post-deployment verification
+    - Optional custom domain setup
+    - CI/CD configuration
+    - Monitoring setup
+    - Regular maintenance tasks
+
 ### Changed
 
 - **User Feedback**: Replaced all 13 blocking `alert()` dialogs with elegant toast notifications
@@ -175,12 +235,14 @@ GET    /api/export/logs/{id}            Export logs
 - Search filtering is debounced for performance
 
 **Code Statistics**:
-- 46 commits total (45 ahead of origin)
-- ~3,500+ lines of code added
+- 48 commits total (47 ahead of origin)
+- ~5,000+ lines of code added
 - 400+ lines backend (Python)
 - 2,500+ lines frontend (JavaScript)
 - 400+ lines styles (CSS)
 - 647 lines tests (Python)
+- 1,500+ lines documentation (Markdown)
+- 200+ lines deployment configs (YAML, JSON, Dockerfile)
 
 ### Security
 
