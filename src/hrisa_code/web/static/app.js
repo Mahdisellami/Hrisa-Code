@@ -971,6 +971,21 @@ async function renderAgentDetail(agentId) {
                 🗑️ Delete
             </button>
         </div>
+
+        <div class="detail-section">
+            <h3>Export Options</h3>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-secondary btn-small" onclick="exportAgentData('${agent.id}', 'json')">
+                    📄 Export JSON
+                </button>
+                <button class="btn btn-secondary btn-small" onclick="exportAgentData('${agent.id}', 'markdown')">
+                    📝 Export Markdown
+                </button>
+                <button class="btn btn-secondary btn-small" onclick="exportAgentLogs('${agent.id}')">
+                    📋 Export Logs
+                </button>
+            </div>
+        </div>
     `;
 
     // Load inter-agent messages asynchronously
@@ -4163,6 +4178,102 @@ function generateSystemRecommendations(agentStats, successRate, errorRate, loopD
         </div>
     `;
 }
+
+// Export & Reporting Functions
+
+
+async function exportSession() {
+    try {
+        const response = await fetch(`${API_BASE}/export/session?include_artifacts=true&include_logs=true`);
+        if (!response.ok) throw new Error('Export failed');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hrisa-session-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        alert('Session exported successfully!');
+    } catch (error) {
+        console.error('Export error:', error);
+        alert(`Export failed: ${error.message}`);
+    }
+}
+
+
+async function exportAnalytics() {
+    try {
+        const response = await fetch(`${API_BASE}/export/analytics`);
+        if (!response.ok) throw new Error('Export failed');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hrisa-analytics-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        alert('Analytics exported successfully!');
+    } catch (error) {
+        console.error('Export error:', error);
+        alert(`Export failed: ${error.message}`);
+    }
+}
+
+
+async function exportAgentData(agentId, format = 'json') {
+    try {
+        const response = await fetch(`${API_BASE}/export/agent/${agentId}?format=${format}`);
+        if (!response.ok) throw new Error('Export failed');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const extension = format === 'markdown' ? 'md' : 'json';
+        a.href = url;
+        a.download = `agent-${agentId}-${new Date().toISOString().split('T')[0]}.${extension}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        alert(`Agent data exported as ${format.toUpperCase()}!`);
+    } catch (error) {
+        console.error('Export error:', error);
+        alert(`Export failed: ${error.message}`);
+    }
+}
+
+
+async function exportAgentLogs(agentId) {
+    try {
+        const response = await fetch(`${API_BASE}/export/logs/${agentId}`);
+        if (!response.ok) throw new Error('Export failed');
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `agent-${agentId}-logs-${new Date().toISOString().split('T')[0]}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        alert('Agent logs exported successfully!');
+    } catch (error) {
+        console.error('Export error:', error);
+        alert(`Export failed: ${error.message}`);
+    }
+}
+
 
 // Override openModal to populate forms when opening modals
 const originalOpenModal = window.openModal || openModal;

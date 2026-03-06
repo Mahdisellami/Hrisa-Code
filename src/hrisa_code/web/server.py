@@ -1917,6 +1917,378 @@ async def get_fallback_statistics():
     )
 
 
+# Export & Reporting Endpoints
+
+
+@app.get("/api/export/session")
+async def export_session(
+    include_artifacts: bool = Query(True, description="Include artifact contents"),
+    include_logs: bool = Query(True, description="Include agent logs"),
+):
+    """Export complete session data including all agents and teams."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    # Collect all agents
+    agents_data = []
+    for agent_id, agent_info in agent_manager.agents.items():
+        agent_data = {
+            "id": agent_id,
+            "task": agent_info.task,
+            "status": agent_info.status.value,
+            "created_at": agent_info.created_at.isoformat(),
+            "working_dir": str(agent_info.working_dir),
+            "model": agent_info.model,
+            "role": agent_info.role,
+            "tags": agent_info.tags,
+            "progress": {
+                "total_steps": agent_info.progress.total_steps,
+                "completed_steps": agent_info.progress.completed_steps,
+                "current_step": agent_info.progress.current_step,
+                "tool_calls": agent_info.progress.tool_calls,
+                "loop_detections": agent_info.progress.loop_detections,
+                "errors": agent_info.progress.errors,
+                "last_activity": agent_info.progress.last_activity.isoformat(),
+            },
+            "current_state": agent_info.current_state.value,
+            "parent_agent_id": agent_info.parent_agent_id,
+            "child_agent_ids": agent_info.child_agent_ids,
+            "team_id": agent_info.team_id,
+            "priority": agent_info.priority,
+            "message_count": len(agent_info.messages),
+        }
+
+        if include_logs:
+            agent_data["logs"] = [
+                {
+                    "timestamp": log.timestamp.isoformat(),
+                    "level": log.level,
+                    "message": log.message,
+                }
+                for log in agent_info.logs
+            ]
+
+        if include_artifacts:
+            agent_data["artifacts"] = [
+                {
+                    "id": artifact.id,
+                    "name": artifact.name,
+                    "type": artifact.type,
+                    "content": artifact.content,
+                    "created_at": artifact.created_at.isoformat(),
+                    "updated_at": artifact.updated_at.isoformat() if artifact.updated_at else None,
+                }
+                for artifact in agent_info.artifacts
+            ]
+
+        agents_data.append(agent_data)
+
+    # Collect all teams
+    teams_data = [
+        {
+            "id": team.id,
+            "name": team.name,
+            "description": team.description,
+            "created_at": team.created_at.isoformat(),
+            "lead_agent_id": team.lead_agent_id,
+            "member_agent_ids": team.member_agent_ids,
+            "shared_goal": team.shared_goal,
+            "status": team.status,
+        }
+        for team in agent_manager.teams
+    ]
+
+    # Collect model metrics
+    model_metrics = [
+        {
+            "model_name": m.model_name,
+            "total_requests": m.total_requests,
+            "successful_requests": m.successful_requests,
+            "failed_requests": m.failed_requests,
+            "success_rate": m.success_rate,
+            "average_response_time": m.average_response_time,
+            "average_tokens_per_request": m.average_tokens_per_request,
+            "last_used": m.last_used.isoformat() if m.last_used else None,
+        }
+        for m in agent_manager.model_metrics.values()
+    ]
+
+    session_data = {
+        "export_timestamp": datetime.now().isoformat(),
+        "export_version": "1.0",
+        "agents": agents_data,
+        "teams": teams_data,
+        "model_metrics": model_metrics,
+        "statistics": {
+            "total_agents": len(agents_data),
+            "total_teams": len(teams_data),
+            "agents_by_status": {
+                "running": sum(1 for a in agents_data if a["status"] == "running"),
+                "completed": sum(1 for a in agents_data if a["status"] == "completed"),
+                "failed": sum(1 for a in agents_data if a["status"] == "failed"),
+                "stuck": sum(1 for a in agents_data if a["status"] == "stuck"),
+            },
+        },
+    }
+
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        content=session_data,
+        headers={
+            "Content-Disposition": f'attachment; filename="hrisa-session-{datetime.now().strftime("%Y%m%d-%H%M%S")}.json"'
+        },
+    )
+
+
+@app.get("/api/export/agent/{agent_id}")
+async def export_agent(
+    agent_id: str,
+    format: str = Query("json", regex="^(json|markdown)$", description="Export format"),
+):
+    """Export single agent data in JSON or Markdown format."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent_info = agent_manager.agents.get(agent_id)
+    if not agent_info:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    if format == "json":
+        agent_data = {
+            "id": agent_id,
+            "task": agent_info.task,
+            "status": agent_info.status.value,
+            "created_at": agent_info.created_at.isoformat(),
+            "working_dir": str(agent_info.working_dir),
+            "model": agent_info.model,
+            "role": agent_info.role,
+            "tags": agent_info.tags,
+            "progress": {
+                "total_steps": agent_info.progress.total_steps,
+                "completed_steps": agent_info.progress.completed_steps,
+                "current_step": agent_info.progress.current_step,
+                "tool_calls": agent_info.progress.tool_calls,
+                "loop_detections": agent_info.progress.loop_detections,
+                "errors": agent_info.progress.errors,
+                "last_activity": agent_info.progress.last_activity.isoformat(),
+            },
+            "messages": [
+                {
+                    "role": msg.role,
+                    "content": msg.content[:500] + "..." if len(msg.content) > 500 else msg.content,
+                    "timestamp": msg.timestamp.isoformat(),
+                }
+                for msg in agent_info.messages
+            ],
+            "logs": [
+                {
+                    "timestamp": log.timestamp.isoformat(),
+                    "level": log.level,
+                    "message": log.message,
+                }
+                for log in agent_info.logs
+            ],
+            "artifacts": [
+                {
+                    "id": artifact.id,
+                    "name": artifact.name,
+                    "type": artifact.type,
+                    "content_length": len(artifact.content),
+                    "created_at": artifact.created_at.isoformat(),
+                }
+                for artifact in agent_info.artifacts
+            ],
+        }
+
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            content=agent_data,
+            headers={
+                "Content-Disposition": f'attachment; filename="agent-{agent_id}-{datetime.now().strftime("%Y%m%d-%H%M%S")}.json"'
+            },
+        )
+
+    elif format == "markdown":
+        # Generate Markdown report
+        md_content = f"""# Agent Report: {agent_id}
+
+**Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+## Overview
+
+- **Task:** {agent_info.task}
+- **Status:** {agent_info.status.value}
+- **Model:** {agent_info.model}
+- **Role:** {agent_info.role or "general"}
+- **Created:** {agent_info.created_at.strftime("%Y-%m-%d %H:%M:%S")}
+- **Working Directory:** {agent_info.working_dir}
+- **Tags:** {", ".join(agent_info.tags) if agent_info.tags else "None"}
+
+## Progress
+
+- **Total Steps:** {agent_info.progress.total_steps}
+- **Completed Steps:** {agent_info.progress.completed_steps}
+- **Current Step:** {agent_info.progress.current_step or "N/A"}
+- **Tool Calls:** {agent_info.progress.tool_calls}
+- **Loop Detections:** {agent_info.progress.loop_detections}
+- **Errors:** {agent_info.progress.errors}
+- **Last Activity:** {agent_info.progress.last_activity.strftime("%Y-%m-%d %H:%M:%S")}
+- **Completion Rate:** {(agent_info.progress.completed_steps / max(agent_info.progress.total_steps, 1)) * 100:.1f}%
+
+## Messages ({len(agent_info.messages)})
+
+"""
+        for i, msg in enumerate(agent_info.messages[:10], 1):  # Limit to first 10
+            md_content += f"### Message {i} - {msg.role}\n"
+            md_content += f"**Time:** {msg.timestamp.strftime('%H:%M:%S')}\n\n"
+            preview = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
+            md_content += f"```\n{preview}\n```\n\n"
+
+        if len(agent_info.messages) > 10:
+            md_content += f"*...and {len(agent_info.messages) - 10} more messages*\n\n"
+
+        md_content += f"""## Artifacts ({len(agent_info.artifacts)})
+
+"""
+        for artifact in agent_info.artifacts:
+            md_content += f"- **{artifact.name}** ({artifact.type}) - Created: {artifact.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n"
+
+        md_content += f"""
+## Logs (Recent)
+
+"""
+        for log in agent_info.logs[-20:]:  # Last 20 logs
+            md_content += f"- `[{log.timestamp.strftime('%H:%M:%S')}]` **{log.level}**: {log.message}\n"
+
+        from fastapi.responses import Response
+
+        return Response(
+            content=md_content,
+            media_type="text/markdown",
+            headers={
+                "Content-Disposition": f'attachment; filename="agent-{agent_id}-{datetime.now().strftime("%Y%m%d-%H%M%S")}.md"'
+            },
+        )
+
+
+@app.get("/api/export/analytics")
+async def export_analytics():
+    """Export comprehensive analytics report."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agents = list(agent_manager.agents.values())
+    teams = agent_manager.teams
+
+    # Calculate analytics
+    now = datetime.now()
+    total_duration = sum(
+        (now - agent.created_at).total_seconds() for agent in agents
+    )
+    avg_duration = total_duration / len(agents) if agents else 0
+
+    analytics = {
+        "generated_at": now.isoformat(),
+        "summary": {
+            "total_agents": len(agents),
+            "total_teams": len(teams),
+            "total_runtime_hours": total_duration / 3600,
+            "average_agent_duration_minutes": avg_duration / 60,
+        },
+        "agent_statistics": {
+            "by_status": {
+                "running": sum(1 for a in agents if a.status == AgentStatus.RUNNING),
+                "completed": sum(1 for a in agents if a.status == AgentStatus.COMPLETED),
+                "failed": sum(1 for a in agents if a.status == AgentStatus.FAILED),
+                "stuck": sum(1 for a in agents if a.status == AgentStatus.STUCK),
+            },
+            "by_model": {},
+            "by_role": {},
+        },
+        "performance_metrics": {
+            "total_tool_calls": sum(a.progress.tool_calls for a in agents),
+            "total_messages": sum(len(a.messages) for a in agents),
+            "total_artifacts": sum(len(a.artifacts) for a in agents),
+            "total_errors": sum(a.progress.errors for a in agents),
+            "total_loop_detections": sum(a.progress.loop_detections for a in agents),
+            "average_tool_calls_per_agent": sum(a.progress.tool_calls for a in agents) / len(agents) if agents else 0,
+            "average_messages_per_agent": sum(len(a.messages) for a in agents) / len(agents) if agents else 0,
+            "success_rate": (sum(1 for a in agents if a.status == AgentStatus.COMPLETED) / len(agents) * 100) if agents else 0,
+        },
+        "model_performance": [
+            {
+                "model_name": m.model_name,
+                "requests": m.total_requests,
+                "success_rate": m.success_rate,
+                "avg_response_time": m.average_response_time,
+                "avg_tokens": m.average_tokens_per_request,
+            }
+            for m in agent_manager.model_metrics.values()
+        ],
+        "team_statistics": {
+            "total_teams": len(teams),
+            "active_teams": sum(1 for t in teams if t.status == "active"),
+            "average_members_per_team": sum(len(t.member_agent_ids) for t in teams) / len(teams) if teams else 0,
+        },
+    }
+
+    # Count by model and role
+    for agent in agents:
+        analytics["agent_statistics"]["by_model"][agent.model] = (
+            analytics["agent_statistics"]["by_model"].get(agent.model, 0) + 1
+        )
+        role = agent.role or "general"
+        analytics["agent_statistics"]["by_role"][role] = (
+            analytics["agent_statistics"]["by_role"].get(role, 0) + 1
+        )
+
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(
+        content=analytics,
+        headers={
+            "Content-Disposition": f'attachment; filename="hrisa-analytics-{datetime.now().strftime("%Y%m%d-%H%M%S")}.json"'
+        },
+    )
+
+
+@app.get("/api/export/logs/{agent_id}")
+async def export_agent_logs(agent_id: str):
+    """Export agent logs as text file."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent_info = agent_manager.agents.get(agent_id)
+    if not agent_info:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    # Generate log text
+    log_content = f"""Hrisa Code - Agent Logs
+Agent ID: {agent_id}
+Task: {agent_info.task}
+Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+
+{'=' * 80}
+
+"""
+
+    for log in agent_info.logs:
+        timestamp = log.timestamp.strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        log_content += f"[{timestamp}] {log.level.upper():8} | {log.message}\n"
+
+    from fastapi.responses import Response
+
+    return Response(
+        content=log_content,
+        media_type="text/plain",
+        headers={
+            "Content-Disposition": f'attachment; filename="agent-{agent_id}-logs-{datetime.now().strftime("%Y%m%d-%H%M%S")}.txt"'
+        },
+    )
+
+
 # WebSocket endpoint
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
