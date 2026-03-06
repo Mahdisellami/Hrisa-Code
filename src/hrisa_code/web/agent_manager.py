@@ -216,6 +216,54 @@ class AgentProgress:
 
 
 @dataclass
+class WebhookConfig:
+    """Configuration for a webhook integration."""
+
+    id: str
+    name: str
+    url: str
+    events: List[str]  # e.g., ["agent.completed", "agent.failed", "agent.stuck"]
+    enabled: bool = True
+    secret: Optional[str] = None  # For signature verification
+    headers: Dict[str, str] = field(default_factory=dict)
+    created_at: datetime = field(default_factory=datetime.now)
+    last_triggered: Optional[datetime] = None
+    trigger_count: int = 0
+    failure_count: int = 0
+
+
+@dataclass
+class NotificationChannel:
+    """Configuration for a notification channel (Slack, Discord, Email)."""
+
+    id: str
+    name: str
+    type: str  # 'slack', 'discord', 'email'
+    config: Dict[str, Any]  # Type-specific config (webhook_url, email addresses, etc.)
+    events: List[str]  # Events to notify on
+    enabled: bool = True
+    created_at: datetime = field(default_factory=datetime.now)
+    last_sent: Optional[datetime] = None
+    send_count: int = 0
+    failure_count: int = 0
+
+
+@dataclass
+class WebhookEvent:
+    """A webhook event record."""
+
+    id: str
+    webhook_id: str
+    event_type: str
+    timestamp: datetime
+    payload: Dict[str, Any]
+    response_status: Optional[int] = None
+    response_time_ms: Optional[float] = None
+    error: Optional[str] = None
+    success: bool = False
+
+
+@dataclass
 class AgentInfo:
     """Complete information about a web-managed agent."""
 
@@ -293,6 +341,11 @@ class WebAgentManager:
         # Session management
         self.sessions_dir = Path.home() / ".hrisa" / "sessions"
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
+
+        # Integration management
+        self.webhooks: Dict[str, WebhookConfig] = {}
+        self.notification_channels: Dict[str, NotificationChannel] = {}
+        self.webhook_events: List[WebhookEvent] = []
 
     async def start(self) -> None:
         """Start the agent manager and monitoring."""
@@ -2451,3 +2504,369 @@ class WebAgentManager:
             "most_reliable_model": most_reliable,
             "most_problematic_model": most_problematic,
         }
+
+    # Webhook & Integration Management
+
+    def add_webhook(
+        self,
+        name: str,
+        url: str,
+        events: List[str],
+        secret: Optional[str] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> str:
+        """Add a new webhook integration.
+
+        Args:
+            name: Webhook name
+            url: Webhook URL
+            events: List of events to trigger on
+            secret: Optional secret for signature verification
+            headers: Optional custom headers
+
+        Returns:
+            Webhook ID
+        """
+        webhook_id = str(uuid.uuid4())
+        self.webhooks[webhook_id] = WebhookConfig(
+            id=webhook_id,
+            name=name,
+            url=url,
+            events=events,
+            secret=secret,
+            headers=headers or {},
+        )
+        return webhook_id
+
+    def update_webhook(self, webhook_id: str, **kwargs) -> bool:
+        """Update webhook configuration.
+
+        Args:
+            webhook_id: Webhook ID
+            **kwargs: Fields to update
+
+        Returns:
+            True if updated successfully
+        """
+        if webhook_id not in self.webhooks:
+            return False
+
+        webhook = self.webhooks[webhook_id]
+        for key, value in kwargs.items():
+            if hasattr(webhook, key):
+                setattr(webhook, key, value)
+        return True
+
+    def delete_webhook(self, webhook_id: str) -> bool:
+        """Delete a webhook.
+
+        Args:
+            webhook_id: Webhook ID
+
+        Returns:
+            True if deleted
+        """
+        return self.webhooks.pop(webhook_id, None) is not None
+
+    def get_webhooks(self) -> List[WebhookConfig]:
+        """Get all webhooks.
+
+        Returns:
+            List of webhook configurations
+        """
+        return list(self.webhooks.values())
+
+    async def trigger_webhooks(self, event_type: str, payload: Dict[str, Any]) -> None:
+        """Trigger all webhooks subscribed to an event.
+
+        Args:
+            event_type: Event type (e.g., "agent.completed")
+            payload: Event payload
+        """
+        import aiohttp
+        import hashlib
+        import hmac
+        import time
+
+        # Find matching webhooks
+        matching_webhooks = [
+            w for w in self.webhooks.values()
+            if w.enabled and event_type in w.events
+        ]
+
+        if not matching_webhooks:
+            return
+
+        async with aiohttp.ClientSession() as session:
+            for webhook in matching_webhooks:
+                event_id = str(uuid.uuid4())
+                start_time = time.time()
+
+                try:
+                    # Prepare payload
+                    webhook_payload = {
+                        "event_id": event_id,
+                        "event_type": event_type,
+                        "timestamp": datetime.now().isoformat(),
+                        "data": payload,
+                    }
+
+                    # Prepare headers
+                    headers = dict(webhook.headers)
+                    headers["Content-Type"] = "application/json"
+
+                    # Add signature if secret is configured
+                    if webhook.secret:
+                        payload_bytes = json.dumps(webhook_payload).encode("utf-8")
+                        signature = hmac.new(
+                            webhook.secret.encode("utf-8"),
+                            payload_bytes,
+                            hashlib.sha256,
+                        ).hexdigest()
+                        headers["X-Webhook-Signature"] = f"sha256={signature}"
+
+                    # Send webhook
+                    async with session.post(
+                        webhook.url,
+                        json=webhook_payload,
+                        headers=headers,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as response:
+                        status = response.status
+                        response_time = (time.time() - start_time) * 1000
+
+                        # Record event
+                        webhook_event = WebhookEvent(
+                            id=event_id,
+                            webhook_id=webhook.id,
+                            event_type=event_type,
+                            timestamp=datetime.now(),
+                            payload=payload,
+                            response_status=status,
+                            response_time_ms=response_time,
+                            success=200 <= status < 300,
+                        )
+                        self.webhook_events.append(webhook_event)
+
+                        # Update webhook stats
+                        webhook.last_triggered = datetime.now()
+                        webhook.trigger_count += 1
+                        if status >= 400:
+                            webhook.failure_count += 1
+
+                except Exception as e:
+                    # Record failed event
+                    response_time = (time.time() - start_time) * 1000
+                    webhook_event = WebhookEvent(
+                        id=event_id,
+                        webhook_id=webhook.id,
+                        event_type=event_type,
+                        timestamp=datetime.now(),
+                        payload=payload,
+                        response_time_ms=response_time,
+                        error=str(e),
+                        success=False,
+                    )
+                    self.webhook_events.append(webhook_event)
+                    webhook.failure_count += 1
+
+    def add_notification_channel(
+        self,
+        name: str,
+        channel_type: str,
+        config: Dict[str, Any],
+        events: List[str],
+    ) -> str:
+        """Add a notification channel.
+
+        Args:
+            name: Channel name
+            channel_type: Channel type ('slack', 'discord', 'email')
+            config: Channel-specific configuration
+            events: Events to notify on
+
+        Returns:
+            Channel ID
+        """
+        channel_id = str(uuid.uuid4())
+        self.notification_channels[channel_id] = NotificationChannel(
+            id=channel_id,
+            name=name,
+            type=channel_type,
+            config=config,
+            events=events,
+        )
+        return channel_id
+
+    def update_notification_channel(self, channel_id: str, **kwargs) -> bool:
+        """Update notification channel.
+
+        Args:
+            channel_id: Channel ID
+            **kwargs: Fields to update
+
+        Returns:
+            True if updated
+        """
+        if channel_id not in self.notification_channels:
+            return False
+
+        channel = self.notification_channels[channel_id]
+        for key, value in kwargs.items():
+            if hasattr(channel, key):
+                setattr(channel, key, value)
+        return True
+
+    def delete_notification_channel(self, channel_id: str) -> bool:
+        """Delete notification channel.
+
+        Args:
+            channel_id: Channel ID
+
+        Returns:
+            True if deleted
+        """
+        return self.notification_channels.pop(channel_id, None) is not None
+
+    def get_notification_channels(self) -> List[NotificationChannel]:
+        """Get all notification channels.
+
+        Returns:
+            List of notification channels
+        """
+        return list(self.notification_channels.values())
+
+    async def send_notifications(self, event_type: str, payload: Dict[str, Any]) -> None:
+        """Send notifications to all subscribed channels.
+
+        Args:
+            event_type: Event type
+            payload: Event data
+        """
+        import aiohttp
+
+        # Find matching channels
+        matching_channels = [
+            c for c in self.notification_channels.values()
+            if c.enabled and event_type in c.events
+        ]
+
+        if not matching_channels:
+            return
+
+        async with aiohttp.ClientSession() as session:
+            for channel in matching_channels:
+                try:
+                    if channel.type == "slack":
+                        await self._send_slack_notification(session, channel, event_type, payload)
+                    elif channel.type == "discord":
+                        await self._send_discord_notification(session, channel, event_type, payload)
+                    elif channel.type == "email":
+                        await self._send_email_notification(channel, event_type, payload)
+
+                    channel.last_sent = datetime.now()
+                    channel.send_count += 1
+
+                except Exception as e:
+                    print(f"Failed to send notification to {channel.name}: {e}")
+                    channel.failure_count += 1
+
+    async def _send_slack_notification(
+        self,
+        session: "aiohttp.ClientSession",
+        channel: NotificationChannel,
+        event_type: str,
+        payload: Dict[str, Any],
+    ) -> None:
+        """Send Slack notification."""
+        webhook_url = channel.config.get("webhook_url")
+        if not webhook_url:
+            raise ValueError("Slack webhook_url not configured")
+
+        # Format message
+        agent_id = payload.get("agent_id", "unknown")
+        status = payload.get("status", event_type)
+        task = payload.get("task", "")[:100]
+
+        message = {
+            "text": f"Agent {event_type}",
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Agent {event_type.replace('agent.', '').title()}*\n"
+                                f"ID: `{agent_id}`\n"
+                                f"Status: {status}\n"
+                                f"Task: {task}"
+                    }
+                }
+            ]
+        }
+
+        async with session.post(webhook_url, json=message) as response:
+            response.raise_for_status()
+
+    async def _send_discord_notification(
+        self,
+        session: "aiohttp.ClientSession",
+        channel: NotificationChannel,
+        event_type: str,
+        payload: Dict[str, Any],
+    ) -> None:
+        """Send Discord notification."""
+        webhook_url = channel.config.get("webhook_url")
+        if not webhook_url:
+            raise ValueError("Discord webhook_url not configured")
+
+        # Format embed
+        agent_id = payload.get("agent_id", "unknown")
+        status = payload.get("status", event_type)
+        task = payload.get("task", "")[:1000]
+
+        color_map = {
+            "agent.completed": 0x00FF00,  # Green
+            "agent.failed": 0xFF0000,  # Red
+            "agent.stuck": 0xFFA500,  # Orange
+            "agent.started": 0x0000FF,  # Blue
+        }
+
+        message = {
+            "embeds": [{
+                "title": f"Agent {event_type.replace('agent.', '').title()}",
+                "description": f"**ID:** `{agent_id}`\n**Status:** {status}\n**Task:** {task}",
+                "color": color_map.get(event_type, 0x808080),
+                "timestamp": datetime.now().isoformat(),
+            }]
+        }
+
+        async with session.post(webhook_url, json=message) as response:
+            response.raise_for_status()
+
+    async def _send_email_notification(
+        self,
+        channel: NotificationChannel,
+        event_type: str,
+        payload: Dict[str, Any],
+    ) -> None:
+        """Send email notification."""
+        # Email sending would require SMTP configuration
+        # Placeholder for now
+        print(f"Email notification: {event_type} - {payload}")
+
+    def get_webhook_events(self, webhook_id: Optional[str] = None, limit: int = 100) -> List[WebhookEvent]:
+        """Get webhook event history.
+
+        Args:
+            webhook_id: Optional filter by webhook ID
+            limit: Maximum number of events to return
+
+        Returns:
+            List of webhook events
+        """
+        events = self.webhook_events
+        if webhook_id:
+            events = [e for e in events if e.webhook_id == webhook_id]
+
+        # Return most recent first
+        return sorted(events, key=lambda e: e.timestamp, reverse=True)[:limit]

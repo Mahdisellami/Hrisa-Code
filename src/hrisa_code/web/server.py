@@ -2289,6 +2289,270 @@ Generated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
     )
 
 
+# Webhook & Integration Management Endpoints
+
+
+class WebhookCreateRequest(BaseModel):
+    """Request to create a webhook."""
+
+    name: str
+    url: str
+    events: List[str]
+    secret: Optional[str] = None
+    headers: Optional[Dict[str, str]] = None
+
+
+class WebhookUpdateRequest(BaseModel):
+    """Request to update a webhook."""
+
+    name: Optional[str] = None
+    url: Optional[str] = None
+    events: Optional[List[str]] = None
+    enabled: Optional[bool] = None
+    secret: Optional[str] = None
+    headers: Optional[Dict[str, str]] = None
+
+
+class WebhookResponse(BaseModel):
+    """Webhook configuration response."""
+
+    id: str
+    name: str
+    url: str
+    events: List[str]
+    enabled: bool
+    created_at: str
+    last_triggered: Optional[str] = None
+    trigger_count: int
+    failure_count: int
+
+
+class NotificationChannelCreateRequest(BaseModel):
+    """Request to create notification channel."""
+
+    name: str
+    type: str  # 'slack', 'discord', 'email'
+    config: Dict[str, Any]
+    events: List[str]
+
+
+class NotificationChannelUpdateRequest(BaseModel):
+    """Request to update notification channel."""
+
+    name: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
+    events: Optional[List[str]] = None
+    enabled: Optional[bool] = None
+
+
+class NotificationChannelResponse(BaseModel):
+    """Notification channel response."""
+
+    id: str
+    name: str
+    type: str
+    events: List[str]
+    enabled: bool
+    created_at: str
+    last_sent: Optional[str] = None
+    send_count: int
+    failure_count: int
+
+
+@app.post("/api/webhooks")
+async def create_webhook(request: WebhookCreateRequest):
+    """Create a new webhook."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    webhook_id = agent_manager.add_webhook(
+        name=request.name,
+        url=request.url,
+        events=request.events,
+        secret=request.secret,
+        headers=request.headers,
+    )
+
+    webhook = agent_manager.webhooks[webhook_id]
+    return WebhookResponse(
+        id=webhook.id,
+        name=webhook.name,
+        url=webhook.url,
+        events=webhook.events,
+        enabled=webhook.enabled,
+        created_at=webhook.created_at.isoformat(),
+        last_triggered=webhook.last_triggered.isoformat() if webhook.last_triggered else None,
+        trigger_count=webhook.trigger_count,
+        failure_count=webhook.failure_count,
+    )
+
+
+@app.get("/api/webhooks")
+async def list_webhooks():
+    """List all webhooks."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    webhooks = agent_manager.get_webhooks()
+    return [
+        WebhookResponse(
+            id=w.id,
+            name=w.name,
+            url=w.url,
+            events=w.events,
+            enabled=w.enabled,
+            created_at=w.created_at.isoformat(),
+            last_triggered=w.last_triggered.isoformat() if w.last_triggered else None,
+            trigger_count=w.trigger_count,
+            failure_count=w.failure_count,
+        )
+        for w in webhooks
+    ]
+
+
+@app.put("/api/webhooks/{webhook_id}")
+async def update_webhook(webhook_id: str, request: WebhookUpdateRequest):
+    """Update a webhook."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    updates = {k: v for k, v in request.dict().items() if v is not None}
+    if not agent_manager.update_webhook(webhook_id, **updates):
+        raise HTTPException(status_code=404, detail="Webhook not found")
+
+    webhook = agent_manager.webhooks[webhook_id]
+    return WebhookResponse(
+        id=webhook.id,
+        name=webhook.name,
+        url=webhook.url,
+        events=webhook.events,
+        enabled=webhook.enabled,
+        created_at=webhook.created_at.isoformat(),
+        last_triggered=webhook.last_triggered.isoformat() if webhook.last_triggered else None,
+        trigger_count=webhook.trigger_count,
+        failure_count=webhook.failure_count,
+    )
+
+
+@app.delete("/api/webhooks/{webhook_id}")
+async def delete_webhook(webhook_id: str):
+    """Delete a webhook."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    if not agent_manager.delete_webhook(webhook_id):
+        raise HTTPException(status_code=404, detail="Webhook not found")
+
+    return {"message": "Webhook deleted successfully"}
+
+
+@app.get("/api/webhooks/{webhook_id}/events")
+async def get_webhook_events(webhook_id: str, limit: int = Query(100, ge=1, le=1000)):
+    """Get webhook event history."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    events = agent_manager.get_webhook_events(webhook_id, limit)
+    return [
+        {
+            "id": e.id,
+            "event_type": e.event_type,
+            "timestamp": e.timestamp.isoformat(),
+            "success": e.success,
+            "response_status": e.response_status,
+            "response_time_ms": e.response_time_ms,
+            "error": e.error,
+        }
+        for e in events
+    ]
+
+
+@app.post("/api/notifications/channels")
+async def create_notification_channel(request: NotificationChannelCreateRequest):
+    """Create a notification channel."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    channel_id = agent_manager.add_notification_channel(
+        name=request.name,
+        channel_type=request.type,
+        config=request.config,
+        events=request.events,
+    )
+
+    channel = agent_manager.notification_channels[channel_id]
+    return NotificationChannelResponse(
+        id=channel.id,
+        name=channel.name,
+        type=channel.type,
+        events=channel.events,
+        enabled=channel.enabled,
+        created_at=channel.created_at.isoformat(),
+        last_sent=channel.last_sent.isoformat() if channel.last_sent else None,
+        send_count=channel.send_count,
+        failure_count=channel.failure_count,
+    )
+
+
+@app.get("/api/notifications/channels")
+async def list_notification_channels():
+    """List all notification channels."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    channels = agent_manager.get_notification_channels()
+    return [
+        NotificationChannelResponse(
+            id=c.id,
+            name=c.name,
+            type=c.type,
+            events=c.events,
+            enabled=c.enabled,
+            created_at=c.created_at.isoformat(),
+            last_sent=c.last_sent.isoformat() if c.last_sent else None,
+            send_count=c.send_count,
+            failure_count=c.failure_count,
+        )
+        for c in channels
+    ]
+
+
+@app.put("/api/notifications/channels/{channel_id}")
+async def update_notification_channel(channel_id: str, request: NotificationChannelUpdateRequest):
+    """Update a notification channel."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    updates = {k: v for k, v in request.dict().items() if v is not None}
+    if not agent_manager.update_notification_channel(channel_id, **updates):
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    channel = agent_manager.notification_channels[channel_id]
+    return NotificationChannelResponse(
+        id=channel.id,
+        name=channel.name,
+        type=channel.type,
+        events=channel.events,
+        enabled=channel.enabled,
+        created_at=channel.created_at.isoformat(),
+        last_sent=channel.last_sent.isoformat() if channel.last_sent else None,
+        send_count=channel.send_count,
+        failure_count=channel.failure_count,
+    )
+
+
+@app.delete("/api/notifications/channels/{channel_id}")
+async def delete_notification_channel(channel_id: str):
+    """Delete a notification channel."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    if not agent_manager.delete_notification_channel(channel_id):
+        raise HTTPException(status_code=404, detail="Channel not found")
+
+    return {"message": "Notification channel deleted successfully"}
+
+
 # WebSocket endpoint
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

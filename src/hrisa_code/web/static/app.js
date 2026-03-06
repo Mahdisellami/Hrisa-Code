@@ -4610,6 +4610,367 @@ function switchView(viewName) {
     }
 }
 
+// Integration Management Functions
+
+
+async function showIntegrationsView() {
+    const listContainer = document.getElementById('agent-list');
+
+    // Fetch webhooks and notification channels
+    let webhooks = [];
+    let channels = [];
+
+    try {
+        const webhooksResponse = await fetch(`${API_BASE}/webhooks`);
+        webhooks = await webhooksResponse.json();
+
+        const channelsResponse = await fetch(`${API_BASE}/notifications/channels`);
+        channels = await channelsResponse.json();
+    } catch (error) {
+        console.error('Failed to fetch integrations:', error);
+    }
+
+    const integrationsHTML = `
+        <div style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="margin: 0; font-size: 24px; font-weight: 700;">🔌 Integrations</h2>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-primary btn-small" onclick="openCreateWebhookModal()">+ Add Webhook</button>
+                    <button class="btn btn-primary btn-small" onclick="openCreateNotificationModal()">+ Add Notification</button>
+                </div>
+            </div>
+
+            <!-- Webhooks Section -->
+            <div style="background: var(--sand-100); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Webhooks (${webhooks.length})</h3>
+                <p style="font-size: 13px; color: var(--sand-600); margin-bottom: 16px;">
+                    Webhooks send HTTP POST requests to external services when specific events occur.
+                </p>
+                ${webhooks.length > 0 ? `
+                    <div style="display: grid; gap: 12px;">
+                        ${webhooks.map(webhook => `
+                            <div style="background: white; border-radius: 8px; padding: 16px; border-left: 4px solid ${webhook.enabled ? '#3b82f6' : '#6b7280'};">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                    <div style="flex: 1;">
+                                        <div style="font-size: 16px; font-weight: 600; color: var(--sand-900); margin-bottom: 4px;">
+                                            ${escapeHtml(webhook.name)}
+                                            ${!webhook.enabled ? '<span style="font-size: 11px; background: var(--sand-300); color: var(--sand-700); padding: 2px 6px; border-radius: 4px; margin-left: 8px;">Disabled</span>' : ''}
+                                        </div>
+                                        <div style="font-size: 12px; color: var(--sand-600); font-family: monospace; margin-bottom: 8px;">
+                                            ${escapeHtml(webhook.url)}
+                                        </div>
+                                        <div style="font-size: 11px; color: var(--sand-600);">
+                                            Events: ${webhook.events.join(', ')}
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; gap: 8px; flex-shrink: 0; margin-left: 16px;">
+                                        <button class="btn btn-secondary btn-small" onclick="toggleWebhook('${webhook.id}', ${!webhook.enabled})" style="font-size: 11px;">
+                                            ${webhook.enabled ? 'Disable' : 'Enable'}
+                                        </button>
+                                        <button class="btn btn-secondary btn-small" onclick="deleteWebhook('${webhook.id}')" style="font-size: 11px;">Delete</button>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 16px; font-size: 11px; color: var(--sand-600); padding-top: 8px; border-top: 1px solid var(--sand-200);">
+                                    <span title="Total triggers">🔔 ${webhook.trigger_count}</span>
+                                    <span title="Failed triggers">❌ ${webhook.failure_count}</span>
+                                    <span title="Last triggered">${webhook.last_triggered ? '⏱️ ' + formatDate(webhook.last_triggered) : '⏱️ Never'}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : '<p style="color: var(--sand-600); text-align: center; padding: 20px;">No webhooks configured. Click "Add Webhook" to get started.</p>'}
+            </div>
+
+            <!-- Notification Channels Section -->
+            <div style="background: var(--sand-100); border-radius: 12px; padding: 20px;">
+                <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Notification Channels (${channels.length})</h3>
+                <p style="font-size: 13px; color: var(--sand-600); margin-bottom: 16px;">
+                    Send notifications to Slack, Discord, or Email when events occur.
+                </p>
+                ${channels.length > 0 ? `
+                    <div style="display: grid; gap: 12px;">
+                        ${channels.map(channel => {
+                            const typeIcons = {
+                                'slack': '💬',
+                                'discord': '💎',
+                                'email': '📧'
+                            };
+                            const typeColors = {
+                                'slack': '#4A154B',
+                                'discord': '#5865F2',
+                                'email': '#EA4335'
+                            };
+                            return `
+                                <div style="background: white; border-radius: 8px; padding: 16px; border-left: 4px solid ${channel.enabled ? typeColors[channel.type] || '#3b82f6' : '#6b7280'};">
+                                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                                        <div style="flex: 1;">
+                                            <div style="font-size: 16px; font-weight: 600; color: var(--sand-900); margin-bottom: 4px;">
+                                                ${typeIcons[channel.type] || '🔔'} ${escapeHtml(channel.name)}
+                                                ${!channel.enabled ? '<span style="font-size: 11px; background: var(--sand-300); color: var(--sand-700); padding: 2px 6px; border-radius: 4px; margin-left: 8px;">Disabled</span>' : ''}
+                                            </div>
+                                            <div style="font-size: 12px; color: var(--sand-600); margin-bottom: 8px;">
+                                                Type: <span style="text-transform: capitalize;">${channel.type}</span>
+                                            </div>
+                                            <div style="font-size: 11px; color: var(--sand-600);">
+                                                Events: ${channel.events.join(', ')}
+                                            </div>
+                                        </div>
+                                        <div style="display: flex; gap: 8px; flex-shrink: 0; margin-left: 16px;">
+                                            <button class="btn btn-secondary btn-small" onclick="toggleNotificationChannel('${channel.id}', ${!channel.enabled})" style="font-size: 11px;">
+                                                ${channel.enabled ? 'Disable' : 'Enable'}
+                                            </button>
+                                            <button class="btn btn-secondary btn-small" onclick="deleteNotificationChannel('${channel.id}')" style="font-size: 11px;">Delete</button>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; gap: 16px; font-size: 11px; color: var(--sand-600); padding-top: 8px; border-top: 1px solid var(--sand-200);">
+                                        <span title="Total sent">📨 ${channel.send_count}</span>
+                                        <span title="Failed sends">❌ ${channel.failure_count}</span>
+                                        <span title="Last sent">${channel.last_sent ? '⏱️ ' + formatDate(channel.last_sent) : '⏱️ Never'}</span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                ` : '<p style="color: var(--sand-600); text-align: center; padding: 20px;">No notification channels configured. Click "Add Notification" to get started.</p>'}
+            </div>
+        </div>
+    `;
+
+    listContainer.innerHTML = integrationsHTML;
+}
+
+async function openCreateWebhookModal() {
+    const html = `
+        <div style="padding: 20px; max-width: 600px;">
+            <h2 style="margin: 0 0 20px 0;">Create Webhook</h2>
+            <form id="create-webhook-form">
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Webhook Name *</label>
+                    <input type="text" id="webhook-name" required style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Webhook URL *</label>
+                    <input type="url" id="webhook-url" required placeholder="https://example.com/webhook" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Events to Subscribe *</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label><input type="checkbox" class="webhook-event" value="agent.started"> Agent Started</label>
+                        <label><input type="checkbox" class="webhook-event" value="agent.completed" checked> Agent Completed</label>
+                        <label><input type="checkbox" class="webhook-event" value="agent.failed" checked> Agent Failed</label>
+                        <label><input type="checkbox" class="webhook-event" value="agent.stuck" checked> Agent Stuck</label>
+                    </div>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Secret (Optional)</label>
+                    <input type="text" id="webhook-secret" placeholder="For HMAC signature verification" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                </div>
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="closeDetailPanel()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Webhook</button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    elements.detailContent.innerHTML = html;
+    openDetailPanel();
+
+    document.getElementById('create-webhook-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const name = document.getElementById('webhook-name').value;
+        const url = document.getElementById('webhook-url').value;
+        const secret = document.getElementById('webhook-secret').value || null;
+        const events = Array.from(document.querySelectorAll('.webhook-event:checked')).map(cb => cb.value);
+
+        if (events.length === 0) {
+            toastError('Please select at least one event', 'Validation Error');
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/webhooks`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, url, events, secret })
+            });
+
+            if (!response.ok) throw new Error('Failed to create webhook');
+
+            toastSuccess('Webhook created successfully!', 'Webhook Created');
+            closeDetailPanel();
+            showIntegrationsView();
+        } catch (error) {
+            toastError(`Failed to create webhook: ${error.message}`, 'Creation Failed');
+        }
+    });
+}
+
+async function openCreateNotificationModal() {
+    const html = `
+        <div style="padding: 20px; max-width: 600px;">
+            <h2 style="margin: 0 0 20px 0;">Create Notification Channel</h2>
+            <form id="create-notification-form">
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Channel Name *</label>
+                    <input type="text" id="channel-name" required style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Channel Type *</label>
+                    <select id="channel-type" required onchange="updateChannelConfigFields()" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+                        <option value="slack">Slack</option>
+                        <option value="discord">Discord</option>
+                        <option value="email">Email</option>
+                    </select>
+                </div>
+                <div id="channel-config" style="margin-bottom: 16px;">
+                    <!-- Dynamic config fields -->
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <label style="display: block; font-weight: 600; margin-bottom: 8px;">Events to Notify *</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <label><input type="checkbox" class="notification-event" value="agent.started"> Agent Started</label>
+                        <label><input type="checkbox" class="notification-event" value="agent.completed" checked> Agent Completed</label>
+                        <label><input type="checkbox" class="notification-event" value="agent.failed" checked> Agent Failed</label>
+                        <label><input type="checkbox" class="notification-event" value="agent.stuck" checked> Agent Stuck</label>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="closeDetailPanel()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Channel</button>
+                </div>
+            </form>
+        </div>
+    `;
+
+    elements.detailContent.innerHTML = html;
+    openDetailPanel();
+    updateChannelConfigFields();
+
+    document.getElementById('create-notification-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const name = document.getElementById('channel-name').value;
+        const type = document.getElementById('channel-type').value;
+        const events = Array.from(document.querySelectorAll('.notification-event:checked')).map(cb => cb.value);
+
+        if (events.length === 0) {
+            toastError('Please select at least one event', 'Validation Error');
+            return;
+        }
+
+        let config = {};
+        if (type === 'slack' || type === 'discord') {
+            config.webhook_url = document.getElementById('config-webhook-url').value;
+        } else if (type === 'email') {
+            config.to = document.getElementById('config-email-to').value;
+            config.smtp_host = document.getElementById('config-smtp-host').value;
+            config.smtp_port = document.getElementById('config-smtp-port').value;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE}/notifications/channels`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, type, config, events })
+            });
+
+            if (!response.ok) throw new Error('Failed to create channel');
+
+            toastSuccess('Notification channel created successfully!', 'Channel Created');
+            closeDetailPanel();
+            showIntegrationsView();
+        } catch (error) {
+            toastError(`Failed to create channel: ${error.message}`, 'Creation Failed');
+        }
+    });
+}
+
+function updateChannelConfigFields() {
+    const type = document.getElementById('channel-type').value;
+    const configDiv = document.getElementById('channel-config');
+
+    if (type === 'slack' || type === 'discord') {
+        configDiv.innerHTML = `
+            <label style="display: block; font-weight: 600; margin-bottom: 8px;">Webhook URL *</label>
+            <input type="url" id="config-webhook-url" required placeholder="https://hooks.${type}.com/..." style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+        `;
+    } else if (type === 'email') {
+        configDiv.innerHTML = `
+            <label style="display: block; font-weight: 600; margin-bottom: 8px;">To Email Address *</label>
+            <input type="email" id="config-email-to" required style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; margin-bottom: 12px;">
+            <label style="display: block; font-weight: 600; margin-bottom: 8px;">SMTP Host *</label>
+            <input type="text" id="config-smtp-host" required style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; margin-bottom: 12px;">
+            <label style="display: block; font-weight: 600; margin-bottom: 8px;">SMTP Port *</label>
+            <input type="number" id="config-smtp-port" required value="587" style="width: 100%; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px;">
+        `;
+    }
+}
+
+async function toggleWebhook(webhookId, enabled) {
+    try {
+        const response = await fetch(`${API_BASE}/webhooks/${webhookId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled })
+        });
+
+        if (!response.ok) throw new Error('Failed to update webhook');
+
+        toastSuccess(`Webhook ${enabled ? 'enabled' : 'disabled'}`, 'Webhook Updated');
+        showIntegrationsView();
+    } catch (error) {
+        toastError(`Failed to update webhook: ${error.message}`);
+    }
+}
+
+async function deleteWebhook(webhookId) {
+    if (!confirm('Are you sure you want to delete this webhook?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/webhooks/${webhookId}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete webhook');
+
+        toastSuccess('Webhook deleted', 'Webhook Deleted');
+        showIntegrationsView();
+    } catch (error) {
+        toastError(`Failed to delete webhook: ${error.message}`);
+    }
+}
+
+async function toggleNotificationChannel(channelId, enabled) {
+    try {
+        const response = await fetch(`${API_BASE}/notifications/channels/${channelId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled })
+        });
+
+        if (!response.ok) throw new Error('Failed to update channel');
+
+        toastSuccess(`Channel ${enabled ? 'enabled' : 'disabled'}`, 'Channel Updated');
+        showIntegrationsView();
+    } catch (error) {
+        toastError(`Failed to update channel: ${error.message}`);
+    }
+}
+
+async function deleteNotificationChannel(channelId) {
+    if (!confirm('Are you sure you want to delete this notification channel?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/notifications/channels/${channelId}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Failed to delete channel');
+
+        toastSuccess('Channel deleted', 'Channel Deleted');
+        showIntegrationsView();
+    } catch (error) {
+        toastError(`Failed to delete channel: ${error.message}`);
+    }
+}
+
+
 // Search & Filter Functions
 function setSearchFilter(field) {
     state.searchField = field;
