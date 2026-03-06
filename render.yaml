@@ -59,12 +59,12 @@ services:
     healthCheckPath: /health
     autoDeploy: true
 
-databases:
-  # Optional PostgreSQL for persistent storage
-  - name: hrisa-db
-    databaseName: hrisa
-    user: hrisa
-    plan: starter
+# Optional: Add PostgreSQL database manually in Render dashboard if needed
+# databases:
+#   - name: hrisa-db
+#     databaseName: hrisa
+#     user: hrisa
+#     plan: free  # or 'basic' for paid tier
 
 # Background worker for agent processing (optional)
 # - type: worker
