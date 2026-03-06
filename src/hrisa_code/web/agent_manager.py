@@ -77,6 +77,13 @@ class AgentArtifact:
     metadata: Optional[Dict[str, Any]] = None
     file_path: Optional[str] = None  # For file artifacts
     language: Optional[str] = None  # For code artifacts (python, javascript, etc.)
+    # Shared artifact fields
+    shared: bool = False  # Whether this artifact is shared with other agents
+    shared_with: List[str] = field(default_factory=list)  # Agent IDs this is shared with
+    owner_agent_id: Optional[str] = None  # Original creator agent
+    locked_by: Optional[str] = None  # Agent ID that has lock for editing
+    version: int = 1  # Version number for tracking changes
+    last_modified_by: Optional[str] = None  # Last agent to modify
 
 
 @dataclass
@@ -1445,3 +1452,146 @@ class WebAgentManager:
         messages.sort(key=lambda m: m.timestamp)
 
         return messages
+
+    # Shared Artifact Methods
+    def share_artifact(
+        self,
+        artifact_id: str,
+        owner_agent_id: str,
+        target_agent_ids: List[str],
+    ) -> None:
+        """Share an artifact with other agents.
+
+        Args:
+            artifact_id: Artifact ID to share
+            owner_agent_id: Owner agent ID
+            target_agent_ids: List of agent IDs to share with
+        """
+        owner = self.get_agent(owner_agent_id)
+        if not owner:
+            raise ValueError(f"Owner agent {owner_agent_id} not found")
+
+        # Find artifact
+        artifact = next((a for a in owner.artifacts if a.id == artifact_id), None)
+        if not artifact:
+            raise ValueError(f"Artifact {artifact_id} not found")
+
+        # Mark as shared
+        artifact.shared = True
+        artifact.owner_agent_id = owner_agent_id
+        artifact.shared_with = list(set(artifact.shared_with + target_agent_ids))
+
+        # Add to target agents' artifacts
+        for target_id in target_agent_ids:
+            target = self.get_agent(target_id)
+            if target and target_id != owner_agent_id:
+                # Check if already has this artifact
+                if not any(a.id == artifact_id for a in target.artifacts):
+                    target.artifacts.append(artifact)
+
+    def get_shared_artifacts(
+        self,
+        agent_id: str,
+    ) -> List[AgentArtifact]:
+        """Get all artifacts shared with or by an agent.
+
+        Args:
+            agent_id: Agent ID
+
+        Returns:
+            List of shared artifacts
+        """
+        agent = self.get_agent(agent_id)
+        if not agent:
+            return []
+
+        return [a for a in agent.artifacts if a.shared]
+
+    def acquire_artifact_lock(
+        self,
+        artifact_id: str,
+        agent_id: str,
+    ) -> bool:
+        """Acquire lock on shared artifact for editing.
+
+        Args:
+            artifact_id: Artifact ID
+            agent_id: Agent ID requesting lock
+
+        Returns:
+            True if lock acquired, False if already locked
+        """
+        agent = self.get_agent(agent_id)
+        if not agent:
+            return False
+
+        artifact = next((a for a in agent.artifacts if a.id == artifact_id), None)
+        if not artifact or not artifact.shared:
+            return False
+
+        # Check if already locked
+        if artifact.locked_by and artifact.locked_by != agent_id:
+            return False
+
+        artifact.locked_by = agent_id
+        return True
+
+    def release_artifact_lock(
+        self,
+        artifact_id: str,
+        agent_id: str,
+    ) -> None:
+        """Release lock on shared artifact.
+
+        Args:
+            artifact_id: Artifact ID
+            agent_id: Agent ID releasing lock
+        """
+        agent = self.get_agent(agent_id)
+        if not agent:
+            return
+
+        artifact = next((a for a in agent.artifacts if a.id == artifact_id), None)
+        if artifact and artifact.locked_by == agent_id:
+            artifact.locked_by = None
+
+    def update_shared_artifact(
+        self,
+        artifact_id: str,
+        agent_id: str,
+        new_content: str,
+    ) -> None:
+        """Update shared artifact content (requires lock).
+
+        Args:
+            artifact_id: Artifact ID
+            agent_id: Agent ID making update
+            new_content: New artifact content
+        """
+        agent = self.get_agent(agent_id)
+        if not agent:
+            raise ValueError(f"Agent {agent_id} not found")
+
+        artifact = next((a for a in agent.artifacts if a.id == artifact_id), None)
+        if not artifact:
+            raise ValueError(f"Artifact {artifact_id} not found")
+
+        if not artifact.shared:
+            raise ValueError(f"Artifact {artifact_id} is not shared")
+
+        if artifact.locked_by != agent_id:
+            raise ValueError(f"Artifact is locked by {artifact.locked_by}")
+
+        # Update content and metadata
+        artifact.content = new_content
+        artifact.version += 1
+        artifact.last_modified_by = agent_id
+
+        # Propagate changes to all agents sharing this artifact
+        for other_agent in self.agents.values():
+            if other_agent.id != agent_id:
+                other_artifact = next((a for a in other_agent.artifacts if a.id == artifact_id), None)
+                if other_artifact:
+                    other_artifact.content = new_content
+                    other_artifact.version = artifact.version
+                    other_artifact.last_modified_by = agent_id
