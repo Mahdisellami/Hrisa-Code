@@ -24,6 +24,7 @@ from hrisa_code.web.agent_manager import (
     AgentState,
     AgentStateTransition,
     AgentMemory,
+    InterAgentMessage,
 )
 from hrisa_code.web.roles import list_roles, AgentRole
 
@@ -117,6 +118,30 @@ class PaginatedAgentsResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+class SendAgentMessageRequest(BaseModel):
+    """Request to send message between agents."""
+
+    to_agent_id: str = Field(..., description="Recipient agent ID")
+    message_type: str = Field(..., description="Message type: request, response, notification, question")
+    content: str = Field(..., description="Message content")
+    metadata: Optional[Dict] = Field(None, description="Optional metadata")
+    in_reply_to: Optional[str] = Field(None, description="Message ID this is replying to")
+
+
+class InterAgentMessageResponse(BaseModel):
+    """Response containing inter-agent message."""
+
+    id: str
+    timestamp: str
+    from_agent_id: str
+    to_agent_id: str
+    message_type: str
+    content: str
+    metadata: Optional[Dict]
+    in_reply_to: Optional[str]
+    read: bool
 
 
 class AgentMessageResponse(BaseModel):
@@ -1041,6 +1066,93 @@ async def replay_agent(agent_id: str):
     await agent_manager.start_agent(new_agent_id)
 
     return {"status": "replaying", "new_agent_id": new_agent_id, "original_agent_id": agent_id}
+
+
+# Inter-Agent Messaging Endpoints
+@app.post("/api/agents/{agent_id}/messages/send")
+async def send_agent_message(agent_id: str, request: SendAgentMessageRequest):
+    """Send a message from one agent to another."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        message_id = agent_manager.send_agent_message(
+            from_agent_id=agent_id,
+            to_agent_id=request.to_agent_id,
+            message_type=request.message_type,
+            content=request.content,
+            metadata=request.metadata,
+            in_reply_to=request.in_reply_to,
+        )
+        return {"status": "sent", "message_id": message_id}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/api/agents/{agent_id}/messages", response_model=List[InterAgentMessageResponse])
+async def get_agent_messages(
+    agent_id: str,
+    message_type: Optional[str] = Query(None, description="Filter by message type"),
+    unread_only: bool = Query(False, description="Only unread messages"),
+):
+    """Get inter-agent messages for an agent."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    messages = agent_manager.get_agent_messages(
+        agent_id=agent_id,
+        filter_type=message_type,
+        unread_only=unread_only,
+    )
+
+    return [
+        InterAgentMessageResponse(
+            id=msg.id,
+            timestamp=msg.timestamp.isoformat(),
+            from_agent_id=msg.from_agent_id,
+            to_agent_id=msg.to_agent_id,
+            message_type=msg.message_type,
+            content=msg.content,
+            metadata=msg.metadata,
+            in_reply_to=msg.in_reply_to,
+            read=msg.read,
+        )
+        for msg in messages
+    ]
+
+
+@app.post("/api/agents/{agent_id}/messages/{message_id}/read")
+async def mark_message_read(agent_id: str, message_id: str):
+    """Mark a message as read."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent_manager.mark_message_read(agent_id, message_id)
+    return {"status": "marked_read", "message_id": message_id}
+
+
+@app.get("/api/agents/{agent_id}/messages/thread/{other_agent_id}", response_model=List[InterAgentMessageResponse])
+async def get_conversation_thread(agent_id: str, other_agent_id: str):
+    """Get full conversation thread between two agents."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    messages = agent_manager.get_conversation_thread(agent_id, other_agent_id)
+
+    return [
+        InterAgentMessageResponse(
+            id=msg.id,
+            timestamp=msg.timestamp.isoformat(),
+            from_agent_id=msg.from_agent_id,
+            to_agent_id=msg.to_agent_id,
+            message_type=msg.message_type,
+            content=msg.content,
+            metadata=msg.metadata,
+            in_reply_to=msg.in_reply_to,
+            read=msg.read,
+        )
+        for msg in messages
+    ]
 
 
 # WebSocket endpoint

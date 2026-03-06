@@ -372,6 +372,80 @@ async function fetchAgentMemory(agentId) {
     }
 }
 
+async function fetchAgentMessages(agentId) {
+    try {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/messages`);
+        if (!response.ok) throw new Error('Failed to fetch messages');
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching messages:', error);
+        return [];
+    }
+}
+
+async function renderInterAgentMessages(agentId) {
+    const container = document.getElementById(`inter-agent-messages-${agentId}`);
+    if (!container) return;
+
+    const messages = await fetchAgentMessages(agentId);
+
+    if (messages.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No inter-agent messages yet</p></div>';
+        return;
+    }
+
+    const agentList = Array.from(state.agents.values());
+    const getAgentName = (id) => {
+        const agent = agentList.find(a => a.id === id);
+        return agent ? `${agent.id.substring(0, 8)} (${getRoleInfo(agent.role).name})` : id.substring(0, 8);
+    };
+
+    const messageTypeIcons = {
+        'request': '📨',
+        'response': '📬',
+        'notification': '🔔',
+        'question': '❓',
+    };
+
+    const messageTypeColors = {
+        'request': 'var(--brand-500)',
+        'response': 'var(--success-500)',
+        'notification': 'var(--terracotta-500)',
+        'question': 'var(--purple-500)',
+    };
+
+    container.innerHTML = `
+        <div style="background: var(--sand-50); border-radius: 8px; padding: 16px; max-height: 400px; overflow-y: auto;">
+            ${messages.map(msg => {
+                const isIncoming = msg.to_agent_id === agentId;
+                const icon = messageTypeIcons[msg.message_type] || '💬';
+                const color = messageTypeColors[msg.message_type] || 'var(--sand-500)';
+
+                return `
+                    <div style="background: ${isIncoming ? 'var(--brand-50)' : 'var(--sand-100)'}; border-left: 3px solid ${color}; border-radius: 6px; padding: 12px; margin-bottom: 12px; ${!msg.read && isIncoming ? 'border: 2px solid var(--brand-400);' : ''}">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                            <div>
+                                <span style="font-size: 1.2em; margin-right: 6px;">${icon}</span>
+                                <span style="color: ${color}; font-weight: 600; font-size: 0.9em; text-transform: uppercase;">${msg.message_type}</span>
+                                ${!msg.read && isIncoming ? '<span style="background: var(--brand-500); color: white; font-size: 0.7em; padding: 2px 6px; border-radius: 10px; margin-left: 8px;">NEW</span>' : ''}
+                            </div>
+                            <span style="color: var(--sand-600); font-size: 0.75em;">${formatTime(msg.timestamp)}</span>
+                        </div>
+                        <div style="margin-bottom: 8px;">
+                            <span style="color: var(--sand-700); font-size: 0.85em;">
+                                ${isIncoming ? '← From' : '→ To'}: <strong>${getAgentName(isIncoming ? msg.from_agent_id : msg.to_agent_id)}</strong>
+                            </span>
+                        </div>
+                        <div style="color: var(--sand-900); line-height: 1.4;">
+                            ${escapeHtml(msg.content)}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
 // Rendering Functions
 function getRoleInfo(roleId) {
     const role = state.roles.find(r => r.id === roleId);
@@ -773,6 +847,13 @@ async function renderAgentDetail(agentId) {
         </div>
 
         <div class="detail-section">
+            <h3>Inter-Agent Messages</h3>
+            <div id="inter-agent-messages-${agent.id}">
+                <p style="color: var(--sand-600); text-align: center;">Loading messages...</p>
+            </div>
+        </div>
+
+        <div class="detail-section">
             <h3>Agent Memory (Detailed)</h3>
             <div style="background: var(--sand-100); border-radius: 8px; padding: 12px;">
                 <div style="margin-bottom: 16px;">
@@ -873,6 +954,9 @@ async function renderAgentDetail(agentId) {
             </button>
         </div>
     `;
+
+    // Load inter-agent messages asynchronously
+    renderInterAgentMessages(agentId);
 }
 
 function openDetailPanel() {

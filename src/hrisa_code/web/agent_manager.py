@@ -80,6 +80,21 @@ class AgentArtifact:
 
 
 @dataclass
+class InterAgentMessage:
+    """A message sent from one agent to another."""
+
+    id: str
+    timestamp: datetime
+    from_agent_id: str
+    to_agent_id: str
+    message_type: str  # 'request', 'response', 'notification', 'question'
+    content: str
+    metadata: Optional[Dict[str, Any]] = None
+    in_reply_to: Optional[str] = None  # ID of message this is replying to
+    read: bool = False
+
+
+@dataclass
 class AgentStateTransition:
     """A state transition in the agent's execution."""
 
@@ -138,6 +153,7 @@ class AgentInfo:
     auto_start_next: Optional[str] = None  # Next agent ID to auto-start on completion
     current_state: AgentState = AgentState.INITIALIZING  # State machine
     memory: AgentMemory = field(default_factory=AgentMemory)  # Agent memory
+    inter_agent_messages: List[InterAgentMessage] = field(default_factory=list)  # Messages to/from other agents
 
 
 class WebAgentManager:
@@ -1301,3 +1317,131 @@ class WebAgentManager:
             raise FileNotFoundError(f"Session {session_id} not found")
 
         session_file.unlink()
+
+    # Inter-Agent Messaging Methods
+    def send_agent_message(
+        self,
+        from_agent_id: str,
+        to_agent_id: str,
+        message_type: str,
+        content: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        in_reply_to: Optional[str] = None,
+    ) -> str:
+        """Send a message from one agent to another.
+
+        Args:
+            from_agent_id: Sender agent ID
+            to_agent_id: Recipient agent ID
+            message_type: Type of message (request, response, notification, question)
+            content: Message content
+            metadata: Optional metadata
+            in_reply_to: Optional message ID this is replying to
+
+        Returns:
+            Message ID
+        """
+        from_agent = self.get_agent(from_agent_id)
+        to_agent = self.get_agent(to_agent_id)
+
+        if not from_agent:
+            raise ValueError(f"Sender agent {from_agent_id} not found")
+        if not to_agent:
+            raise ValueError(f"Recipient agent {to_agent_id} not found")
+
+        message_id = str(uuid.uuid4())[:8]
+        message = InterAgentMessage(
+            id=message_id,
+            timestamp=datetime.now(),
+            from_agent_id=from_agent_id,
+            to_agent_id=to_agent_id,
+            message_type=message_type,
+            content=content,
+            metadata=metadata,
+            in_reply_to=in_reply_to,
+            read=False,
+        )
+
+        # Add to both agents' message lists
+        from_agent.inter_agent_messages.append(message)
+        to_agent.inter_agent_messages.append(message)
+
+        return message_id
+
+    def get_agent_messages(
+        self,
+        agent_id: str,
+        filter_type: Optional[str] = None,
+        unread_only: bool = False,
+    ) -> List[InterAgentMessage]:
+        """Get inter-agent messages for an agent.
+
+        Args:
+            agent_id: Agent ID
+            filter_type: Optional message type filter
+            unread_only: Only return unread messages
+
+        Returns:
+            List of messages
+        """
+        agent = self.get_agent(agent_id)
+        if not agent:
+            return []
+
+        messages = agent.inter_agent_messages
+
+        # Filter by type
+        if filter_type:
+            messages = [m for m in messages if m.message_type == filter_type]
+
+        # Filter by read status
+        if unread_only:
+            messages = [m for m in messages if not m.read and m.to_agent_id == agent_id]
+
+        return messages
+
+    def mark_message_read(self, agent_id: str, message_id: str) -> None:
+        """Mark a message as read.
+
+        Args:
+            agent_id: Agent ID
+            message_id: Message ID
+        """
+        agent = self.get_agent(agent_id)
+        if not agent:
+            return
+
+        for message in agent.inter_agent_messages:
+            if message.id == message_id and message.to_agent_id == agent_id:
+                message.read = True
+                break
+
+    def get_conversation_thread(
+        self,
+        agent_id: str,
+        other_agent_id: str,
+    ) -> List[InterAgentMessage]:
+        """Get full conversation thread between two agents.
+
+        Args:
+            agent_id: First agent ID
+            other_agent_id: Second agent ID
+
+        Returns:
+            List of messages sorted by timestamp
+        """
+        agent = self.get_agent(agent_id)
+        if not agent:
+            return []
+
+        # Get messages between these two agents
+        messages = [
+            m for m in agent.inter_agent_messages
+            if (m.from_agent_id == agent_id and m.to_agent_id == other_agent_id)
+            or (m.from_agent_id == other_agent_id and m.to_agent_id == agent_id)
+        ]
+
+        # Sort by timestamp
+        messages.sort(key=lambda m: m.timestamp)
+
+        return messages
