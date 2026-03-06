@@ -20,6 +20,9 @@ const state = {
     teams: [],
     selectedTeamId: null,
     viewMode: 'agents', // 'agents' or 'teams'
+    // Search & Filter
+    searchQuery: '',
+    searchField: 'all', // 'all', 'id', 'task', 'model', 'tags'
 };
 
 // DOM Elements
@@ -621,6 +624,28 @@ async function changePage(page) {
 function renderAgentList() {
     const filteredAgents = Array.from(state.agents.values())
         .filter(agent => state.statusFilters.has(agent.status))
+        .filter(agent => {
+            if (!state.searchQuery) return true;
+
+            const query = state.searchQuery.toLowerCase();
+
+            switch (state.searchField) {
+                case 'id':
+                    return agent.id.toLowerCase().includes(query);
+                case 'task':
+                    return agent.task.toLowerCase().includes(query);
+                case 'model':
+                    return agent.model.toLowerCase().includes(query);
+                case 'tags':
+                    return agent.tags && agent.tags.some(tag => tag.toLowerCase().includes(query));
+                case 'all':
+                default:
+                    return agent.id.toLowerCase().includes(query) ||
+                           agent.task.toLowerCase().includes(query) ||
+                           agent.model.toLowerCase().includes(query) ||
+                           (agent.tags && agent.tags.some(tag => tag.toLowerCase().includes(query)));
+            }
+        })
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
     if (filteredAgents.length === 0) {
@@ -4548,6 +4573,37 @@ function switchView(viewName) {
     }
 }
 
+// Search & Filter Functions
+function setSearchFilter(field) {
+    state.searchField = field;
+    const indicator = document.getElementById('search-filter-indicator');
+    const fieldNames = {
+        'all': 'All fields',
+        'id': 'ID only',
+        'task': 'Task only',
+        'model': 'Model only',
+        'tags': 'Tags only'
+    };
+    if (indicator) {
+        indicator.textContent = `Searching: ${fieldNames[field] || field}`;
+    }
+    renderAgentList();
+}
+
+function handleSearchInput(e) {
+    state.searchQuery = e.target.value;
+    renderAgentList();
+}
+
+function clearSearch() {
+    const searchInput = document.getElementById('agent-search-input');
+    if (searchInput) {
+        searchInput.value = '';
+        state.searchQuery = '';
+        renderAgentList();
+    }
+}
+
 // Initialize keyboard shortcuts
 document.addEventListener('keydown', handleKeyboardShortcut);
 
@@ -4558,6 +4614,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     fetchAgents();
     fetchTeams();
     await fetchAvailableModelsWithInfo();
+
+    // Setup search input
+    const searchInput = document.getElementById('agent-search-input');
+    if (searchInput) {
+        searchInput.addEventListener('input', handleSearchInput);
+        // Add clear button on Escape
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                clearSearch();
+                searchInput.blur();
+            }
+        });
+    }
 
     // Refresh agents and teams every 10 seconds
     setInterval(() => {

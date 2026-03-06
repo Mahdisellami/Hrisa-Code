@@ -86,7 +86,25 @@
                 </button>
 
                 <div class="filter-section">
-                    <h3>Filters</h3>
+                    <h3>Search</h3>
+                    <input
+                        type="text"
+                        id="agent-search-input"
+                        placeholder="Search agents..."
+                        style="width: 100%; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 13px; margin-bottom: 8px;"
+                    >
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap; font-size: 11px;">
+                        <button class="btn btn-secondary btn-small" onclick="setSearchFilter('all')" style="font-size: 10px; padding: 4px 8px;">All Fields</button>
+                        <button class="btn btn-secondary btn-small" onclick="setSearchFilter('id')" style="font-size: 10px; padding: 4px 8px;">ID</button>
+                        <button class="btn btn-secondary btn-small" onclick="setSearchFilter('task')" style="font-size: 10px; padding: 4px 8px;">Task</button>
+                        <button class="btn btn-secondary btn-small" onclick="setSearchFilter('model')" style="font-size: 10px; padding: 4px 8px;">Model</button>
+                        <button class="btn btn-secondary btn-small" onclick="setSearchFilter('tags')" style="font-size: 10px; padding: 4px 8px;">Tags</button>
+                    </div>
+                    <div id="search-filter-indicator" style="font-size: 11px; color: var(--sand-600); margin-top: 4px;">Searching: All fields</div>
+                </div>
+
+                <div class="filter-section">
+                    <h3>Status Filters</h3>
                     <div class="filter-group">
                         <label>
                             <input type="checkbox" class="status-filter" value="running" checked>
