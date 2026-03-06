@@ -3506,6 +3506,273 @@ function populateTeamAgentSelections() {
     }
 }
 
+// Resource Usage Visualization
+async function showResourceUsageView() {
+    const listContainer = document.getElementById('agent-list');
+    const agents = Array.from(state.agents.values());
+
+    if (agents.length === 0) {
+        listContainer.innerHTML = '<div class="empty-state"><p>No agents to analyze resource usage.</p></div>';
+        return;
+    }
+
+    // Calculate resource metrics for each agent
+    const agentMetrics = agents.map(agent => {
+        const created = new Date(agent.created_at);
+        const now = Date.now();
+        const duration = (now - created.getTime()) / 1000; // seconds
+        const durationMinutes = duration / 60;
+        const durationHours = duration / 3600;
+
+        // Calculate rates
+        const toolCallRate = durationMinutes > 0 ? agent.progress.tool_calls / durationMinutes : 0;
+        const completionRate = agent.progress.total_steps > 0 ? (agent.progress.completed_steps / agent.progress.total_steps) * 100 : 0;
+        const errorRate = agent.progress.tool_calls > 0 ? (agent.progress.errors / agent.progress.tool_calls) * 100 : 0;
+
+        // Estimate resource consumption score (higher = more resources)
+        const resourceScore = (agent.progress.tool_calls * 1) +
+                            (agent.messages.length * 0.5) +
+                            (agent.artifacts.length * 2) +
+                            (durationMinutes * 0.1);
+
+        return {
+            agent,
+            duration,
+            durationMinutes,
+            durationHours,
+            toolCallRate,
+            completionRate,
+            errorRate,
+            resourceScore,
+            toolCalls: agent.progress.tool_calls,
+            messages: agent.messages.length,
+            artifacts: agent.artifacts.length,
+            errors: agent.progress.errors
+        };
+    });
+
+    // Sort by resource score descending
+    agentMetrics.sort((a, b) => b.resourceScore - a.resourceScore);
+    const topConsumers = agentMetrics.slice(0, 10);
+
+    // Calculate total stats
+    const totalDuration = agentMetrics.reduce((sum, m) => sum + m.duration, 0);
+    const totalToolCalls = agentMetrics.reduce((sum, m) => sum + m.toolCalls, 0);
+    const totalMessages = agentMetrics.reduce((sum, m) => sum + m.messages, 0);
+    const totalArtifacts = agentMetrics.reduce((sum, m) => sum + m.artifacts, 0);
+    const avgCompletionRate = agentMetrics.length > 0
+        ? agentMetrics.reduce((sum, m) => sum + m.completionRate, 0) / agentMetrics.length
+        : 0;
+
+    // Time distribution buckets
+    const timeBuckets = [
+        { label: '<1min', count: agentMetrics.filter(m => m.durationMinutes < 1).length },
+        { label: '1-5min', count: agentMetrics.filter(m => m.durationMinutes >= 1 && m.durationMinutes < 5).length },
+        { label: '5-15min', count: agentMetrics.filter(m => m.durationMinutes >= 5 && m.durationMinutes < 15).length },
+        { label: '15-60min', count: agentMetrics.filter(m => m.durationMinutes >= 15 && m.durationMinutes < 60).length },
+        { label: '>1hr', count: agentMetrics.filter(m => m.durationMinutes >= 60).length }
+    ];
+
+    const resourceHTML = `
+        <div style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="margin: 0; font-size: 24px; font-weight: 700;">Resource Usage Dashboard</h2>
+                <button class="btn btn-secondary btn-small" onclick="fetchAgents()">🔄 Refresh</button>
+            </div>
+
+            <!-- Summary Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 20px; border-radius: 12px; color: white;">
+                    <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.9; margin-bottom: 8px;">Total Runtime</div>
+                    <div style="font-size: 32px; font-weight: 700;">${formatDuration(totalDuration)}</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">${agents.length} agents tracked</div>
+                </div>
+                <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 20px; border-radius: 12px; color: white;">
+                    <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.9; margin-bottom: 8px;">Tool Calls</div>
+                    <div style="font-size: 32px; font-weight: 700;">${totalToolCalls.toLocaleString()}</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">Avg ${(totalToolCalls / agents.length).toFixed(1)} per agent</div>
+                </div>
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 20px; border-radius: 12px; color: white;">
+                    <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.9; margin-bottom: 8px;">Messages</div>
+                    <div style="font-size: 32px; font-weight: 700;">${totalMessages.toLocaleString()}</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">${totalArtifacts} artifacts created</div>
+                </div>
+                <div style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); padding: 20px; border-radius: 12px; color: white;">
+                    <div style="font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.9; margin-bottom: 8px;">Avg Completion</div>
+                    <div style="font-size: 32px; font-weight: 700;">${avgCompletionRate.toFixed(0)}%</div>
+                    <div style="font-size: 11px; opacity: 0.8; margin-top: 4px;">Task progress rate</div>
+                </div>
+            </div>
+
+            <!-- Top Resource Consumers -->
+            <div style="background: var(--sand-100); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Top Resource Consumers</h3>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    ${topConsumers.map((m, idx) => {
+                        const statusColor = {
+                            'running': '#3b82f6',
+                            'completed': '#10b981',
+                            'failed': '#ef4444',
+                            'stuck': '#f59e0b'
+                        }[m.agent.status] || '#6b7280';
+
+                        return `
+                            <div style="background: white; border-radius: 8px; padding: 16px; border-left: 4px solid ${statusColor}; cursor: pointer;" onclick="showAgentDetail('${m.agent.id}')">
+                                <div style="display: flex; justify-content: space-between; align-items: start;">
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="font-weight: 600; font-size: 14px; color: var(--sand-900); margin-bottom: 4px;">
+                                            #${idx + 1} ${m.agent.id}
+                                        </div>
+                                        <div style="font-size: 12px; color: var(--sand-600); margin-bottom: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                            ${escapeHtml(m.agent.task.substring(0, 80))}${m.agent.task.length > 80 ? '...' : ''}
+                                        </div>
+                                        <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 11px; color: var(--sand-600);">
+                                            <span title="Tool calls">🔧 ${m.toolCalls}</span>
+                                            <span title="Messages">💬 ${m.messages}</span>
+                                            <span title="Artifacts">📄 ${m.artifacts}</span>
+                                            <span title="Runtime">⏱️ ${formatDuration(m.duration)}</span>
+                                            <span title="Tool call rate">📊 ${m.toolCallRate.toFixed(1)} calls/min</span>
+                                        </div>
+                                    </div>
+                                    <div style="text-align: right; margin-left: 16px;">
+                                        <div style="font-size: 20px; font-weight: 700; color: ${statusColor};">${m.resourceScore.toFixed(0)}</div>
+                                        <div style="font-size: 10px; color: var(--sand-600); text-transform: uppercase;">Score</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+                <!-- Time Distribution -->
+                <div style="background: var(--sand-100); border-radius: 12px; padding: 20px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Runtime Distribution</h3>
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        ${timeBuckets.map(bucket => {
+                            const maxCount = Math.max(...timeBuckets.map(b => b.count));
+                            const percentage = maxCount > 0 ? (bucket.count / maxCount) * 100 : 0;
+                            return `
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div style="width: 80px; font-size: 12px; font-weight: 600; color: var(--sand-700);">${bucket.label}</div>
+                                    <div style="flex: 1; background: var(--sand-200); border-radius: 4px; height: 24px; overflow: hidden;">
+                                        <div style="background: linear-gradient(90deg, #3b82f6 0%, #2563eb 100%); height: 100%; width: ${percentage}%; transition: width 0.3s; display: flex; align-items: center; padding: 0 8px;">
+                                            <span style="font-size: 11px; font-weight: 600; color: white;">${bucket.count}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+
+                <!-- Efficiency Metrics -->
+                <div style="background: var(--sand-100); border-radius: 12px; padding: 20px;">
+                    <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Efficiency Metrics</h3>
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        ${[
+                            {
+                                label: 'Avg Tool Calls/Minute',
+                                value: totalDuration > 0 ? (totalToolCalls / (totalDuration / 60)).toFixed(2) : '0',
+                                icon: '🔧',
+                                color: '#3b82f6'
+                            },
+                            {
+                                label: 'Avg Messages/Agent',
+                                value: (totalMessages / agents.length).toFixed(1),
+                                icon: '💬',
+                                color: '#10b981'
+                            },
+                            {
+                                label: 'Artifact Creation Rate',
+                                value: totalDuration > 0 ? ((totalArtifacts / (totalDuration / 3600)).toFixed(2) + '/hr') : '0/hr',
+                                icon: '📄',
+                                color: '#f59e0b'
+                            },
+                            {
+                                label: 'Avg Error Rate',
+                                value: (agentMetrics.reduce((sum, m) => sum + m.errorRate, 0) / agentMetrics.length).toFixed(1) + '%',
+                                icon: '⚠️',
+                                color: '#ef4444'
+                            }
+                        ].map(metric => `
+                            <div style="background: white; border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span style="font-size: 20px;">${metric.icon}</span>
+                                    <span style="font-size: 13px; color: var(--sand-700);">${metric.label}</span>
+                                </div>
+                                <div style="font-size: 18px; font-weight: 700; color: ${metric.color};">${metric.value}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Activity Heatmap (Tool Calls over Time) -->
+            <div style="background: var(--sand-100); border-radius: 12px; padding: 20px;">
+                <h3 style="margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">Activity Intensity</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 8px;">
+                    ${agents.map(agent => {
+                        const intensity = Math.min(agent.progress.tool_calls / 50, 1); // Normalize to 0-1
+                        const color = intensity > 0.7 ? '#ef4444' : intensity > 0.4 ? '#f59e0b' : intensity > 0.1 ? '#3b82f6' : '#6b7280';
+                        const bgOpacity = 0.1 + (intensity * 0.9);
+
+                        return `
+                            <div
+                                style="background: ${color}${Math.round(bgOpacity * 255).toString(16).padStart(2, '0')}; border-radius: 8px; padding: 12px; cursor: pointer; transition: transform 0.2s; text-align: center;"
+                                onclick="showAgentDetail('${agent.id}')"
+                                onmouseover="this.style.transform='scale(1.05)'"
+                                onmouseout="this.style.transform='scale(1)'"
+                                title="${agent.id}: ${agent.progress.tool_calls} tool calls"
+                            >
+                                <div style="font-size: 10px; color: var(--sand-600); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${agent.id.substring(0, 8)}</div>
+                                <div style="font-size: 16px; font-weight: 700; color: ${color};">${agent.progress.tool_calls}</div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+                <div style="margin-top: 12px; display: flex; align-items: center; gap: 16px; font-size: 11px; color: var(--sand-600);">
+                    <span>Intensity: </span>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <div style="width: 12px; height: 12px; background: #6b7280; border-radius: 2px;"></div>
+                        <span>Low</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <div style="width: 12px; height: 12px; background: #3b82f6; border-radius: 2px;"></div>
+                        <span>Medium</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <div style="width: 12px; height: 12px; background: #f59e0b; border-radius: 2px;"></div>
+                        <span>High</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <div style="width: 12px; height: 12px; background: #ef4444; border-radius: 2px;"></div>
+                        <span>Very High</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    listContainer.innerHTML = resourceHTML;
+}
+
+// Helper function to format duration
+function formatDuration(seconds) {
+    if (seconds < 60) {
+        return `${Math.round(seconds)}s`;
+    } else if (seconds < 3600) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.round(seconds % 60);
+        return `${mins}m ${secs}s`;
+    } else {
+        const hours = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        return `${hours}h ${mins}m`;
+    }
+}
+
 // Override openModal to populate forms when opening modals
 const originalOpenModal = window.openModal || openModal;
 window.openModal = function(modalId) {
