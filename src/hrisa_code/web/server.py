@@ -68,6 +68,25 @@ class CreateChainedAgentRequest(BaseModel):
     tags: Optional[List[str]] = Field(None, description="Tags (inherits from parent if not specified)")
 
 
+class SaveSessionRequest(BaseModel):
+    """Request to save a session."""
+
+    name: str = Field(..., description="Session name")
+    description: Optional[str] = Field(None, description="Session description")
+    agent_ids: Optional[List[str]] = Field(None, description="Agent IDs to include (all if not specified)")
+
+
+class SessionResponse(BaseModel):
+    """Response containing session information."""
+
+    id: str
+    name: str
+    description: Optional[str]
+    created_at: str
+    agent_count: int
+    total_artifacts: int
+
+
 class AgentResponse(BaseModel):
     """Response containing agent information."""
 
@@ -888,6 +907,99 @@ async def delete_agent(agent_id: str):
     del agent_manager.agents[agent_id]
 
     return {"status": "deleted", "agent_id": agent_id}
+
+
+# Session Management Endpoints
+@app.post("/api/sessions/save", response_model=SessionResponse)
+async def save_session(request: SaveSessionRequest):
+    """Save current session (agents, messages, artifacts, state)."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        session_id = agent_manager.save_session(
+            name=request.name,
+            description=request.description,
+            agent_ids=request.agent_ids,
+        )
+        session_info = agent_manager.get_session(session_id)
+        return SessionResponse(**session_info)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save session: {str(e)}")
+
+
+@app.get("/api/sessions", response_model=List[SessionResponse])
+async def list_sessions():
+    """List all saved sessions."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    sessions = agent_manager.list_sessions()
+    return [SessionResponse(**session) for session in sessions]
+
+
+@app.get("/api/sessions/{session_id}", response_model=SessionResponse)
+async def get_session(session_id: str):
+    """Get session details."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    session_info = agent_manager.get_session(session_id)
+    if not session_info:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return SessionResponse(**session_info)
+
+
+@app.post("/api/sessions/{session_id}/load")
+async def load_session(session_id: str):
+    """Load a saved session."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        agent_manager.load_session(session_id)
+        return {"status": "loaded", "session_id": session_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load session: {str(e)}")
+
+
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: str):
+    """Delete a saved session."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        agent_manager.delete_session(session_id)
+        return {"status": "deleted", "session_id": session_id}
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Session not found: {str(e)}")
+
+
+@app.post("/api/agents/{agent_id}/replay")
+async def replay_agent(agent_id: str):
+    """Replay an agent's execution (create new agent with same task/context)."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent = agent_manager.get_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    # Create new agent with same configuration
+    new_agent_id = await agent_manager.create_agent(
+        task=f"[REPLAY] {agent.task}",
+        working_dir=agent.working_dir,
+        model=agent.model,
+        role=agent.role,
+        tags=agent.tags + ["replay", f"replay-of-{agent_id[:8]}"],
+    )
+
+    # Start the new agent
+    await agent_manager.start_agent(new_agent_id)
+
+    return {"status": "replaying", "new_agent_id": new_agent_id, "original_agent_id": agent_id}
 
 
 # WebSocket endpoint

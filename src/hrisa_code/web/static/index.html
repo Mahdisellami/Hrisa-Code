@@ -66,6 +66,12 @@
                     <button class="btn btn-secondary btn-small" id="refresh-btn">Refresh</button>
                     <button class="btn btn-secondary btn-small" id="clear-completed-btn">Clear Completed</button>
                 </div>
+
+                <div class="filter-section">
+                    <h3>Session Management</h3>
+                    <button class="btn btn-secondary btn-small btn-block" id="save-session-btn" style="margin-bottom: 8px;">💾 Save Session</button>
+                    <button class="btn btn-secondary btn-small btn-block" id="load-session-btn">📂 Load Session</button>
+                </div>
             </aside>
 
             <!-- Agent List -->
@@ -224,6 +230,58 @@
                         <button type="button" class="btn btn-secondary" id="chain-modal-cancel-btn">Cancel</button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Session Modal -->
+    <div class="modal" id="save-session-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Save Session</h2>
+                <button class="btn-close" id="save-session-modal-close-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="save-session-form">
+                    <div class="form-group">
+                        <label for="session-name-input">Session Name *</label>
+                        <input
+                            type="text"
+                            id="session-name-input"
+                            placeholder="e.g., Dashboard Development Session"
+                            required
+                        >
+                    </div>
+
+                    <div class="form-group">
+                        <label for="session-description-input">Description</label>
+                        <textarea
+                            id="session-description-input"
+                            rows="3"
+                            placeholder="Optional description of what was accomplished in this session"
+                        ></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">💾 Save Session</button>
+                        <button type="button" class="btn btn-secondary" id="save-session-modal-cancel-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Session Modal -->
+    <div class="modal" id="load-session-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Load Session</h2>
+                <button class="btn-close" id="load-session-modal-close-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="sessions-list" style="max-height: 400px; overflow-y: auto;">
+                    <p style="color: var(--sand-600); text-align: center;">Loading sessions...</p>
+                </div>
             </div>
         </div>
     </div>

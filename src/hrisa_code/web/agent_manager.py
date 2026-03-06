@@ -2,7 +2,8 @@
 
 import asyncio
 import uuid
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
@@ -175,6 +176,10 @@ class WebAgentManager:
         # Background task for monitoring
         self.monitor_task: Optional[asyncio.Task] = None
         self.running = False
+
+        # Session management
+        self.sessions_dir = Path.home() / ".hrisa" / "sessions"
+        self.sessions_dir.mkdir(parents=True, exist_ok=True)
 
     async def start(self) -> None:
         """Start the agent manager and monitoring."""
@@ -1010,3 +1015,264 @@ class WebAgentManager:
                     callback(agent_id, reason)
             except Exception as e:
                 print(f"Error in stuck callback: {e}")
+
+    # Session Management Methods
+    def save_session(
+        self,
+        name: str,
+        description: Optional[str] = None,
+        agent_ids: Optional[List[str]] = None,
+    ) -> str:
+        """Save current session to disk.
+
+        Args:
+            name: Session name
+            description: Optional description
+            agent_ids: List of agent IDs to save (all if None)
+
+        Returns:
+            Session ID
+        """
+        session_id = str(uuid.uuid4())[:8]
+
+        # Determine which agents to save
+        agents_to_save = agent_ids or list(self.agents.keys())
+
+        # Serialize agents
+        session_data = {
+            "id": session_id,
+            "name": name,
+            "description": description,
+            "created_at": datetime.now().isoformat(),
+            "agents": {}
+        }
+
+        for agent_id in agents_to_save:
+            agent_info = self.agents.get(agent_id)
+            if not agent_info:
+                continue
+
+            # Convert to dict (handling dataclasses and enums)
+            agent_dict = {
+                "id": agent_info.id,
+                "task": agent_info.task,
+                "status": agent_info.status.value,
+                "created_at": agent_info.created_at.isoformat(),
+                "working_dir": agent_info.working_dir,
+                "model": agent_info.model,
+                "role": agent_info.role,
+                "tags": agent_info.tags,
+                "parent_agent_id": agent_info.parent_agent_id,
+                "child_agent_ids": agent_info.child_agent_ids,
+                "workflow_step": agent_info.workflow_step,
+                "auto_start_next": agent_info.auto_start_next,
+                "current_state": agent_info.current_state.value if agent_info.current_state else None,
+                "messages": [
+                    {
+                        "timestamp": msg.timestamp.isoformat(),
+                        "role": msg.role,
+                        "content": msg.content,
+                        "tool_calls": msg.tool_calls,
+                        "tool_results": msg.tool_results,
+                    }
+                    for msg in agent_info.messages
+                ],
+                "logs": [
+                    {
+                        "timestamp": log.timestamp.isoformat(),
+                        "level": log.level,
+                        "message": log.message,
+                        "metadata": log.metadata,
+                    }
+                    for log in agent_info.logs
+                ],
+                "artifacts": [
+                    {
+                        "id": art.id,
+                        "name": art.name,
+                        "type": art.type,
+                        "content": art.content,
+                        "created_at": art.created_at.isoformat(),
+                        "description": art.description,
+                        "metadata": art.metadata,
+                        "file_path": art.file_path,
+                        "language": art.language,
+                    }
+                    for art in agent_info.artifacts
+                ],
+                "memory": {
+                    "decisions": agent_info.memory.decisions,
+                    "context": agent_info.memory.context,
+                    "intermediate_outputs": agent_info.memory.intermediate_outputs,
+                    "working_memory": agent_info.memory.working_memory,
+                    "state_transitions": [
+                        {
+                            "timestamp": st.timestamp.isoformat(),
+                            "from_state": st.from_state,
+                            "to_state": st.to_state,
+                            "reason": st.reason,
+                        }
+                        for st in agent_info.memory.state_transitions
+                    ],
+                },
+            }
+
+            session_data["agents"][agent_id] = agent_dict
+
+        # Save to file
+        session_file = self.sessions_dir / f"{session_id}.json"
+        with open(session_file, 'w') as f:
+            json.dump(session_data, f, indent=2)
+
+        return session_id
+
+    def load_session(self, session_id: str) -> None:
+        """Load a saved session from disk.
+
+        Args:
+            session_id: Session ID to load
+        """
+        session_file = self.sessions_dir / f"{session_id}.json"
+        if not session_file.exists():
+            raise FileNotFoundError(f"Session {session_id} not found")
+
+        with open(session_file, 'r') as f:
+            session_data = json.load(f)
+
+        # Clear current agents
+        self.agents.clear()
+
+        # Restore agents
+        for agent_id, agent_dict in session_data["agents"].items():
+            # Reconstruct agent info
+            agent_info = AgentInfo(
+                id=agent_dict["id"],
+                task=agent_dict["task"],
+                status=AgentStatus(agent_dict["status"]),
+                created_at=datetime.fromisoformat(agent_dict["created_at"]),
+                working_dir=agent_dict["working_dir"],
+                model=agent_dict["model"],
+                role=agent_dict.get("role"),
+                tags=agent_dict.get("tags", []),
+                parent_agent_id=agent_dict.get("parent_agent_id"),
+                child_agent_ids=agent_dict.get("child_agent_ids", []),
+                workflow_step=agent_dict.get("workflow_step", 0),
+                auto_start_next=agent_dict.get("auto_start_next"),
+                current_state=AgentState(agent_dict["current_state"]) if agent_dict.get("current_state") else AgentState.INITIALIZING,
+                messages=[
+                    AgentMessage(
+                        timestamp=datetime.fromisoformat(msg["timestamp"]),
+                        role=msg["role"],
+                        content=msg["content"],
+                        tool_calls=msg.get("tool_calls"),
+                        tool_results=msg.get("tool_results"),
+                    )
+                    for msg in agent_dict.get("messages", [])
+                ],
+                logs=[
+                    AgentLog(
+                        timestamp=datetime.fromisoformat(log["timestamp"]),
+                        level=log["level"],
+                        message=log["message"],
+                        metadata=log.get("metadata"),
+                    )
+                    for log in agent_dict.get("logs", [])
+                ],
+                artifacts=[
+                    AgentArtifact(
+                        id=art["id"],
+                        name=art["name"],
+                        type=art["type"],
+                        content=art["content"],
+                        created_at=datetime.fromisoformat(art["created_at"]),
+                        description=art.get("description"),
+                        metadata=art.get("metadata"),
+                        file_path=art.get("file_path"),
+                        language=art.get("language"),
+                    )
+                    for art in agent_dict.get("artifacts", [])
+                ],
+                memory=AgentMemory(
+                    decisions=agent_dict.get("memory", {}).get("decisions", []),
+                    context=agent_dict.get("memory", {}).get("context", {}),
+                    intermediate_outputs=agent_dict.get("memory", {}).get("intermediate_outputs", []),
+                    working_memory=agent_dict.get("memory", {}).get("working_memory", []),
+                    state_transitions=[
+                        AgentStateTransition(
+                            timestamp=datetime.fromisoformat(st["timestamp"]),
+                            from_state=st.get("from_state"),
+                            to_state=st["to_state"],
+                            reason=st.get("reason"),
+                        )
+                        for st in agent_dict.get("memory", {}).get("state_transitions", [])
+                    ],
+                ),
+            )
+
+            self.agents[agent_id] = agent_info
+
+    def list_sessions(self) -> List[Dict[str, Any]]:
+        """List all saved sessions.
+
+        Returns:
+            List of session info dicts
+        """
+        sessions = []
+        for session_file in self.sessions_dir.glob("*.json"):
+            try:
+                with open(session_file, 'r') as f:
+                    session_data = json.load(f)
+                    sessions.append({
+                        "id": session_data["id"],
+                        "name": session_data["name"],
+                        "description": session_data.get("description"),
+                        "created_at": session_data["created_at"],
+                        "agent_count": len(session_data["agents"]),
+                        "total_artifacts": sum(
+                            len(agent.get("artifacts", []))
+                            for agent in session_data["agents"].values()
+                        ),
+                    })
+            except Exception as e:
+                print(f"Error loading session {session_file}: {e}")
+
+        return sorted(sessions, key=lambda s: s["created_at"], reverse=True)
+
+    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Get session info.
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            Session info dict or None
+        """
+        session_file = self.sessions_dir / f"{session_id}.json"
+        if not session_file.exists():
+            return None
+
+        with open(session_file, 'r') as f:
+            session_data = json.load(f)
+            return {
+                "id": session_data["id"],
+                "name": session_data["name"],
+                "description": session_data.get("description"),
+                "created_at": session_data["created_at"],
+                "agent_count": len(session_data["agents"]),
+                "total_artifacts": sum(
+                    len(agent.get("artifacts", []))
+                    for agent in session_data["agents"].values()
+                ),
+            }
+
+    def delete_session(self, session_id: str) -> None:
+        """Delete a saved session.
+
+        Args:
+            session_id: Session ID to delete
+        """
+        session_file = self.sessions_dir / f"{session_id}.json"
+        if not session_file.exists():
+            raise FileNotFoundError(f"Session {session_id} not found")
+
+        session_file.unlink()

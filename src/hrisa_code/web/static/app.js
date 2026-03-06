@@ -736,6 +736,9 @@ async function renderAgentDetail(agentId) {
                 <button class="btn btn-primary" onclick="openChainModal('${agent.id}')">
                     🔗 Create Follow-up Agent
                 </button>
+                <button class="btn btn-secondary" onclick="replayAgent('${agent.id}')">
+                    🔄 Replay
+                </button>
             ` : ''}
             <button class="btn btn-secondary" onclick="confirmDeleteAgent('${agent.id}')">
                 🗑️ Delete
@@ -1206,6 +1209,172 @@ document.getElementById('chain-agent-form').addEventListener('submit', async (e)
         showNotification('Failed to create chained agent', 'error');
     }
 });
+
+// Session Management Event Listeners
+document.getElementById('save-session-btn').addEventListener('click', () => {
+    openModal('save-session-modal');
+});
+
+document.getElementById('load-session-btn').addEventListener('click', async () => {
+    await loadSessionsList();
+    openModal('load-session-modal');
+});
+
+document.getElementById('save-session-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const name = document.getElementById('session-name-input').value;
+    const description = document.getElementById('session-description-input').value || null;
+
+    try {
+        const response = await fetch(`${API_BASE}/sessions/save`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, description }),
+        });
+
+        if (!response.ok) throw new Error('Failed to save session');
+
+        const session = await response.json();
+
+        closeModal('save-session-modal');
+        e.target.reset();
+
+        showNotification(`Session "${session.name}" saved successfully!`, 'success');
+
+    } catch (error) {
+        console.error('Error saving session:', error);
+        showNotification('Failed to save session', 'error');
+    }
+});
+
+document.getElementById('save-session-modal-close-btn').addEventListener('click', () => {
+    closeModal('save-session-modal');
+});
+
+document.getElementById('save-session-modal-cancel-btn').addEventListener('click', () => {
+    closeModal('save-session-modal');
+});
+
+document.getElementById('load-session-modal-close-btn').addEventListener('click', () => {
+    closeModal('load-session-modal');
+});
+
+async function loadSessionsList() {
+    const sessionsListDiv = document.getElementById('sessions-list');
+    sessionsListDiv.innerHTML = '<p style="color: var(--sand-600); text-align: center;">Loading sessions...</p>';
+
+    try {
+        const response = await fetch(`${API_BASE}/sessions`);
+        if (!response.ok) throw new Error('Failed to load sessions');
+
+        const sessions = await response.json();
+
+        if (sessions.length === 0) {
+            sessionsListDiv.innerHTML = '<div class="empty-state"><p>No saved sessions yet</p></div>';
+            return;
+        }
+
+        sessionsListDiv.innerHTML = sessions.map(session => `
+            <div style="background: var(--sand-100); border: 1px solid var(--sand-300); border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                    <div>
+                        <h4 style="color: var(--sand-900); margin: 0 0 4px 0;">${escapeHtml(session.name)}</h4>
+                        ${session.description ? `<p style="color: var(--sand-600); font-size: 0.9em; margin: 4px 0;">${escapeHtml(session.description)}</p>` : ''}
+                        <div style="color: var(--sand-600); font-size: 0.85em; margin-top: 8px;">
+                            ${session.agent_count} agent${session.agent_count !== 1 ? 's' : ''} • ${session.total_artifacts} artifact${session.total_artifacts !== 1 ? 's' : ''}<br>
+                            Saved: ${formatDate(session.created_at)}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button
+                            onclick="loadSession('${session.id}')"
+                            class="btn btn-primary btn-small"
+                            style="font-size: 0.85em; padding: 6px 12px;"
+                        >
+                            📂 Load
+                        </button>
+                        <button
+                            onclick="deleteSession('${session.id}')"
+                            class="btn btn-secondary btn-small"
+                            style="font-size: 0.85em; padding: 6px 12px;"
+                        >
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+    } catch (error) {
+        console.error('Error loading sessions:', error);
+        sessionsListDiv.innerHTML = '<div class="empty-state"><p style="color: var(--danger-500);">Failed to load sessions</p></div>';
+    }
+}
+
+async function loadSession(sessionId) {
+    if (!confirm('Loading this session will replace all current agents. Continue?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/sessions/${sessionId}/load`, {
+            method: 'POST',
+        });
+
+        if (!response.ok) throw new Error('Failed to load session');
+
+        closeModal('load-session-modal');
+        await fetchAgents();
+
+        showNotification('Session loaded successfully!', 'success');
+
+    } catch (error) {
+        console.error('Error loading session:', error);
+        showNotification('Failed to load session', 'error');
+    }
+}
+
+async function deleteSession(sessionId) {
+    if (!confirm('Are you sure you want to delete this session?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/sessions/${sessionId}`, {
+            method: 'DELETE',
+        });
+
+        if (!response.ok) throw new Error('Failed to delete session');
+
+        await loadSessionsList();
+
+        showNotification('Session deleted successfully!', 'success');
+
+    } catch (error) {
+        console.error('Error deleting session:', error);
+        showNotification('Failed to delete session', 'error');
+    }
+}
+
+async function replayAgent(agentId) {
+    if (!confirm('This will create a new agent with the same task and start it. Continue?')) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/replay`, {
+            method: 'POST',
+        });
+
+        if (!response.ok) throw new Error('Failed to replay agent');
+
+        const result = await response.json();
+
+        await fetchAgents();
+        selectAgent(result.new_agent_id);
+
+        showNotification(`Agent replayed! New agent started.`, 'success');
+
+    } catch (error) {
+        console.error('Error replaying agent:', error);
+        showNotification('Failed to replay agent', 'error');
+    }
+}
 
 elements.closeDetailBtn.addEventListener('click', closeDetailPanel);
 
