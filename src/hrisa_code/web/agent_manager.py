@@ -118,6 +118,35 @@ class AgentTeam:
 
 
 @dataclass
+class ModelFallbackConfig:
+    """Configuration for model fallback/retry behavior."""
+
+    enabled: bool = True
+    max_retries: int = 2
+    retry_delay: float = 1.0  # Base delay in seconds (exponential backoff)
+    timeout_seconds: int = 180
+    fallback_models: List[str] = field(default_factory=lambda: [
+        "qwen2.5-coder:32b",
+        "qwen2.5-coder:7b",
+    ])  # Models to try in order when primary fails
+    auto_switch_on_timeout: bool = True
+    auto_switch_on_error: bool = True
+
+
+@dataclass
+class ModelFallbackEvent:
+    """Record of a model fallback event."""
+
+    timestamp: datetime
+    agent_id: str
+    primary_model: str
+    fallback_model: str
+    reason: str  # 'timeout', 'error', 'unavailable'
+    error_message: Optional[str] = None
+    retry_attempt: int = 0
+
+
+@dataclass
 class ModelPerformanceMetrics:
     """Performance metrics for a model."""
 
@@ -248,6 +277,8 @@ class WebAgentManager:
         self.model_metrics: Dict[str, ModelPerformanceMetrics] = {}  # Model performance tracking
         self.model_catalog = ModelCatalog()  # Model catalog for capabilities and info
         self._available_models_cache: Optional[List[str]] = None  # Cache for available models
+        self.fallback_config = ModelFallbackConfig()  # Fallback configuration
+        self.fallback_events: List[ModelFallbackEvent] = []  # Fallback event history
 
         # Callbacks for web UI updates
         self.status_callbacks: List[Callable[[str, AgentInfo], None]] = []
@@ -2218,3 +2249,205 @@ class WebAgentManager:
         else:
             # Default to balanced model
             return "qwen2.5-coder:32b"
+
+    # Model Fallback and Retry Methods
+    def update_fallback_config(self, config: Dict[str, Any]) -> None:
+        """Update fallback configuration.
+
+        Args:
+            config: Dictionary with fallback config fields
+        """
+        if "enabled" in config:
+            self.fallback_config.enabled = config["enabled"]
+        if "max_retries" in config:
+            self.fallback_config.max_retries = config["max_retries"]
+        if "retry_delay" in config:
+            self.fallback_config.retry_delay = config["retry_delay"]
+        if "timeout_seconds" in config:
+            self.fallback_config.timeout_seconds = config["timeout_seconds"]
+        if "fallback_models" in config:
+            self.fallback_config.fallback_models = config["fallback_models"]
+        if "auto_switch_on_timeout" in config:
+            self.fallback_config.auto_switch_on_timeout = config["auto_switch_on_timeout"]
+        if "auto_switch_on_error" in config:
+            self.fallback_config.auto_switch_on_error = config["auto_switch_on_error"]
+
+    def get_fallback_config(self) -> Dict[str, Any]:
+        """Get current fallback configuration.
+
+        Returns:
+            Dictionary with fallback configuration
+        """
+        return {
+            "enabled": self.fallback_config.enabled,
+            "max_retries": self.fallback_config.max_retries,
+            "retry_delay": self.fallback_config.retry_delay,
+            "timeout_seconds": self.fallback_config.timeout_seconds,
+            "fallback_models": self.fallback_config.fallback_models,
+            "auto_switch_on_timeout": self.fallback_config.auto_switch_on_timeout,
+            "auto_switch_on_error": self.fallback_config.auto_switch_on_error,
+        }
+
+    def record_fallback_event(
+        self,
+        agent_id: str,
+        primary_model: str,
+        fallback_model: str,
+        reason: str,
+        error_message: Optional[str] = None,
+        retry_attempt: int = 0,
+    ) -> None:
+        """Record a model fallback event.
+
+        Args:
+            agent_id: ID of the agent
+            primary_model: Model that failed
+            fallback_model: Model switched to
+            reason: Reason for fallback (timeout, error, unavailable)
+            error_message: Optional error message
+            retry_attempt: Retry attempt number
+        """
+        event = ModelFallbackEvent(
+            timestamp=datetime.now(),
+            agent_id=agent_id,
+            primary_model=primary_model,
+            fallback_model=fallback_model,
+            reason=reason,
+            error_message=error_message,
+            retry_attempt=retry_attempt,
+        )
+        self.fallback_events.append(event)
+
+        # Keep only last 100 events
+        if len(self.fallback_events) > 100:
+            self.fallback_events = self.fallback_events[-100:]
+
+    def get_fallback_events(
+        self,
+        agent_id: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[ModelFallbackEvent]:
+        """Get fallback event history.
+
+        Args:
+            agent_id: Optional filter by agent ID
+            limit: Maximum number of events to return
+
+        Returns:
+            List of fallback events
+        """
+        events = self.fallback_events
+
+        if agent_id:
+            events = [e for e in events if e.agent_id == agent_id]
+
+        # Return most recent events first
+        events = sorted(events, key=lambda e: e.timestamp, reverse=True)
+        return events[:limit]
+
+    def get_next_fallback_model(
+        self,
+        current_model: str,
+        attempted_models: Optional[List[str]] = None,
+    ) -> Optional[str]:
+        """Get the next fallback model to try.
+
+        Args:
+            current_model: Model that failed
+            attempted_models: Models already attempted
+
+        Returns:
+            Next model to try, or None if no more fallbacks
+        """
+        attempted = set(attempted_models or [])
+        attempted.add(current_model)
+
+        # Try fallback models in order
+        for fallback_model in self.fallback_config.fallback_models:
+            if fallback_model not in attempted:
+                return fallback_model
+
+        return None
+
+    def should_retry_model(
+        self,
+        model: str,
+        retry_count: int,
+        reason: str,
+    ) -> bool:
+        """Determine if a model request should be retried.
+
+        Args:
+            model: Model name
+            retry_count: Current retry count
+            reason: Failure reason
+
+        Returns:
+            True if should retry, False otherwise
+        """
+        if not self.fallback_config.enabled:
+            return False
+
+        if retry_count >= self.fallback_config.max_retries:
+            return False
+
+        if reason == "timeout" and not self.fallback_config.auto_switch_on_timeout:
+            return False
+
+        if reason == "error" and not self.fallback_config.auto_switch_on_error:
+            return False
+
+        return True
+
+    def get_retry_delay(self, retry_count: int) -> float:
+        """Calculate retry delay with exponential backoff.
+
+        Args:
+            retry_count: Current retry attempt
+
+        Returns:
+            Delay in seconds
+        """
+        return self.fallback_config.retry_delay * (2 ** retry_count)
+
+    def get_fallback_statistics(self) -> Dict[str, Any]:
+        """Get statistics about fallback events.
+
+        Returns:
+            Dictionary with fallback statistics
+        """
+        if not self.fallback_events:
+            return {
+                "total_events": 0,
+                "by_reason": {},
+                "by_model": {},
+                "most_reliable_model": None,
+                "most_problematic_model": None,
+            }
+
+        # Count by reason
+        by_reason = defaultdict(int)
+        for event in self.fallback_events:
+            by_reason[event.reason] += 1
+
+        # Count by primary model (models that failed)
+        by_model = defaultdict(int)
+        for event in self.fallback_events:
+            by_model[event.primary_model] += 1
+
+        # Find most problematic model (most fallbacks)
+        most_problematic = max(by_model.items(), key=lambda x: x[1])[0] if by_model else None
+
+        # Find most reliable fallback (most used as fallback)
+        fallback_usage = defaultdict(int)
+        for event in self.fallback_events:
+            fallback_usage[event.fallback_model] += 1
+        most_reliable = max(fallback_usage.items(), key=lambda x: x[1])[0] if fallback_usage else None
+
+        return {
+            "total_events": len(self.fallback_events),
+            "by_reason": dict(by_reason),
+            "by_model": dict(by_model),
+            "most_reliable_model": most_reliable,
+            "most_problematic_model": most_problematic,
+        }
