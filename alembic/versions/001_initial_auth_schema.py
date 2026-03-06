@@ -28,7 +28,7 @@ def upgrade() -> None:
         sa.Column('is_active', sa.Boolean(), nullable=False, server_default='true'),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column('last_login', sa.DateTime()),
-        sa.Column('metadata', postgresql.JSONB(), server_default='{}'),
+        sa.Column('extra_data', postgresql.JSONB(), server_default='{}'),
         sa.CheckConstraint("role IN ('admin', 'user', 'viewer')", name='check_valid_role'),
     )
     op.create_index('ix_users_email', 'users', ['email'])
@@ -81,7 +81,7 @@ def upgrade() -> None:
         sa.Column('working_dir', sa.Text()),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.Column('metadata', postgresql.JSONB(), server_default='{}'),
+        sa.Column('extra_data', postgresql.JSONB(), server_default='{}'),
     )
     op.create_index('idx_agents_user', 'agents', ['user_id'])
     op.create_index('idx_agents_status', 'agents', ['status'])
@@ -98,7 +98,7 @@ def upgrade() -> None:
         sa.Column('lead_agent_id', postgresql.UUID(as_uuid=True)),
         sa.Column('status', sa.String(20), server_default='active'),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
-        sa.Column('metadata', postgresql.JSONB(), server_default='{}'),
+        sa.Column('extra_data', postgresql.JSONB(), server_default='{}'),
     )
     op.create_index('idx_teams_user', 'teams', ['user_id'])
     op.create_index('idx_teams_status', 'teams', ['status'])

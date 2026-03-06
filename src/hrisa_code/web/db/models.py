@@ -22,7 +22,7 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     last_login = Column(DateTime)
-    metadata = Column(JSONB, default={})
+    extra_data = Column(JSONB, default={})
 
     # Relationships
     magic_links = relationship("MagicLinkToken", back_populates="user", cascade="all, delete-orphan")
@@ -98,7 +98,7 @@ class Agent(Base):
     working_dir = Column(Text)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    metadata = Column(JSONB, default={})
+    extra_data = Column(JSONB, default={})
 
     # Relationships
     user = relationship("User", back_populates="agents")
@@ -123,7 +123,7 @@ class Team(Base):
     lead_agent_id = Column(UUID(as_uuid=True))
     status = Column(String(20), default="active")
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    metadata = Column(JSONB, default={})
+    extra_data = Column(JSONB, default={})
 
     # Relationships
     user = relationship("User", back_populates="teams")
