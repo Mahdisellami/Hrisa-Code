@@ -144,6 +144,18 @@ class InterAgentMessageResponse(BaseModel):
     read: bool
 
 
+class ShareArtifactRequest(BaseModel):
+    """Request to share an artifact with other agents."""
+
+    target_agent_ids: List[str] = Field(..., description="Agent IDs to share with")
+
+
+class UpdateSharedArtifactRequest(BaseModel):
+    """Request to update a shared artifact."""
+
+    content: str = Field(..., description="New artifact content")
+
+
 class AgentMessageResponse(BaseModel):
     """Response containing agent message."""
 
@@ -1153,6 +1165,94 @@ async def get_conversation_thread(agent_id: str, other_agent_id: str):
         )
         for msg in messages
     ]
+
+
+# Shared Artifact Endpoints
+@app.post("/api/agents/{agent_id}/artifacts/{artifact_id}/share")
+async def share_artifact(agent_id: str, artifact_id: str, request: ShareArtifactRequest):
+    """Share an artifact with other agents."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        agent_manager.share_artifact(
+            artifact_id=artifact_id,
+            owner_agent_id=agent_id,
+            target_agent_ids=request.target_agent_ids,
+        )
+        return {"status": "shared", "artifact_id": artifact_id, "shared_with": request.target_agent_ids}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.get("/api/agents/{agent_id}/artifacts/shared")
+async def get_shared_artifacts(agent_id: str):
+    """Get all shared artifacts for an agent."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    artifacts = agent_manager.get_shared_artifacts(agent_id)
+
+    return [
+        {
+            "id": art.id,
+            "name": art.name,
+            "type": art.type,
+            "language": art.language,
+            "description": art.description,
+            "content": art.content,
+            "created_at": art.created_at.isoformat(),
+            "shared": art.shared,
+            "owner_agent_id": art.owner_agent_id,
+            "shared_with": art.shared_with,
+            "locked_by": art.locked_by,
+            "version": art.version,
+            "last_modified_by": art.last_modified_by,
+        }
+        for art in artifacts
+    ]
+
+
+@app.post("/api/agents/{agent_id}/artifacts/{artifact_id}/lock")
+async def acquire_artifact_lock(agent_id: str, artifact_id: str):
+    """Acquire lock on shared artifact for editing."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    success = agent_manager.acquire_artifact_lock(artifact_id, agent_id)
+
+    if not success:
+        raise HTTPException(status_code=409, detail="Artifact is locked by another agent")
+
+    return {"status": "locked", "artifact_id": artifact_id, "locked_by": agent_id}
+
+
+@app.post("/api/agents/{agent_id}/artifacts/{artifact_id}/unlock")
+async def release_artifact_lock(agent_id: str, artifact_id: str):
+    """Release lock on shared artifact."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent_manager.release_artifact_lock(artifact_id, agent_id)
+
+    return {"status": "unlocked", "artifact_id": artifact_id}
+
+
+@app.put("/api/agents/{agent_id}/artifacts/{artifact_id}/update")
+async def update_shared_artifact(agent_id: str, artifact_id: str, request: UpdateSharedArtifactRequest):
+    """Update shared artifact content (requires lock)."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        agent_manager.update_shared_artifact(
+            artifact_id=artifact_id,
+            agent_id=agent_id,
+            new_content=request.content,
+        )
+        return {"status": "updated", "artifact_id": artifact_id}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # WebSocket endpoint
