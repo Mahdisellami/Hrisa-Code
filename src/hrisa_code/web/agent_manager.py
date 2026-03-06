@@ -177,6 +177,8 @@ class AgentInfo:
     memory: AgentMemory = field(default_factory=AgentMemory)  # Agent memory
     inter_agent_messages: List[InterAgentMessage] = field(default_factory=list)  # Messages to/from other agents
     team_id: Optional[str] = None  # Team this agent belongs to
+    priority: int = 5  # Agent priority (1=highest, 10=lowest, 5=default)
+    scheduled_start_time: Optional[datetime] = None  # Scheduled execution time
 
 
 class WebAgentManager:
@@ -1776,3 +1778,138 @@ class WebAgentManager:
             lead = self.get_agent(team.lead_agent_id)
             if lead:
                 lead.team_id = None
+
+    # Priority and Scheduling Methods
+    def set_agent_priority(self, agent_id: str, priority: int) -> None:
+        """Set priority for an agent (1=highest, 10=lowest).
+
+        Args:
+            agent_id: Agent ID
+            priority: Priority level (1-10)
+
+        Raises:
+            ValueError: If agent not found or priority out of range
+        """
+        if priority < 1 or priority > 10:
+            raise ValueError("Priority must be between 1 (highest) and 10 (lowest)")
+
+        agent = self.get_agent(agent_id)
+        if not agent:
+            raise ValueError(f"Agent not found: {agent_id}")
+
+        agent.priority = priority
+
+    def schedule_agent(self, agent_id: str, start_time: datetime) -> None:
+        """Schedule an agent to start at a specific time.
+
+        Args:
+            agent_id: Agent ID
+            start_time: When to start the agent
+
+        Raises:
+            ValueError: If agent not found
+        """
+        agent = self.get_agent(agent_id)
+        if not agent:
+            raise ValueError(f"Agent not found: {agent_id}")
+
+        agent.scheduled_start_time = start_time
+
+        # If the agent is pending and the time has passed, start it
+        if agent.status == AgentStatus.PENDING and start_time <= datetime.now():
+            # This will be handled by the monitor task
+            pass
+
+    def get_priority_queue(self) -> List[AgentInfo]:
+        """Get list of agents sorted by priority and scheduled time.
+
+        Returns:
+            List of agents ordered by execution priority
+        """
+        agents = list(self.agents.values())
+
+        # Filter to pending/created agents
+        pending_agents = [
+            a
+            for a in agents
+            if a.status
+            in [AgentStatus.PENDING, AgentStatus.RUNNING, AgentStatus.STUCK]
+        ]
+
+        # Sort by priority (lower number = higher priority), then by scheduled time, then by creation time
+        def sort_key(agent: AgentInfo):
+            # Priority (1-10, lower is higher priority)
+            priority = agent.priority
+
+            # Scheduled time (earlier is higher priority)
+            scheduled = agent.scheduled_start_time or datetime.max
+
+            # Creation time (older is higher priority)
+            created = agent.created_at
+
+            return (priority, scheduled, created)
+
+        pending_agents.sort(key=sort_key)
+        return pending_agents
+
+    def get_next_scheduled_agent(self) -> Optional[AgentInfo]:
+        """Get the next agent that should start based on priority and schedule.
+
+        Returns:
+            Next agent to execute, or None if no agents ready
+        """
+        queue = self.get_priority_queue()
+        now = datetime.now()
+
+        for agent in queue:
+            # Skip already running agents
+            if agent.status == AgentStatus.RUNNING:
+                continue
+
+            # Check if scheduled time has passed
+            if agent.scheduled_start_time and agent.scheduled_start_time > now:
+                continue
+
+            # Check if we're at max concurrent
+            running_count = sum(
+                1 for a in self.agents.values() if a.status == AgentStatus.RUNNING
+            )
+            if running_count >= self.max_concurrent:
+                return None
+
+            return agent
+
+        return None
+
+    def bulk_set_priority(self, agent_ids: List[str], priority: int) -> int:
+        """Set priority for multiple agents at once.
+
+        Args:
+            agent_ids: List of agent IDs
+            priority: Priority level (1-10)
+
+        Returns:
+            Number of agents updated
+
+        Raises:
+            ValueError: If priority out of range
+        """
+        if priority < 1 or priority > 10:
+            raise ValueError("Priority must be between 1 (highest) and 10 (lowest)")
+
+        updated = 0
+        for agent_id in agent_ids:
+            agent = self.get_agent(agent_id)
+            if agent:
+                agent.priority = priority
+                updated += 1
+
+        return updated
+
+    def reorder_queue_by_priority(self) -> List[AgentInfo]:
+        """Get all agents reordered by their priority settings.
+
+        Returns:
+            All agents sorted by priority
+        """
+        return self.get_priority_queue()
