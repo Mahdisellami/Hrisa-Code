@@ -7,6 +7,13 @@ from .preflight_check import (
     CheckResult,
     run_preflight_checks,
 )
+from .setup_manager import (
+    SetupManager,
+    Platform,
+    SetupStatus,
+    SetupStep,
+    run_setup,
+)
 
 __all__ = [
     "CodeQualityValidator",
@@ -14,4 +21,9 @@ __all__ = [
     "CheckStatus",
     "CheckResult",
     "run_preflight_checks",
+    "SetupManager",
+    "Platform",
+    "SetupStatus",
+    "SetupStep",
+    "run_setup",
 ]

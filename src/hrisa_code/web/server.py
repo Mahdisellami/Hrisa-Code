@@ -21,6 +21,9 @@ from hrisa_code.web.agent_manager import (
     AgentProgress,
     AgentLog,
     AgentArtifact,
+    AgentState,
+    AgentStateTransition,
+    AgentMemory,
 )
 from hrisa_code.web.roles import list_roles, AgentRole
 
@@ -55,6 +58,16 @@ class CreateArtifactRequest(BaseModel):
     language: Optional[str] = Field(None, description="Programming language for code artifacts")
 
 
+class CreateChainedAgentRequest(BaseModel):
+    """Request to create a chained agent."""
+
+    task: str = Field(..., description="Task for the chained agent")
+    role: Optional[str] = Field(None, description="Agent role (inherits from parent if not specified)")
+    model: Optional[str] = Field(None, description="Model to use (inherits from parent if not specified)")
+    auto_start: bool = Field(False, description="Auto-start this agent when parent completes")
+    tags: Optional[List[str]] = Field(None, description="Tags (inherits from parent if not specified)")
+
+
 class AgentResponse(BaseModel):
     """Response containing agent information."""
 
@@ -71,6 +84,10 @@ class AgentResponse(BaseModel):
     stuck_reason: Optional[str]
     tags: List[str]
     message_count: int
+    current_state: str
+    parent_agent_id: Optional[str]
+    child_agent_ids: List[str]
+    workflow_step: int
 
 
 class AgentMessageResponse(BaseModel):
@@ -104,6 +121,32 @@ class AgentArtifactResponse(BaseModel):
     metadata: Optional[Dict]
     file_path: Optional[str]
     language: Optional[str]
+
+
+class AgentStateTransitionResponse(BaseModel):
+    """Response containing agent state transition."""
+
+    timestamp: str
+    from_state: Optional[str]
+    to_state: str
+    reason: Optional[str]
+
+
+class AgentStateResponse(BaseModel):
+    """Response containing agent state machine information."""
+
+    current_state: str
+    transitions: List[AgentStateTransitionResponse]
+
+
+class AgentMemoryResponse(BaseModel):
+    """Response containing agent memory information."""
+
+    decisions: List[Dict]
+    context: Dict
+    intermediate_outputs: List[Dict]
+    state_transitions: List[AgentStateTransitionResponse]
+    working_memory: List[str]
 
 
 class StatsResponse(BaseModel):
@@ -176,6 +219,10 @@ def _agent_info_to_response(info: AgentInfo) -> AgentResponse:
         stuck_reason=info.stuck_reason,
         tags=info.tags,
         message_count=len(info.messages),
+        current_state=info.current_state.value,
+        parent_agent_id=info.parent_agent_id,
+        child_agent_ids=info.child_agent_ids,
+        workflow_step=info.workflow_step,
     )
 
 
@@ -235,13 +282,16 @@ async def startup_event():
         print(f"Using Ollama host from environment: {ollama_host}")
 
     # Use available model if default not found (for Docker environment)
-    # Default is qwen2.5:72b but we have qwen2.5-coder:7b in Docker
+    # Default is qwen2.5:72b but we have llama3.2:latest in Docker
     if config.model.name == "qwen2.5:72b":
-        config.model.name = "qwen2.5-coder:7b"
+        config.model.name = "llama3.2:latest"
         print(f"Using available model: {config.model.name}")
+    elif config.model.name == "qwen2.5-coder:7b":
+        config.model.name = "llama3.2:latest"
+        print(f"Fallback to available model: {config.model.name}")
 
-    # Create agent manager
-    agent_manager = WebAgentManager(config=config)
+    # Create agent manager (limit to 1 concurrent to avoid Ollama overload)
+    agent_manager = WebAgentManager(config=config, max_concurrent=1)
 
     # Add callbacks for WebSocket broadcasts
     async def on_status_change(agent_id: str, info: AgentInfo):
@@ -469,6 +519,233 @@ async def create_agent_artifact(agent_id: str, request: CreateArtifactRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/agents/{agent_id}/artifacts/{artifact_id}/download")
+async def download_artifact(agent_id: str, artifact_id: str):
+    """Download a single artifact."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    artifacts = agent_manager.get_artifacts(agent_id)
+    artifact = next((a for a in artifacts if a.id == artifact_id), None)
+
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    # Determine file extension based on type/language
+    language_map = {
+        'python': '.py',
+        'javascript': '.js',
+        'typescript': '.ts',
+        'java': '.java',
+        'cpp': '.cpp',
+        'c': '.c',
+        'go': '.go',
+        'rust': '.rs',
+        'ruby': '.rb',
+        'php': '.php',
+        'swift': '.swift',
+        'kotlin': '.kt',
+        'sql': '.sql',
+        'bash': '.sh',
+        'shell': '.sh',
+        'markdown': '.md',
+        'json': '.json',
+        'yaml': '.yaml',
+        'xml': '.xml',
+        'html': '.html',
+        'css': '.css',
+    }
+
+    type_map = {
+        'markdown': '.md',
+        'json': '.json',
+        'document': '.txt',
+        'data': '.json',
+        'diagram': '.txt',
+    }
+
+    # Priority: language > type > default
+    if artifact.language and artifact.language.lower() in language_map:
+        ext = language_map[artifact.language.lower()]
+    elif artifact.type in type_map:
+        ext = type_map[artifact.type]
+    else:
+        ext = '.txt'
+
+    filename = f"{artifact.name}{ext}".replace(' ', '_')
+
+    from fastapi.responses import Response
+    return Response(
+        content=artifact.content,
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        }
+    )
+
+
+@app.get("/api/agents/{agent_id}/artifacts/download-all")
+async def download_all_artifacts(agent_id: str):
+    """Download all artifacts as a zip file."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent = agent_manager.get_agent(agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    artifacts = agent_manager.get_artifacts(agent_id)
+
+    if not artifacts:
+        raise HTTPException(status_code=404, detail="No artifacts to download")
+
+    import io
+    import zipfile
+
+    # Create zip file in memory
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for artifact in artifacts:
+            # Determine file extension
+            language_map = {
+                'python': '.py',
+                'javascript': '.js',
+                'typescript': '.ts',
+                'java': '.java',
+                'cpp': '.cpp',
+                'c': '.c',
+                'go': '.go',
+                'rust': '.rs',
+                'ruby': '.rb',
+                'php': '.php',
+                'swift': '.swift',
+                'kotlin': '.kt',
+                'sql': '.sql',
+                'bash': '.sh',
+                'shell': '.sh',
+                'markdown': '.md',
+                'json': '.json',
+                'yaml': '.yaml',
+                'xml': '.xml',
+                'html': '.html',
+                'css': '.css',
+            }
+
+            type_map = {
+                'markdown': '.md',
+                'json': '.json',
+                'document': '.txt',
+                'data': '.json',
+                'diagram': '.txt',
+            }
+
+            # Priority: language > type > default
+            if artifact.language and artifact.language.lower() in language_map:
+                ext = language_map[artifact.language.lower()]
+            elif artifact.type in type_map:
+                ext = type_map[artifact.type]
+            else:
+                ext = '.txt'
+
+            filename = f"{artifact.name}{ext}".replace(' ', '_')
+
+            # Add artifact to zip
+            zip_file.writestr(filename, artifact.content)
+
+    zip_buffer.seek(0)
+
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(
+        io.BytesIO(zip_buffer.read()),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="agent_{agent_id[:8]}_artifacts.zip"'
+        }
+    )
+
+
+@app.get("/api/agents/{agent_id}/state", response_model=AgentStateResponse)
+async def get_agent_state(agent_id: str):
+    """Get agent state machine information."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent = agent_manager.get_agent(agent_id)
+
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    return AgentStateResponse(
+        current_state=agent.current_state.value,
+        transitions=[
+            AgentStateTransitionResponse(
+                timestamp=t.timestamp.isoformat(),
+                from_state=t.from_state,
+                to_state=t.to_state,
+                reason=t.reason,
+            )
+            for t in agent.memory.state_transitions
+        ],
+    )
+
+
+@app.get("/api/agents/{agent_id}/memory", response_model=AgentMemoryResponse)
+async def get_agent_memory(agent_id: str):
+    """Get agent memory information."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent = agent_manager.get_agent(agent_id)
+
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    return AgentMemoryResponse(
+        decisions=agent.memory.decisions,
+        context=agent.memory.context,
+        intermediate_outputs=agent.memory.intermediate_outputs,
+        state_transitions=[
+            AgentStateTransitionResponse(
+                timestamp=t.timestamp.isoformat(),
+                from_state=t.from_state,
+                to_state=t.to_state,
+                reason=t.reason,
+            )
+            for t in agent.memory.state_transitions
+        ],
+        working_memory=agent.memory.working_memory,
+    )
+
+
+@app.get("/api/agents/{agent_id}/memory/decisions")
+async def get_agent_decisions(agent_id: str):
+    """Get agent decision history."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent = agent_manager.get_agent(agent_id)
+
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    return {"decisions": agent.memory.decisions}
+
+
+@app.get("/api/agents/{agent_id}/memory/outputs")
+async def get_agent_outputs(agent_id: str):
+    """Get agent intermediate outputs."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent = agent_manager.get_agent(agent_id)
+
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    return {"outputs": agent.memory.intermediate_outputs}
+
+
 @app.post("/api/agents", response_model=AgentResponse)
 async def create_agent(request: CreateAgentRequest):
     """Create a new agent."""
@@ -542,6 +819,54 @@ async def cancel_agent(agent_id: str):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/agents/{agent_id}/chain", response_model=AgentResponse)
+async def create_chained_agent(agent_id: str, request: CreateChainedAgentRequest):
+    """Create a chained agent that inherits from parent."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    try:
+        child_agent_id = await agent_manager.create_chained_agent(
+            parent_agent_id=agent_id,
+            task=request.task,
+            role=request.role,
+            auto_start=request.auto_start,
+            model=request.model,
+            tags=request.tags,
+        )
+
+        child_agent = agent_manager.get_agent(child_agent_id)
+        if not child_agent:
+            raise HTTPException(status_code=500, detail="Failed to create chained agent")
+
+        return _agent_info_to_response(child_agent)
+
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/agents/{agent_id}/children", response_model=List[AgentResponse])
+async def get_agent_children(agent_id: str):
+    """Get direct children of an agent."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    children = agent_manager.get_children(agent_id)
+    return [_agent_info_to_response(child) for child in children]
+
+
+@app.get("/api/agents/{agent_id}/workflow", response_model=List[AgentResponse])
+async def get_agent_workflow(agent_id: str):
+    """Get full workflow chain for an agent."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    workflow = agent_manager.get_workflow_chain(agent_id)
+    return [_agent_info_to_response(agent) for agent in workflow]
 
 
 @app.delete("/api/agents/{agent_id}")

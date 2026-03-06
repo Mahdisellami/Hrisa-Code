@@ -1,136 +1,336 @@
-# Quick Testing Guide
+# Docker Deployment - Testing Guide
 
-## What We Fixed
+**Date**: 2026-03-04  
+**Status**: ✅ Deployment Complete - Ready for Testing
 
-1. **Hanging Issue**: Plan mode was trying to generate plans for simple tasks like "List files", which is slow with large models. Now SIMPLE tasks skip planning and execute directly.
+## Deployment Status
 
-2. **SHIFT+TAB**: Added keyboard binding so SHIFT+TAB cycles modes (just like /agent command).
+✅ **ALL SERVICES RUNNING**
+- **Ollama**: Healthy on port 11434
+- **Web UI**: Healthy on port 8000  
+- **Verification**: Passed (entrypoint checks completed)
+- **PDF Libraries**: Installed and working
 
-## Quick Test (2 minutes)
+## Quick Access
+
+- **Web UI**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+- **Ollama API**: http://localhost:11434
+
+---
+
+## Phase 1: Verify Deployment ✅ (DONE)
+
+These have already been confirmed working:
+
+- [x] Docker services running
+- [x] Ollama service healthy
+- [x] Web UI service healthy
+- [x] Verification checks passed
+- [x] PDF libraries available
+
+---
+
+## Phase 2: Test Web UI (START HERE)
+
+### Test 1: Access Web UI
+
+Open your browser to:
+**http://localhost:8000**
+
+Or use command:
+```bash
+open http://localhost:8000
+```
+
+**Expected**: Clean web interface with "Create New Agent" button
+
+**Result**: ✅ PASS / ❌ FAIL
+
+---
+
+### Test 2: Pull a Model First
+
+Before creating agents, pull a model (takes 5-10 minutes):
 
 ```bash
-hrisa chat
+docker exec hrisa-ollama ollama pull qwen2.5-coder:7b
 ```
 
-**Test 1: Mode Cycling**
-```
-/agent
-```
-Should show: "► Agent Mode" (cyan panel)
-
-```
-/agent
-```
-Should show: "► Plan Mode" (magenta panel)
-
-Try pressing **SHIFT+TAB** - should also cycle modes with inline feedback: "► Switched to Agent Mode"
-
-**Test 2: Simple Task in Plan Mode**
-```
-/agent
-/agent
-```
-(Now in plan mode)
-
-```
-List all Python files in the src directory
+**Or pull both recommended models**:
+```bash
+./deploy.sh pull-models
 ```
 
-Expected behavior:
-- Shows: "Analyzing task complexity..."
-- Shows: "Task is SIMPLE - using direct execution instead of planning"
-- Executes immediately without generating a plan
-- No more hanging!
-
-**Test 3: Moderate Task in Plan Mode**
-```
-/agent
-/agent
-```
-(Now in plan mode)
-
-```
-Find all TODO comments in the codebase and summarize them
+Wait for completion, then verify:
+```bash
+curl -s http://localhost:11434/api/tags | python3 -m json.tool
 ```
 
-Expected behavior:
-- Shows animated spinner: "⠋ Analyzing task complexity..."
-- Shows animated spinner: "⠙ Task complexity: MODERATE - generating execution plan..."
-- Generates and displays a plan table
-- Shows animated spinner for each step: "⠹ Executing step 1..."
-- Executes steps with progress tracking
+You should see the model(s) listed.
 
-## What to Try
+---
 
-### Safe Tests (Won't Modify Files)
-- "List all Python files in src/"
-- "Count functions in src/hrisa_code/core/config.py"
-- "Show me the git status"
-- "Find all TODO comments"
+### Test 3: Create Your First Agent
 
-### Moderate Tests (Read-Only Analysis)
-- "Analyze the architecture of the ConversationManager class"
-- "Find all functions that use the ollama_client"
-- "Summarize what tools are available in file_operations.py"
+1. In the Web UI, click "Create New Agent"
+2. Enter task: **"List all Python files in the current directory"**
+3. Click "Create & Start"
 
-## Expected Behavior
+**Expected**:
+- Agent appears in list
+- Status changes: initializing → running → completed
+- Real-time output appears
+- Agent completes successfully
 
-### SIMPLE Tasks
-```
-> List files
-Analyzing task complexity...
-Task is SIMPLE - using direct execution instead of planning
+**Result**: ✅ PASS / ❌ FAIL
 
-[executes immediately with agent mode]
-```
+---
 
-### MODERATE/COMPLEX Tasks
-```
-> Add error logging to all functions
-⠋ Analyzing task complexity...
-⠙ Task complexity: MODERATE - generating execution plan...
+### Test 4: Test Real-Time Updates
 
-    📋 Execution Plan: Add error logging
-┏━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
-┃ # ┃ Step        ┃ Type      ┃ Dependencies ┃
-┡━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━┩
-│ 1 │ Explore...  │ exploration│ none        │
-│ 2 │ Design...   │ design     │ 1           │
-│ 3 │ Implement...│ implementation│ 2         │
-└───┴─────────────┴───────────┴──────────────┘
+While an agent runs:
+- Watch the status update automatically
+- See output appear in real-time
+- No need to refresh the page
 
-► Step 1/3 (0% complete)
-...
+**Expected**: Live updates via WebSocket
+
+**Result**: ✅ PASS / ❌ FAIL
+
+---
+
+## Phase 3: Test API Endpoints
+
+### Test 5: Check Service Stats
+
+```bash
+curl -s http://localhost:8000/api/stats | python3 -m json.tool
 ```
 
-## Keyboard Shortcuts
+**Expected Output**:
+```json
+{
+    "total_agents": 0,
+    "running_agents": 0,
+    "stuck_agents": 0,
+    "completed_agents": 0,
+    "failed_agents": 0,
+    "cancelled_agents": 0
+}
+```
 
-- **SHIFT+TAB**: Cycle modes (normal → agent → plan → normal)
-- **Ctrl+D**: Exit
-- **Ctrl+C**: Interrupt (if something hangs)
+---
 
-## If Something Goes Wrong
+### Test 6: Create Agent via API
 
-**Hung on a task:**
-- Press Ctrl+C to interrupt
-- Type `/agent` to cycle back to normal mode
-- Try a simpler task first
+```bash
+curl -X POST http://localhost:8000/api/agents \
+  -H "Content-Type: application/json" \
+  -d '{"task": "Calculate 2 + 2", "model": "qwen2.5-coder:7b"}'
+```
 
-**SHIFT+TAB doesn't work:**
-- Just use `/agent` command instead (works identically)
-- SHIFT+TAB binding is terminal-dependent
+**Expected**: JSON response with agent ID and status
 
-**Mode not changing:**
-- Type `/help` to see current mode
-- Use `/agent` to cycle explicitly
+---
+
+## Phase 4: Verification Testing
+
+### Test 7: Check Startup Verification
+
+```bash
+docker-compose logs web | grep -A 15 "Hrisa Code - Docker Startup"
+```
+
+**Expected Output**:
+```
+========================================
+  Hrisa Code - Docker Startup
+========================================
+
+[1/3] Waiting for Ollama service...
+✓ Ollama service is ready
+
+[2/3] Checking for required models...
+✓ All required models are available
+
+[3/3] Running pre-flight checks...
+✓ Verification passed
+
+========================================
+  Hrisa Code Ready!
+========================================
+```
+
+---
+
+### Test 8: Run Verification Service
+
+```bash
+./deploy.sh verify
+```
+
+**Expected**: Table showing all checks passed with ✓ marks
+
+---
+
+### Test 9: Verify PDF Support
+
+```bash
+docker exec hrisa-web python3 -c "import pypdf; print('✓ PDF support available')"
+```
+
+**Expected Output**: `✓ PDF support available`
+
+---
+
+## Troubleshooting
+
+### Web UI Won't Load
+
+1. Check service status:
+   ```bash
+   docker-compose ps
+   ```
+   Both should show "Up" and "healthy"
+
+2. Check logs:
+   ```bash
+   docker-compose logs web --tail=50
+   ```
+
+3. Restart services:
+   ```bash
+   ./deploy.sh restart
+   ```
+
+---
+
+### Models Won't Pull
+
+1. Check internet connection
+2. Check disk space: `df -h` (need 20+ GB free)
+3. Check Ollama logs: `docker-compose logs ollama`
+
+---
+
+### Agents Fail to Execute
+
+1. Verify model is pulled:
+   ```bash
+   docker exec hrisa-ollama ollama list
+   ```
+
+2. Check Ollama connectivity:
+   ```bash
+   curl http://localhost:11434/api/tags
+   ```
+
+3. View agent output in Web UI for error details
+
+---
+
+## Useful Commands
+
+```bash
+# Check status
+./deploy.sh status
+
+# View logs
+./deploy.sh logs
+
+# Check system
+./deploy.sh check
+
+# Pull models
+./deploy.sh pull-models
+
+# Restart services
+./deploy.sh restart
+
+# Stop services
+./deploy.sh stop
+```
+
+---
 
 ## Success Criteria
 
-✅ Mode cycling works (/agent command)
-✅ SHIFT+TAB cycles modes (may be terminal-dependent)
-✅ SIMPLE tasks execute immediately without hanging
-✅ MODERATE tasks generate plans
-✅ Visual feedback shows what's happening
-✅ Tasks complete successfully
+Deployment is **SUCCESSFUL** if:
 
-Enjoy testing!
+✅ **Critical**:
+- [ ] Web UI loads in browser
+- [ ] Can pull models successfully
+- [ ] Can create and run agents
+- [ ] Agents complete tasks
+
+✅ **Important**:
+- [ ] Verification passes on startup
+- [ ] PDF libraries available
+- [ ] Real-time updates work
+
+---
+
+## Next Steps
+
+### After Successful Testing
+
+1. **Pull more models** (optional):
+   ```bash
+   docker exec hrisa-ollama ollama pull deepseek-coder:6.7b
+   docker exec hrisa-ollama ollama pull codellama:34b
+   ```
+
+2. **Configure for your needs**:
+   - Edit docker-compose.yml environment variables
+   - Set AUTO_PULL_MODELS=true for convenience
+   - Adjust resource limits
+
+3. **Use regularly**:
+   - `./deploy.sh start` to start
+   - `./deploy.sh stop` to stop
+   - `./deploy.sh backup` to backup data
+
+---
+
+## Test Results
+
+**Date Tested**: 2026-03-04
+**Tested By**: Automated Deployment Test
+**Overall Result**: ⏳ IN PROGRESS
+
+### Test Summary
+- [x] Test 1: Web UI Access - ✅ PASS (http://localhost:8000 accessible)
+- [⏳] Test 2: Pull Model - IN PROGRESS (43% complete, ~21 min remaining)
+- [ ] Test 3: Create Agent - PENDING (waiting for model)
+- [ ] Test 4: Real-Time Updates - PENDING (waiting for model)
+- [x] Test 5: API Stats - ✅ PASS (API responding correctly)
+- [ ] Test 6: API Create Agent - PENDING (waiting for model)
+- [x] Test 7: Startup Verification - ✅ PASS (all checks passed)
+- [x] Test 8: Verification Service - ✅ PASS (services healthy)
+- [x] Test 9: PDF Support - ✅ PASS (pypdf available)
+
+**Notes**:
+- All services deployed successfully and healthy
+- Web UI JavaScript bug fixed (app.js:99)
+- Model llama3.2:latest downloading at 903 KB/s
+- Tests 3-4 and 6 will proceed automatically when model completes
+- Monitoring script running to detect completion
+
+### Current Status
+```
+Services:  ✅ All Healthy
+Web UI:    ✅ http://localhost:8000
+API:       ✅ http://localhost:8000/docs
+Ollama:    ✅ http://localhost:11434
+Model:     ⏳ 43% (870 MB/2.0 GB, ~21 min remaining)
+```
+
+---
+
+**Ready to start coding with AI!** 🚀
+
+For detailed documentation, see:
+- `DOCKER_VERIFICATION.md` - Verification system details
+- `DOCKER_DEPLOYMENT.md` - Complete deployment guide
+- `DOCKER_QUICKSTART.md` - Quick reference

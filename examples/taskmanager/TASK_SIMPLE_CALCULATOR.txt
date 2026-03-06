@@ -1,0 +1,1 @@
+Create a calculator.py file with four functions: add, subtract, multiply, and divide. Each function should take two numbers and return the result. Include type hints on all functions and docstrings explaining what each function does.

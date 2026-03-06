@@ -28,6 +28,20 @@ class AgentStatus(Enum):
     CANCELLED = "cancelled"
 
 
+class AgentState(Enum):
+    """Detailed state within agent execution (state machine)."""
+
+    INITIALIZING = "initializing"
+    PLANNING = "planning"
+    EXECUTING = "executing"
+    THINKING = "thinking"
+    TOOL_USE = "tool_use"
+    REFLECTING = "reflecting"
+    PAUSED = "paused"
+    WAITING_APPROVAL = "waiting_approval"
+    FINALIZING = "finalizing"
+
+
 @dataclass
 class AgentMessage:
     """A message in the agent's conversation."""
@@ -65,6 +79,27 @@ class AgentArtifact:
 
 
 @dataclass
+class AgentStateTransition:
+    """A state transition in the agent's execution."""
+
+    timestamp: datetime
+    from_state: Optional[str]
+    to_state: str
+    reason: Optional[str] = None
+
+
+@dataclass
+class AgentMemory:
+    """Memory system for agent context and decisions."""
+
+    decisions: List[Dict[str, Any]] = field(default_factory=list)
+    context: Dict[str, Any] = field(default_factory=dict)
+    intermediate_outputs: List[Dict[str, Any]] = field(default_factory=list)
+    state_transitions: List[AgentStateTransition] = field(default_factory=list)
+    working_memory: List[str] = field(default_factory=list)  # Short-term memory
+
+
+@dataclass
 class AgentProgress:
     """Progress information for an agent."""
 
@@ -97,6 +132,11 @@ class AgentInfo:
     stuck_reason: Optional[str] = None
     tags: List[str] = field(default_factory=list)
     parent_agent_id: Optional[str] = None  # For tracking artifact inheritance
+    child_agent_ids: List[str] = field(default_factory=list)  # Children in workflow
+    workflow_step: int = 0  # Position in workflow (0=root, 1=first child, etc.)
+    auto_start_next: Optional[str] = None  # Next agent ID to auto-start on completion
+    current_state: AgentState = AgentState.INITIALIZING  # State machine
+    memory: AgentMemory = field(default_factory=AgentMemory)  # Agent memory
 
 
 class WebAgentManager:
@@ -360,6 +400,121 @@ class WebAgentManager:
         )
         agent_info.logs.append(log)
 
+    async def _transition_state(
+        self,
+        agent_id: str,
+        new_state: AgentState,
+        reason: Optional[str] = None,
+    ) -> None:
+        """Transition agent to a new state and record it.
+
+        Args:
+            agent_id: The agent ID
+            new_state: The new state to transition to
+            reason: Optional reason for the transition
+        """
+        agent_info = self.agents.get(agent_id)
+        if not agent_info:
+            return
+
+        # Record transition
+        transition = AgentStateTransition(
+            timestamp=datetime.now(),
+            from_state=agent_info.current_state.value if agent_info.current_state else None,
+            to_state=new_state.value,
+            reason=reason,
+        )
+        agent_info.memory.state_transitions.append(transition)
+        agent_info.current_state = new_state
+
+        # Log state change
+        await self._add_log(
+            agent_id,
+            "info",
+            f"State transition: {transition.from_state} → {new_state.value}" + (f" ({reason})" if reason else ""),
+            {"transition": {"from": transition.from_state, "to": new_state.value}},
+        )
+
+    async def _add_decision(
+        self,
+        agent_id: str,
+        decision_type: str,
+        description: str,
+        rationale: Optional[str] = None,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Record a decision made by the agent.
+
+        Args:
+            agent_id: The agent ID
+            decision_type: Type of decision (e.g., 'tool_selection', 'approach', 'verification')
+            description: Description of the decision
+            rationale: Optional rationale for the decision
+            context: Optional context data
+        """
+        agent_info = self.agents.get(agent_id)
+        if not agent_info:
+            return
+
+        decision = {
+            "timestamp": datetime.now().isoformat(),
+            "type": decision_type,
+            "description": description,
+            "rationale": rationale,
+            "context": context or {},
+        }
+        agent_info.memory.decisions.append(decision)
+
+    async def _add_intermediate_output(
+        self,
+        agent_id: str,
+        output_type: str,
+        content: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Record an intermediate output from the agent.
+
+        Args:
+            agent_id: The agent ID
+            output_type: Type of output (e.g., 'analysis', 'plan', 'code_snippet')
+            content: The output content
+            metadata: Optional metadata
+        """
+        agent_info = self.agents.get(agent_id)
+        if not agent_info:
+            return
+
+        output = {
+            "timestamp": datetime.now().isoformat(),
+            "type": output_type,
+            "content": content,
+            "metadata": metadata or {},
+        }
+        agent_info.memory.intermediate_outputs.append(output)
+
+    async def _update_working_memory(
+        self,
+        agent_id: str,
+        item: str,
+        max_items: int = 10,
+    ) -> None:
+        """Update the agent's working memory (short-term memory).
+
+        Args:
+            agent_id: The agent ID
+            item: Memory item to add
+            max_items: Maximum number of items to keep (FIFO)
+        """
+        agent_info = self.agents.get(agent_id)
+        if not agent_info:
+            return
+
+        agent_info.memory.working_memory.append(item)
+
+        # Keep only the last max_items
+        if len(agent_info.memory.working_memory) > max_items:
+            agent_info.memory.working_memory = agent_info.memory.working_memory[-max_items:]
+
     async def add_artifact(
         self,
         agent_id: str,
@@ -437,10 +592,20 @@ class WebAgentManager:
         agent_info = self.agents[agent_id]
 
         try:
+            # Transition to PLANNING state
+            await self._transition_state(agent_id, AgentState.PLANNING, "Analyzing task requirements")
+
             # Log agent start
             await self._add_log(agent_id, "info", f"Agent started with role: {agent_info.role or 'general'}")
             await self._add_log(agent_id, "info", f"Using model: {agent_info.model}")
             await self._add_log(agent_id, "info", f"Working directory: {agent_info.working_dir}")
+
+            # Store initial context in memory
+            agent_info.memory.context["task"] = agent_info.task
+            agent_info.memory.context["role"] = agent_info.role or "general"
+            agent_info.memory.context["model"] = agent_info.model
+            agent_info.memory.context["working_dir"] = str(agent_info.working_dir)
+            agent_info.memory.context["started_at"] = datetime.now().isoformat()
 
             # Add initial user message
             initial_message = AgentMessage(
@@ -453,19 +618,53 @@ class WebAgentManager:
 
             await self._add_log(agent_id, "info", "Executing task...")
 
+            # Transition to EXECUTING state
+            await self._transition_state(agent_id, AgentState.EXECUTING, "Beginning task execution")
+            await self._update_working_memory(agent_id, f"Started executing: {agent_info.task[:100]}")
+
             # Run agent
             result = await agent.execute_task(agent_info.task)
+
+            # Transition to FINALIZING state
+            await self._transition_state(agent_id, AgentState.FINALIZING, "Completing task and generating output")
+
+            # Store final output in intermediate outputs
+            await self._add_intermediate_output(
+                agent_id,
+                "final_output",
+                result,
+                {"status": "success", "completed_steps": agent_info.progress.total_steps},
+            )
 
             # Store output
             agent_info.output = result
             agent_info.status = AgentStatus.COMPLETED
             agent_info.progress.completed_steps = agent_info.progress.total_steps
 
+            # Update memory context
+            agent_info.memory.context["completed_at"] = datetime.now().isoformat()
+            agent_info.memory.context["final_status"] = "completed"
+
             await self._add_log(agent_id, "info", "Task completed successfully")
+
+            # Auto-start next agent in workflow if configured
+            if agent_info.auto_start_next:
+                next_agent_id = agent_info.auto_start_next
+                await self._add_log(agent_id, "info", f"Auto-starting next agent in workflow: {next_agent_id[:8]}")
+                try:
+                    await self.start_agent(next_agent_id)
+                except Exception as chain_error:
+                    await self._add_log(agent_id, "error", f"Failed to start next agent: {str(chain_error)}")
 
         except Exception as e:
             agent_info.status = AgentStatus.FAILED
             agent_info.error = str(e)
+
+            # Update memory with error context
+            agent_info.memory.context["failed_at"] = datetime.now().isoformat()
+            agent_info.memory.context["final_status"] = "failed"
+            agent_info.memory.context["error"] = str(e)
+
             await self._add_log(agent_id, "error", f"Agent failed: {str(e)}")
 
         finally:
@@ -555,6 +754,83 @@ class WebAgentManager:
         agent_info.status = AgentStatus.CANCELLED
         await self._notify_status_change(agent_id, agent_info)
 
+    async def create_chained_agent(
+        self,
+        parent_agent_id: str,
+        task: str,
+        role: Optional[str] = None,
+        auto_start: bool = False,
+        model: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+    ) -> str:
+        """Create a chained agent that inherits from a parent.
+
+        Args:
+            parent_agent_id: ID of parent agent to chain from
+            task: Task for the new agent
+            role: Agent role (defaults to parent's role if not specified)
+            auto_start: Whether to auto-start this agent when parent completes
+            model: Model to use (defaults to parent's model)
+            tags: Tags for the agent
+
+        Returns:
+            New agent ID
+
+        Raises:
+            ValueError: If parent agent not found
+        """
+        parent_agent = self.get_agent(parent_agent_id)
+        if not parent_agent:
+            raise ValueError(f"Parent agent {parent_agent_id} not found")
+
+        # Inherit settings from parent if not specified
+        if not role:
+            role = parent_agent.role
+        if not model:
+            model = parent_agent.model
+        if not tags:
+            tags = parent_agent.tags.copy()
+
+        # Create the chained agent
+        child_agent_id = await self.create_agent(
+            task=task,
+            working_dir=parent_agent.working_dir,
+            model=model,
+            tags=tags,
+            role=role,
+            parent_agent_id=parent_agent_id,
+        )
+
+        # Update parent's child list
+        parent_agent.child_agent_ids.append(child_agent_id)
+
+        # Update child's workflow step
+        child_agent = self.agents[child_agent_id]
+        child_agent.workflow_step = parent_agent.workflow_step + 1
+
+        # Set up auto-start if requested
+        if auto_start:
+            parent_agent.auto_start_next = child_agent_id
+            await self._add_log(
+                parent_agent_id,
+                "info",
+                f"Configured to auto-start child agent {child_agent_id[:8]} on completion",
+            )
+
+        await self._add_log(
+            parent_agent_id,
+            "info",
+            f"Created chained agent {child_agent_id[:8]} with role: {role}",
+        )
+
+        await self._add_log(
+            child_agent_id,
+            "info",
+            f"Chained from parent agent {parent_agent_id[:8]} (workflow step {child_agent.workflow_step})",
+        )
+
+        return child_agent_id
+
     def get_agent(self, agent_id: str) -> Optional[AgentInfo]:
         """Get agent information.
 
@@ -594,6 +870,65 @@ class WebAgentManager:
         agents.sort(key=lambda a: a.created_at, reverse=True)
 
         return agents
+
+    def get_workflow_chain(self, agent_id: str) -> List[AgentInfo]:
+        """Get the full workflow chain for an agent (root to leaves).
+
+        Args:
+            agent_id: Agent ID to get workflow for
+
+        Returns:
+            List of agents in workflow order (parent first, then children)
+        """
+        agent = self.get_agent(agent_id)
+        if not agent:
+            return []
+
+        # Find root agent (no parent)
+        root = agent
+        while root.parent_agent_id:
+            parent = self.get_agent(root.parent_agent_id)
+            if parent:
+                root = parent
+            else:
+                break
+
+        # Build chain from root using BFS
+        chain = []
+        queue = [root]
+
+        while queue:
+            current = queue.pop(0)
+            chain.append(current)
+
+            # Add children in order
+            for child_id in current.child_agent_ids:
+                child = self.get_agent(child_id)
+                if child:
+                    queue.append(child)
+
+        return chain
+
+    def get_children(self, agent_id: str) -> List[AgentInfo]:
+        """Get direct children of an agent.
+
+        Args:
+            agent_id: Parent agent ID
+
+        Returns:
+            List of child agents
+        """
+        agent = self.get_agent(agent_id)
+        if not agent:
+            return []
+
+        children = []
+        for child_id in agent.child_agent_ids:
+            child = self.get_agent(child_id)
+            if child:
+                children.append(child)
+
+        return children
 
     async def _monitor_agents(self) -> None:
         """Background task to monitor agents for stuck conditions."""

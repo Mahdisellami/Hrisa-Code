@@ -28,73 +28,156 @@ This tool offers a robust CLI interface for interacting with local LLMs via Olla
 ## Prerequisites
 
 - Python >=3.10
-- pip package manager
+- Ollama (for local LLM execution)
+- Git (optional, for version control operations)
 
 ## Installation
+
+### Quick Setup (Recommended)
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/hrisa-code.git
 cd hrisa-code
 
+# Run platform-specific setup script
+# macOS/Linux:
+make setup
+
+# Windows (PowerShell):
+.\scripts\setup-windows.ps1
+
+# Windows (CMD):
+.\scripts\setup-windows.bat
+```
+
+### Manual Setup
+
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
 # Install dependencies
 pip install -e ".[dev]"
+
+# Run setup wizard
+hrisa setup
 ```
 
 ## Usage
 
-Start by running the `chat` command to interact with the coding assistant, or use the `models` command to list available Ollama models. For initialization and documentation generation, commands like `init`, `readme`, and `contributing` provide a streamlined setup process.
+### Initial Setup
 
-### Commands
+After installation, run the comprehensive setup wizard:
 
 ```bash
-# Start an interactive chat session with the coding assistant.
-hrisa-code chat
+# Interactive setup (recommended for first-time users)
+hrisa setup
+
+# Auto-install everything without prompting
+hrisa setup --auto-install
+
+# Specify models to install
+hrisa setup --models "qwen2.5-coder:7b,qwen2.5:72b"
 ```
 
-```bash
-# List available Ollama models.
-hrisa-code models
-```
+The setup wizard will:
+- Verify Python, Git, Curl, and Docker installations
+- Check Ollama installation and service status
+- Install PDF libraries for document support
+- Pull required Ollama models
+- Provide platform-specific fix commands for any issues
+
+### Core Commands
 
 ```bash
-# Initialize Hrisa Code configuration and generate HRISA.md documentation.
-hrisa-code init
+# Run pre-flight checks
+hrisa check
+
+# Start an interactive chat session
+hrisa chat
+
+# List available Ollama models
+hrisa models
+
+# Initialize configuration and generate HRISA.md
+hrisa init
 ```
 
-```bash
-# Generate user-friendly README.md documentation.
-hrisa-code readme
-```
+### Web UI (NEW!)
+
+Manage multiple GenAI agents through a visual web interface:
+
+#### Local Installation
 
 ```bash
-# Generate comprehensive CONTRIBUTING.md contributor guidelines.
-hrisa-code contributing
+# Install web dependencies
+pip install -e ".[web]"
+
+# Start the web UI server
+hrisa web
+
+# Access the dashboard
+open http://localhost:8000
 ```
 
-```bash
-# Generate README.md using progressive context-building (NEW APPROACH).
-hrisa-code readme_progressive
-```
+#### Docker Deployment (Recommended)
+
+Deploy with Docker Compose for a complete setup with Ollama:
 
 ```bash
-# Generate API.md using progressive context-building (NEW APPROACH).
-hrisa-code api_progressive
+# Quick start - deploys Ollama + Web UI
+./deploy.sh start
+
+# Pull recommended models
+./deploy.sh pull-models
+
+# Access the web UI
+open http://localhost:8000
 ```
 
-```bash
-# Generate CONTRIBUTING.md using progressive context-building (NEW APPROACH).
-hrisa-code contributing_progressive
-```
+See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md) for complete Docker guide.
+
+**Features:**
+- 🤖 Create and manage multiple agents simultaneously
+- ⏱️ Real-time progress tracking with WebSocket updates
+- 🔴 Automatic stuck detection (alerts when agents need help)
+- 💬 Send instructions to guide stuck agents
+- 📊 Visual dashboard with statistics and filters
+- 📝 View complete conversation history and outputs
+
+See [docs/WEB_UI.md](docs/WEB_UI.md) for complete documentation.
+
+**Quick Example:**
+1. Start server: `hrisa web` (or `./deploy.sh start` for Docker)
+2. Open browser to http://localhost:8000
+3. Click "Create New Agent"
+4. Enter task: "Generate comprehensive README.md"
+5. Watch real-time progress on dashboard
+6. Send instructions if agent gets stuck
 
 ```bash
-# Generate HRISA.md using progressive context-building (NEW APPROACH).
-hrisa-code hrisa_progressive
-```
+# Generate user-friendly README.md documentation
+hrisa readme
 
-```bash
-# Generate comprehensive API.md reference documentation (OLD APPROACH).
-hrisa-code api
+# Generate comprehensive CONTRIBUTING.md contributor guidelines
+hrisa contributing
+
+# Generate comprehensive API.md reference documentation
+hrisa api
+
+# Generate README.md using progressive context-building (NEW)
+hrisa readme_progressive
+
+# Generate API.md using progressive context-building (NEW)
+hrisa api_progressive
+
+# Generate CONTRIBUTING.md using progressive context-building (NEW)
+hrisa contributing_progressive
+
+# Generate HRISA.md using progressive context-building (NEW)
+hrisa hrisa_progressive
 ```
 
 ### Execution Modes

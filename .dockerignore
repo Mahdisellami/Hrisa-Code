@@ -59,5 +59,6 @@ config.local.yaml
 
 # Misc
 *.md
+!README.md
 LICENSE
 CONTRIBUTING.md

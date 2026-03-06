@@ -1,4 +1,4 @@
-# Multi-stage build for Hrisa Code
+# Multi-stage build for Hrisa Code Web UI
 FROM python:3.11-slim as builder
 
 # Set working directory
@@ -14,8 +14,8 @@ COPY pyproject.toml ./
 COPY src/ ./src/
 COPY README.md ./
 
-# Install the package with PDF support
-RUN pip install --no-cache-dir -e . && \
+# Install the package with web dependencies and PDF support
+RUN pip install --no-cache-dir -e ".[web]" && \
     pip install --no-cache-dir pypdf
 
 # Final stage
@@ -39,7 +39,10 @@ WORKDIR /workspace
 # Copy installed packages from builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin/hrisa /usr/local/bin/hrisa
-COPY --from=builder /app/src /app/src
+COPY --from=builder --chown=hrisa:hrisa /app/src /app/src
+
+# Copy static files for web UI (already owned by hrisa from previous copy)
+# COPY --chown=hrisa:hrisa src/hrisa_code/web/static /app/src/hrisa_code/web/static
 
 # Copy entrypoint script with execute permissions
 COPY --chmod=0755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
@@ -51,8 +54,15 @@ USER hrisa
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
+# Expose web UI port
+EXPOSE 8000
+
+# Health check for web service
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/api/stats || exit 1
+
 # Set entrypoint
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
-# Default command
-CMD ["hrisa", "--help"]
+# Default command: start web UI
+CMD ["hrisa", "web", "--host", "0.0.0.0", "--port", "8000"]

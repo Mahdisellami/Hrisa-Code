@@ -306,6 +306,28 @@ async function fetchAgentArtifacts(agentId) {
     }
 }
 
+async function fetchAgentState(agentId) {
+    try {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/state`);
+        if (!response.ok) throw new Error('Failed to fetch state');
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching state:', error);
+        return { current_state: 'unknown', transitions: [] };
+    }
+}
+
+async function fetchAgentMemory(agentId) {
+    try {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/memory`);
+        if (!response.ok) throw new Error('Failed to fetch memory');
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching memory:', error);
+        return { decisions: [], context: {}, intermediate_outputs: [], state_transitions: [], working_memory: [] };
+    }
+}
+
 // Rendering Functions
 function getRoleInfo(roleId) {
     const role = state.roles.find(r => r.id === roleId);
@@ -330,7 +352,10 @@ function renderAgentList() {
              onclick="selectAgent('${agent.id}')">
             <div class="agent-card-header">
                 <div class="agent-id">${agent.id.substring(0, 8)}</div>
-                <div class="agent-status ${agent.status}">${agent.status}</div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <div class="agent-status ${agent.status}">${agent.status}</div>
+                    ${agent.current_state ? `<div style="background: var(--brand-500); color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em; font-weight: 600;">${agent.current_state.substring(0, 3).toUpperCase()}</div>` : ''}
+                </div>
             </div>
             <div class="agent-role" style="background: ${roleInfo.color}20; color: ${roleInfo.color}; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; margin: 8px 0; display: inline-block;">
                 ${roleInfo.icon} ${roleInfo.name}
@@ -384,6 +409,8 @@ async function renderAgentDetail(agentId) {
     const messages = await fetchAgentMessages(agentId);
     const logs = await fetchAgentLogs(agentId);
     const artifacts = await fetchAgentArtifacts(agentId);
+    const agentState = await fetchAgentState(agentId);
+    const agentMemory = await fetchAgentMemory(agentId);
     const roleInfo = getRoleInfo(agent.role);
 
     elements.detailContent.innerHTML = `
@@ -429,6 +456,43 @@ async function renderAgentDetail(agentId) {
                 <span class="detail-info-value">${escapeHtml(agent.task)}</span>
             </div>
         </div>
+
+        ${agent.parent_agent_id || agent.child_agent_ids.length > 0 ? `
+            <div class="detail-section">
+                <h3>Workflow Chain</h3>
+                <div style="background: var(--sand-100); border-radius: 8px; padding: 12px;">
+                    ${agent.parent_agent_id ? `
+                        <div style="margin-bottom: 12px;">
+                            <span style="color: var(--sand-700); font-size: 0.9em;">↑ Parent Agent:</span>
+                            <div style="background: var(--sand-50); border-left: 3px solid var(--brand-500); padding: 8px; margin-top: 4px; border-radius: 4px; cursor: pointer;" onclick="selectAgent('${agent.parent_agent_id}')">
+                                <span style="color: var(--brand-600); font-weight: 600;">${agent.parent_agent_id.substring(0, 8)}</span>
+                                <span style="color: var(--sand-600); margin-left: 8px; font-size: 0.85em;">Step ${agent.workflow_step - 1}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    <div style="background: var(--terracotta-100); border-left: 3px solid var(--terracotta-500); padding: 8px; border-radius: 4px; margin-bottom: 12px;">
+                        <span style="color: var(--terracotta-700); font-weight: 600;">● Current Agent</span>
+                        <span style="color: var(--sand-600); margin-left: 8px; font-size: 0.85em;">Step ${agent.workflow_step}</span>
+                    </div>
+                    ${agent.child_agent_ids.length > 0 ? `
+                        <div>
+                            <span style="color: var(--sand-700); font-size: 0.9em;">↓ Child Agents (${agent.child_agent_ids.length}):</span>
+                            ${agent.child_agent_ids.map(childId => {
+                                const childAgent = state.agents.get(childId);
+                                const childStatus = childAgent ? childAgent.status : 'unknown';
+                                return `
+                                <div style="background: var(--sand-50); border-left: 3px solid var(--sand-400); padding: 8px; margin-top: 4px; border-radius: 4px; cursor: pointer;" onclick="selectAgent('${childId}')">
+                                    <span style="color: var(--sand-800); font-weight: 600;">${childId.substring(0, 8)}</span>
+                                    <span class="agent-status ${childStatus}" style="margin-left: 8px; font-size: 0.75em; padding: 2px 6px;">${childStatus}</span>
+                                    ${childAgent ? `<span style="color: var(--sand-600); margin-left: 8px; font-size: 0.85em;">Step ${childAgent.workflow_step}</span>` : ''}
+                                </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        ` : ''}
 
         ${agent.stuck_reason ? `
             <div class="detail-section">
@@ -501,7 +565,14 @@ async function renderAgentDetail(agentId) {
         </div>
 
         <div class="detail-section">
-            <h3>Artifacts (${artifacts.length})</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <h3>Artifacts (${artifacts.length})</h3>
+                ${artifacts.length > 0 ? `
+                    <button class="btn btn-secondary btn-small" onclick="downloadAllArtifacts('${agent.id}')" style="font-size: 0.85em; padding: 6px 12px;">
+                        📦 Download All
+                    </button>
+                ` : ''}
+            </div>
             <div class="artifacts-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
                 ${artifacts.length > 0 ? artifacts.map(artifact => {
                     const typeIcons = {
@@ -534,6 +605,13 @@ async function renderAgentDetail(agentId) {
                                     <div style="font-size: 0.85em; color: ${color};">${artifact.type}${artifact.language ? ` (${artifact.language})` : ''}</div>
                                 </div>
                             </div>
+                            <button
+                                onclick="downloadArtifact('${agent.id}', '${artifact.id}')"
+                                style="background: var(--brand-500); color: white; border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 0.85em;"
+                                title="Download artifact"
+                            >
+                                ⬇️
+                            </button>
                         </div>
                         ${artifact.description ? `<div style="font-size: 0.9em; color: var(--sand-700); margin-bottom: 8px;">${escapeHtml(artifact.description)}</div>` : ''}
                         <div style="background: var(--sand-50); border-radius: 4px; padding: 8px; max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 0.85em; color: var(--sand-800);">
@@ -545,6 +623,99 @@ async function renderAgentDetail(agentId) {
                     </div>
                 `;
                 }).join('') : '<div class="empty-state"><p>No artifacts yet</p></div>'}
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <h3>State Machine</h3>
+            <div style="background: var(--sand-100); border-radius: 8px; padding: 12px;">
+                <div class="detail-info-item" style="margin-bottom: 12px;">
+                    <span class="detail-info-label">Current State:</span>
+                    <span class="detail-info-value">
+                        <span style="background: var(--brand-500); color: white; padding: 4px 12px; border-radius: 16px; display: inline-block; font-weight: 600;">
+                            ${agentState.current_state.toUpperCase()}
+                        </span>
+                    </span>
+                </div>
+
+                ${agentState.transitions.length > 0 ? `
+                    <div style="margin: 16px 0;">
+                        <h4 style="color: var(--sand-700); font-size: 0.9em; margin-bottom: 12px;">State Flow Diagram</h4>
+                        ${renderStateFlowDiagram(agentState)}
+                    </div>
+                ` : ''}
+
+                <div style="margin-top: 12px;">
+                    <h4 style="color: var(--sand-700); font-size: 0.9em; margin-bottom: 8px;">State Transitions (${agentState.transitions.length})</h4>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        ${agentState.transitions.length > 0 ? agentState.transitions.map(t => `
+                            <div style="background: var(--sand-50); border-left: 3px solid var(--brand-500); padding: 8px; margin-bottom: 6px; border-radius: 4px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <span style="color: var(--sand-800); font-weight: 600;">
+                                        ${t.from_state ? `${t.from_state} →` : ''} ${t.to_state}
+                                    </span>
+                                    <span style="color: var(--sand-600); font-size: 0.85em;">${formatTime(t.timestamp)}</span>
+                                </div>
+                                ${t.reason ? `<div style="color: var(--sand-700); font-size: 0.9em;">${escapeHtml(t.reason)}</div>` : ''}
+                            </div>
+                        `).join('') : '<div class="empty-state"><p>No state transitions yet</p></div>'}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-section">
+            <h3>Agent Memory</h3>
+            <div style="background: var(--sand-100); border-radius: 8px; padding: 12px;">
+                <div style="margin-bottom: 16px;">
+                    <h4 style="color: var(--sand-700); font-size: 0.9em; margin-bottom: 8px;">Working Memory (${agentMemory.working_memory.length})</h4>
+                    <div style="background: var(--sand-50); border-radius: 4px; padding: 8px; max-height: 150px; overflow-y: auto;">
+                        ${agentMemory.working_memory.length > 0 ? agentMemory.working_memory.map(item => `
+                            <div style="padding: 4px 0; border-bottom: 1px solid var(--sand-200); color: var(--sand-800);">
+                                ${escapeHtml(item)}
+                            </div>
+                        `).join('') : '<div class="empty-state"><p>No working memory items</p></div>'}
+                    </div>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <h4 style="color: var(--sand-700); font-size: 0.9em; margin-bottom: 8px;">Decisions (${agentMemory.decisions.length})</h4>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        ${agentMemory.decisions.length > 0 ? agentMemory.decisions.map(decision => `
+                            <div style="background: var(--sand-50); border-left: 3px solid var(--terracotta-500); padding: 8px; margin-bottom: 6px; border-radius: 4px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <span style="color: var(--terracotta-600); font-weight: 600;">${decision.type}</span>
+                                    <span style="color: var(--sand-600); font-size: 0.85em;">${formatTime(decision.timestamp)}</span>
+                                </div>
+                                <div style="color: var(--sand-800); margin-bottom: 4px;">${escapeHtml(decision.description)}</div>
+                                ${decision.rationale ? `<div style="color: var(--sand-700); font-size: 0.9em; font-style: italic;">${escapeHtml(decision.rationale)}</div>` : ''}
+                            </div>
+                        `).join('') : '<div class="empty-state"><p>No decisions recorded</p></div>'}
+                    </div>
+                </div>
+                <div style="margin-bottom: 16px;">
+                    <h4 style="color: var(--sand-700); font-size: 0.9em; margin-bottom: 8px;">Intermediate Outputs (${agentMemory.intermediate_outputs.length})</h4>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        ${agentMemory.intermediate_outputs.length > 0 ? agentMemory.intermediate_outputs.map(output => `
+                            <div style="background: var(--sand-50); border-left: 3px solid var(--brand-500); padding: 8px; margin-bottom: 6px; border-radius: 4px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <span style="color: var(--brand-600); font-weight: 600;">${output.type}</span>
+                                    <span style="color: var(--sand-600); font-size: 0.85em;">${formatTime(output.timestamp)}</span>
+                                </div>
+                                <div style="background: var(--sand-100); border-radius: 4px; padding: 6px; max-height: 100px; overflow-y: auto; font-family: monospace; font-size: 0.85em; color: var(--sand-800);">
+                                    ${escapeHtml(output.content.substring(0, 200))}${output.content.length > 200 ? '...' : ''}
+                                </div>
+                            </div>
+                        `).join('') : '<div class="empty-state"><p>No intermediate outputs</p></div>'}
+                    </div>
+                </div>
+                <div>
+                    <h4 style="color: var(--sand-700); font-size: 0.9em; margin-bottom: 8px;">Context</h4>
+                    <div style="background: var(--sand-50); border-radius: 4px; padding: 8px; max-height: 150px; overflow-y: auto; font-family: monospace; font-size: 0.85em;">
+                        ${Object.keys(agentMemory.context).length > 0 ? `
+                            <pre style="margin: 0; color: var(--sand-800);">${JSON.stringify(agentMemory.context, null, 2)}</pre>
+                        ` : '<div class="empty-state"><p>No context data</p></div>'}
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -579,6 +750,11 @@ async function renderAgentDetail(agentId) {
                 </button>
                 <button class="btn btn-danger" onclick="confirmCancelAgent('${agent.id}')">
                     ⏹️ Cancel
+                </button>
+            ` : ''}
+            ${agent.status === 'completed' || agent.status === 'failed' ? `
+                <button class="btn btn-primary" onclick="openChainModal('${agent.id}')">
+                    🔗 Create Follow-up Agent
                 </button>
             ` : ''}
             <button class="btn btn-secondary" onclick="confirmDeleteAgent('${agent.id}')">
@@ -630,6 +806,35 @@ function escapeHtml(text) {
     return text.replace(/[&<>"']/g, m => map[m]);
 }
 
+function renderStateFlowDiagram(agentState) {
+    const states = agentState.transitions.map(t => t.to_state);
+    const currentState = agentState.current_state.toLowerCase();
+
+    return `
+        <div style="background: var(--sand-50); border-radius: 6px; padding: 16px; overflow-x: auto;">
+            <div style="display: flex; align-items: center; gap: 8px; min-width: max-content;">
+                ${states.map((state, index) => {
+                    const isCurrent = state === currentState;
+                    const stateColor = isCurrent ? 'var(--brand-500)' : 'var(--sand-400)';
+                    const textColor = isCurrent ? 'white' : 'var(--sand-700)';
+                    const fontSize = isCurrent ? '0.9em' : '0.85em';
+
+                    return `
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="background: ${stateColor}; color: ${textColor}; padding: 8px 12px; border-radius: 6px; font-weight: ${isCurrent ? '600' : '500'}; font-size: ${fontSize}; text-transform: uppercase; min-width: 90px; text-align: center; box-shadow: ${isCurrent ? '0 2px 4px rgba(0,0,0,0.1)' : 'none'};">
+                                ${state.replace('_', ' ')}
+                            </div>
+                            ${index < states.length - 1 ? `
+                                <div style="color: var(--sand-400); font-size: 1.2em;">→</div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        </div>
+    `;
+}
+
 function showNotification(message, type = 'info') {
     // Simple console notification for now
     // Could be enhanced with a toast UI component
@@ -660,6 +865,41 @@ function confirmDeleteAgent(agentId) {
     if (confirm('Are you sure you want to delete this agent?')) {
         deleteAgent(agentId);
     }
+}
+
+function openChainModal(agentId) {
+    const agent = state.agents.get(agentId);
+    if (!agent) return;
+
+    document.getElementById('chain-agent-form').dataset.parentAgentId = agentId;
+
+    // Populate role dropdown with options
+    const roleSelect = document.getElementById('chain-role-input');
+    roleSelect.innerHTML = '<option value="">Inherit from parent</option>' +
+        state.roles.map(role => `<option value="${role.id}">${role.icon} ${role.name}</option>`).join('');
+
+    // Suggest a follow-up task based on parent's role and status
+    const taskInput = document.getElementById('chain-task-input');
+    if (agent.status === 'completed') {
+        taskInput.placeholder = `Example: Now ${getSuggestedFollowUpTask(agent.role)}`;
+    } else if (agent.status === 'failed') {
+        taskInput.placeholder = `Example: Fix the issues and retry the task`;
+    }
+
+    openModal('chain-agent-modal');
+}
+
+function getSuggestedFollowUpTask(role) {
+    const suggestions = {
+        'requirements_engineer': 'create the architecture design based on these requirements',
+        'architect': 'implement the solution following this architecture',
+        'coder': 'write comprehensive unit tests for this code',
+        'tester': 'review the test coverage and identify any gaps',
+        'reviewer': 'implement the suggested improvements',
+        'devops': 'create monitoring and alerting for this deployment',
+        'general': 'create tests for this code'
+    };
+    return suggestions[role] || 'continue with the next step';
 }
 
 // Event Listeners
@@ -699,6 +939,44 @@ elements.instructionForm.addEventListener('submit', async (e) => {
     elements.instructionForm.reset();
 });
 
+document.getElementById('chain-agent-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const parentAgentId = e.target.dataset.parentAgentId;
+    const task = document.getElementById('chain-task-input').value;
+    const role = document.getElementById('chain-role-input').value || null;
+    const autoStart = document.getElementById('chain-auto-start-input').checked;
+
+    try {
+        const response = await fetch(`${API_BASE}/agents/${parentAgentId}/chain`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                task,
+                role,
+                auto_start: autoStart,
+            }),
+        });
+
+        if (!response.ok) throw new Error('Failed to create chained agent');
+
+        const childAgent = await response.json();
+
+        closeModal('chain-agent-modal');
+        e.target.reset();
+
+        // Refresh agents and select the new child agent
+        await fetchAgents();
+        selectAgent(childAgent.id);
+
+        showNotification(`Follow-up agent created successfully! ${autoStart ? '(Will auto-start when parent completes)' : ''}`, 'success');
+
+    } catch (error) {
+        console.error('Error creating chained agent:', error);
+        showNotification('Failed to create chained agent', 'error');
+    }
+});
+
 elements.closeDetailBtn.addEventListener('click', closeDetailPanel);
 
 elements.refreshBtn.addEventListener('click', fetchAgents);
@@ -731,6 +1009,14 @@ document.getElementById('instruction-modal-cancel-btn').addEventListener('click'
     closeModal('instruction-modal');
 });
 
+document.getElementById('chain-modal-close-btn').addEventListener('click', () => {
+    closeModal('chain-agent-modal');
+});
+
+document.getElementById('chain-modal-cancel-btn').addEventListener('click', () => {
+    closeModal('chain-agent-modal');
+});
+
 // Status filters
 document.querySelectorAll('.status-filter').forEach(checkbox => {
     checkbox.addEventListener('change', (e) => {
@@ -751,6 +1037,17 @@ document.querySelectorAll('.modal').forEach(modal => {
         }
     });
 });
+
+// Artifact Download Functions
+function downloadArtifact(agentId, artifactId) {
+    const url = `${API_BASE}/agents/${agentId}/artifacts/${artifactId}/download`;
+    window.open(url, '_blank');
+}
+
+function downloadAllArtifacts(agentId) {
+    const url = `${API_BASE}/agents/${agentId}/artifacts/download-all`;
+    window.open(url, '_blank');
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {

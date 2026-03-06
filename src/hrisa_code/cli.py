@@ -175,6 +175,52 @@ def check(
 
 
 @app.command()
+def setup(
+    auto_install: bool = typer.Option(
+        False,
+        "--auto-install",
+        "-y",
+        help="Automatically install dependencies without prompting",
+    ),
+    models: Optional[str] = typer.Option(
+        None,
+        "--models",
+        "-m",
+        help="Comma-separated list of models to install",
+    ),
+) -> None:
+    """Run the comprehensive setup wizard for Hrisa Code.
+
+    This wizard will:
+    - Check system dependencies (Python, Git, Curl, Docker)
+    - Verify Ollama installation and service status
+    - Install PDF libraries for document support
+    - Pull required Ollama models
+    - Provide platform-specific guidance for missing dependencies
+
+    Example:
+        hrisa setup                                    # Interactive setup
+        hrisa setup --auto-install                     # Auto-install everything
+        hrisa setup --models "qwen2.5-coder:7b"        # Specify models to install
+    """
+    from hrisa_code.core.validation.setup_manager import run_setup
+
+    # Parse models list if provided
+    required_models = None
+    if models:
+        required_models = [m.strip() for m in models.split(",")]
+
+    # Run setup wizard
+    success = run_setup(
+        auto_install=auto_install,
+        required_models=required_models,
+    )
+
+    if not success:
+        raise typer.Exit(1)
+
+
+@app.command()
 def init(
     path: Path = typer.Argument(
         Path.cwd(),
@@ -1193,6 +1239,77 @@ def api(
         console.print("\n[yellow]Make sure Ollama is running:[/yellow]")
         console.print("  ollama serve")
         console.print(f"\nAnd that you have the model: [cyan]ollama pull {config.model.name}[/cyan]")
+        raise typer.Exit(1)
+
+
+@app.command()
+def web(
+    host: str = typer.Option(
+        "0.0.0.0",
+        "--host",
+        "-h",
+        help="Host to bind to",
+    ),
+    port: int = typer.Option(
+        8000,
+        "--port",
+        "-p",
+        help="Port to listen on",
+    ),
+    reload: bool = typer.Option(
+        False,
+        "--reload",
+        "-r",
+        help="Enable auto-reload for development",
+    ),
+) -> None:
+    """Start the web UI server for managing GenAI agents.
+
+    The web UI provides:
+    - Visual dashboard for all agents
+    - Real-time progress tracking
+    - Stuck detection and intervention
+    - User instruction interface
+    - Agent output visualization
+
+    Example:
+        hrisa web                          # Start on http://0.0.0.0:8000
+        hrisa web --port 3000              # Start on port 3000
+        hrisa web --reload                 # Development mode with auto-reload
+    """
+    try:
+        from hrisa_code.web import run_server
+
+        console.print(Panel(
+            "[bold cyan]Hrisa Code Web UI[/bold cyan]\n\n"
+            f"Starting server on http://{host}:{port}\n\n"
+            "[green]Features:[/green]\n"
+            "  • Create and manage multiple agents\n"
+            "  • Real-time progress tracking\n"
+            "  • Automatic stuck detection\n"
+            "  • Send instructions to agents\n"
+            "  • View agent outputs and messages\n\n"
+            "[yellow]Press Ctrl+C to stop[/yellow]",
+            title="Web UI Server",
+            border_style="cyan",
+        ))
+
+        console.print(f"\n[bold]Opening web UI at:[/bold] http://{host}:{port}")
+        console.print(f"[dim]API documentation:[/dim] http://{host}:{port}/docs\n")
+
+        run_server(host=host, port=port, reload=reload)
+
+    except ImportError:
+        console.print("[red]Error: Web UI dependencies not installed[/red]")
+        console.print("\nInstall with:")
+        console.print("  pip install 'hrisa-code[web]'")
+        console.print("\nOr install all dependencies:")
+        console.print("  pip install -e '.[dev]'")
+        raise typer.Exit(1)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Server stopped[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error starting web server:[/red] {str(e)}")
         raise typer.Exit(1)
 
 

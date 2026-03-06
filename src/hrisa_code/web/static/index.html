@@ -183,6 +183,51 @@
         </div>
     </div>
 
+    <!-- Chain Agent Modal -->
+    <div class="modal" id="chain-agent-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create Follow-up Agent</h2>
+                <button class="btn-close" id="chain-modal-close-btn">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="chain-agent-form">
+                    <div class="form-group">
+                        <label for="chain-task-input">Task Description *</label>
+                        <textarea
+                            id="chain-task-input"
+                            rows="4"
+                            placeholder="Describe the follow-up task...&#10;Example: Now write unit tests for the generated code"
+                            required
+                        ></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="chain-role-input">Agent Role</label>
+                        <select id="chain-role-input">
+                            <option value="">Inherit from parent</option>
+                            <!-- Options will be loaded dynamically -->
+                        </select>
+                        <small>Leave empty to inherit parent's role</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="chain-auto-start-input">
+                            Auto-start when parent completes
+                        </label>
+                        <small>Automatically start this agent when the parent finishes</small>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">Create Follow-up Agent</button>
+                        <button type="button" class="btn btn-secondary" id="chain-modal-cancel-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/app.js"></script>
 </body>
 </html>
