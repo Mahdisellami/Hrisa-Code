@@ -2035,6 +2035,239 @@ function switchToAgentsView() {
     renderAgentList();
 }
 
+// Model Fallback Functions
+async function fetchFallbackConfig() {
+    try {
+        const response = await fetch(`${API_BASE}/models/fallback/config`);
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to fetch fallback config:', error);
+    }
+    return null;
+}
+
+async function updateFallbackConfig(config) {
+    try {
+        const response = await fetch(`${API_BASE}/models/fallback/config`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config),
+        });
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to update fallback config:', error);
+    }
+    return null;
+}
+
+async function fetchFallbackEvents(agentId = null, limit = 50) {
+    try {
+        const url = agentId
+            ? `${API_BASE}/models/fallback/events?agent_id=${agentId}&limit=${limit}`
+            : `${API_BASE}/models/fallback/events?limit=${limit}`;
+        const response = await fetch(url);
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to fetch fallback events:', error);
+    }
+    return [];
+}
+
+async function fetchFallbackStatistics() {
+    try {
+        const response = await fetch(`${API_BASE}/models/fallback/statistics`);
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to fetch fallback statistics:', error);
+    }
+    return null;
+}
+
+async function showFallbackSettings() {
+    const listContainer = document.getElementById('agent-list');
+    const config = await fetchFallbackConfig();
+    const stats = await fetchFallbackStatistics();
+    const events = await fetchFallbackEvents(null, 20);
+
+    if (!config) {
+        listContainer.innerHTML = '<div class="empty-state"><p>Failed to load fallback configuration</p></div>';
+        return;
+    }
+
+    const settingsHTML = `
+        <div style="padding: 20px; max-width: 900px;">
+            <h2 style="margin-bottom: 20px;">Model Fallback & Retry Settings</h2>
+
+            <div style="background: var(--sand-100); border: 1px solid var(--sand-300); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="margin-top: 0;">Configuration</h3>
+                <form id="fallback-config-form">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                        <div>
+                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                                <input type="checkbox" id="fallback-enabled" ${config.enabled ? 'checked' : ''}>
+                                <span><strong>Enable Fallback</strong></span>
+                            </label>
+
+                            <label style="display: block; margin-bottom: 12px;">
+                                <span style="display: block; margin-bottom: 4px; font-size: 14px; color: var(--sand-700);">Max Retries</span>
+                                <input type="number" id="fallback-max-retries" value="${config.max_retries}" min="0" max="10" style="width: 100%; padding: 8px; border: 1px solid var(--sand-300); border-radius: 4px;">
+                            </label>
+
+                            <label style="display: block; margin-bottom: 12px;">
+                                <span style="display: block; margin-bottom: 4px; font-size: 14px; color: var(--sand-700);">Retry Delay (seconds)</span>
+                                <input type="number" id="fallback-retry-delay" value="${config.retry_delay}" min="0.1" max="60" step="0.1" style="width: 100%; padding: 8px; border: 1px solid var(--sand-300); border-radius: 4px;">
+                            </label>
+
+                            <label style="display: block; margin-bottom: 12px;">
+                                <span style="display: block; margin-bottom: 4px; font-size: 14px; color: var(--sand-700);">Timeout (seconds)</span>
+                                <input type="number" id="fallback-timeout" value="${config.timeout_seconds}" min="10" max="600" style="width: 100%; padding: 8px; border: 1px solid var(--sand-300); border-radius: 4px;">
+                            </label>
+                        </div>
+
+                        <div>
+                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                                <input type="checkbox" id="fallback-auto-timeout" ${config.auto_switch_on_timeout ? 'checked' : ''}>
+                                <span>Auto-switch on timeout</span>
+                            </label>
+
+                            <label style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+                                <input type="checkbox" id="fallback-auto-error" ${config.auto_switch_on_error ? 'checked' : ''}>
+                                <span>Auto-switch on error</span>
+                            </label>
+
+                            <label style="display: block;">
+                                <span style="display: block; margin-bottom: 4px; font-size: 14px; color: var(--sand-700);">Fallback Models (comma-separated)</span>
+                                <textarea id="fallback-models" rows="4" style="width: 100%; padding: 8px; border: 1px solid var(--sand-300); border-radius: 4px; font-family: monospace; font-size: 12px;">${config.fallback_models.join(', ')}</textarea>
+                                <small style="color: var(--sand-600);">Models will be tried in order when primary fails</small>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 8px;">
+                        <button type="submit" class="btn btn-primary">Save Configuration</button>
+                        <button type="button" class="btn btn-secondary" onclick="switchToAgentsView()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            ${stats && stats.total_events > 0 ? `
+                <div style="background: var(--sand-100); border: 1px solid var(--sand-300); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                    <h3 style="margin-top: 0;">Fallback Statistics</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                        <div style="background: var(--sand-50); padding: 12px; border-radius: 6px;">
+                            <div style="font-size: 11px; color: var(--sand-600); margin-bottom: 4px;">Total Events</div>
+                            <div style="font-size: 24px; font-weight: 600; color: var(--sand-900);">${stats.total_events}</div>
+                        </div>
+                        <div style="background: var(--sand-50); padding: 12px; border-radius: 6px;">
+                            <div style="font-size: 11px; color: var(--sand-600); margin-bottom: 4px;">Most Reliable</div>
+                            <div style="font-size: 14px; font-weight: 600; color: #10b981;">${stats.most_reliable_model || 'N/A'}</div>
+                        </div>
+                        <div style="background: var(--sand-50); padding: 12px; border-radius: 6px;">
+                            <div style="font-size: 11px; color: var(--sand-600); margin-bottom: 4px;">Most Problematic</div>
+                            <div style="font-size: 14px; font-weight: 600; color: #ef4444;">${stats.most_problematic_model || 'N/A'}</div>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <h4 style="font-size: 14px; margin-bottom: 8px;">By Reason</h4>
+                            ${Object.entries(stats.by_reason).map(([reason, count]) => `
+                                <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--sand-200);">
+                                    <span style="text-transform: capitalize;">${reason}</span>
+                                    <span style="font-weight: 600;">${count}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div>
+                            <h4 style="font-size: 14px; margin-bottom: 8px;">By Model</h4>
+                            ${Object.entries(stats.by_model).slice(0, 5).map(([model, count]) => `
+                                <div style="display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--sand-200);">
+                                    <span style="font-size: 12px;">${escapeHtml(model)}</span>
+                                    <span style="font-weight: 600;">${count}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
+
+            ${events.length > 0 ? `
+                <div style="background: var(--sand-100); border: 1px solid var(--sand-300); border-radius: 8px; padding: 20px;">
+                    <h3 style="margin-top: 0;">Recent Fallback Events (${events.length})</h3>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        ${events.map(event => {
+                            const reasonColors = {
+                                'timeout': '#f59e0b',
+                                'error': '#ef4444',
+                                'unavailable': '#6b7280'
+                            };
+                            const color = reasonColors[event.reason] || '#6b7280';
+
+                            return `
+                                <div style="background: var(--sand-50); border-left: 3px solid ${color}; padding: 12px; margin-bottom: 8px; border-radius: 4px;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                        <span style="font-weight: 600; color: var(--sand-900);">${escapeHtml(event.primary_model)} → ${escapeHtml(event.fallback_model)}</span>
+                                        <span style="font-size: 12px; color: var(--sand-600);">${formatTime(event.timestamp)}</span>
+                                    </div>
+                                    <div style="display: flex; gap: 12px; font-size: 12px; color: var(--sand-700);">
+                                        <span>Agent: ${event.agent_id.substring(0, 8)}</span>
+                                        <span style="color: ${color}; font-weight: 600;">Reason: ${event.reason}</span>
+                                        <span>Retry: ${event.retry_attempt}</span>
+                                    </div>
+                                    ${event.error_message ? `
+                                        <div style="margin-top: 8px; padding: 8px; background: var(--sand-100); border-radius: 4px; font-size: 11px; font-family: monospace; color: #ef4444;">
+                                            ${escapeHtml(event.error_message.substring(0, 200))}${event.error_message.length > 200 ? '...' : ''}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    listContainer.innerHTML = settingsHTML;
+
+    // Add form submit handler
+    document.getElementById('fallback-config-form')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await saveFallbackConfig();
+    });
+}
+
+async function saveFallbackConfig() {
+    const config = {
+        enabled: document.getElementById('fallback-enabled').checked,
+        max_retries: parseInt(document.getElementById('fallback-max-retries').value),
+        retry_delay: parseFloat(document.getElementById('fallback-retry-delay').value),
+        timeout_seconds: parseInt(document.getElementById('fallback-timeout').value),
+        auto_switch_on_timeout: document.getElementById('fallback-auto-timeout').checked,
+        auto_switch_on_error: document.getElementById('fallback-auto-error').checked,
+        fallback_models: document.getElementById('fallback-models').value
+            .split(',')
+            .map(m => m.trim())
+            .filter(m => m.length > 0),
+    };
+
+    const result = await updateFallbackConfig(config);
+    if (result) {
+        alert('Fallback configuration saved successfully!');
+        await showFallbackSettings(); // Refresh the view
+    } else {
+        alert('Failed to save fallback configuration');
+    }
+}
+
 // Model Selection Functions
 let availableModelsWithInfo = [];
 
