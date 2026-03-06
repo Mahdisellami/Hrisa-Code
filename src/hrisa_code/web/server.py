@@ -27,6 +27,8 @@ from hrisa_code.web.agent_manager import (
     InterAgentMessage,
     AgentTeam,
     ModelPerformanceMetrics,
+    ModelFallbackConfig,
+    ModelFallbackEvent,
 )
 from hrisa_code.web.roles import list_roles, AgentRole
 
@@ -249,6 +251,52 @@ class ModelRecommendationResponse(BaseModel):
 
     recommended_model: Optional[str]
     reason: str
+
+
+class FallbackConfigRequest(BaseModel):
+    """Request to update fallback configuration."""
+
+    enabled: Optional[bool] = None
+    max_retries: Optional[int] = Field(None, ge=0, le=10)
+    retry_delay: Optional[float] = Field(None, ge=0.1, le=60.0)
+    timeout_seconds: Optional[int] = Field(None, ge=10, le=600)
+    fallback_models: Optional[List[str]] = None
+    auto_switch_on_timeout: Optional[bool] = None
+    auto_switch_on_error: Optional[bool] = None
+
+
+class FallbackConfigResponse(BaseModel):
+    """Response containing fallback configuration."""
+
+    enabled: bool
+    max_retries: int
+    retry_delay: float
+    timeout_seconds: int
+    fallback_models: List[str]
+    auto_switch_on_timeout: bool
+    auto_switch_on_error: bool
+
+
+class FallbackEventResponse(BaseModel):
+    """Response containing fallback event."""
+
+    timestamp: str
+    agent_id: str
+    primary_model: str
+    fallback_model: str
+    reason: str
+    error_message: Optional[str]
+    retry_attempt: int
+
+
+class FallbackStatisticsResponse(BaseModel):
+    """Response containing fallback statistics."""
+
+    total_events: int
+    by_reason: Dict[str, int]
+    by_model: Dict[str, int]
+    most_reliable_model: Optional[str]
+    most_problematic_model: Optional[str]
 
 
 class AgentMessageResponse(BaseModel):
@@ -1776,6 +1824,96 @@ async def recommend_model_for_task(task_description: str):
     return ModelRecommendationResponse(
         recommended_model=recommended,
         reason=reason,
+    )
+
+
+# Model Fallback and Retry Endpoints
+@app.get("/api/models/fallback/config")
+async def get_fallback_config():
+    """Get current fallback configuration."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    config = agent_manager.get_fallback_config()
+
+    return FallbackConfigResponse(
+        enabled=config["enabled"],
+        max_retries=config["max_retries"],
+        retry_delay=config["retry_delay"],
+        timeout_seconds=config["timeout_seconds"],
+        fallback_models=config["fallback_models"],
+        auto_switch_on_timeout=config["auto_switch_on_timeout"],
+        auto_switch_on_error=config["auto_switch_on_error"],
+    )
+
+
+@app.put("/api/models/fallback/config")
+async def update_fallback_config(request: FallbackConfigRequest):
+    """Update fallback configuration."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    # Build config dict from non-None values
+    config_updates = {}
+    if request.enabled is not None:
+        config_updates["enabled"] = request.enabled
+    if request.max_retries is not None:
+        config_updates["max_retries"] = request.max_retries
+    if request.retry_delay is not None:
+        config_updates["retry_delay"] = request.retry_delay
+    if request.timeout_seconds is not None:
+        config_updates["timeout_seconds"] = request.timeout_seconds
+    if request.fallback_models is not None:
+        config_updates["fallback_models"] = request.fallback_models
+    if request.auto_switch_on_timeout is not None:
+        config_updates["auto_switch_on_timeout"] = request.auto_switch_on_timeout
+    if request.auto_switch_on_error is not None:
+        config_updates["auto_switch_on_error"] = request.auto_switch_on_error
+
+    agent_manager.update_fallback_config(config_updates)
+
+    return {"status": "updated", "config": agent_manager.get_fallback_config()}
+
+
+@app.get("/api/models/fallback/events")
+async def get_fallback_events(
+    agent_id: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+):
+    """Get fallback event history."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    events = agent_manager.get_fallback_events(agent_id=agent_id, limit=limit)
+
+    return [
+        FallbackEventResponse(
+            timestamp=event.timestamp.isoformat(),
+            agent_id=event.agent_id,
+            primary_model=event.primary_model,
+            fallback_model=event.fallback_model,
+            reason=event.reason,
+            error_message=event.error_message,
+            retry_attempt=event.retry_attempt,
+        )
+        for event in events
+    ]
+
+
+@app.get("/api/models/fallback/statistics")
+async def get_fallback_statistics():
+    """Get statistics about fallback events."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    stats = agent_manager.get_fallback_statistics()
+
+    return FallbackStatisticsResponse(
+        total_events=stats["total_events"],
+        by_reason=stats["by_reason"],
+        by_model=stats["by_model"],
+        most_reliable_model=stats["most_reliable_model"],
+        most_problematic_model=stats["most_problematic_model"],
     )
 
 
