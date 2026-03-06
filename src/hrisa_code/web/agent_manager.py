@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Callable, Any
-from collections import deque
+from collections import deque, defaultdict
 
 from hrisa_code.core.config import Config
 from hrisa_code.core.planning.agent import AgentLoop
@@ -117,6 +117,41 @@ class AgentTeam:
 
 
 @dataclass
+class ModelPerformanceMetrics:
+    """Performance metrics for a model."""
+
+    model_name: str
+    total_requests: int = 0
+    successful_requests: int = 0
+    failed_requests: int = 0
+    total_response_time: float = 0.0  # Total seconds
+    total_tokens: int = 0  # Total tokens generated
+    last_used: Optional[datetime] = None
+    error_messages: List[str] = field(default_factory=list)  # Recent error messages (max 10)
+
+    @property
+    def success_rate(self) -> float:
+        """Calculate success rate as percentage."""
+        if self.total_requests == 0:
+            return 0.0
+        return (self.successful_requests / self.total_requests) * 100
+
+    @property
+    def average_response_time(self) -> float:
+        """Calculate average response time in seconds."""
+        if self.successful_requests == 0:
+            return 0.0
+        return self.total_response_time / self.successful_requests
+
+    @property
+    def average_tokens_per_request(self) -> float:
+        """Calculate average tokens per successful request."""
+        if self.successful_requests == 0:
+            return 0.0
+        return self.total_tokens / self.successful_requests
+
+
+@dataclass
 class AgentStateTransition:
     """A state transition in the agent's execution."""
 
@@ -209,6 +244,7 @@ class WebAgentManager:
         self.agent_tasks: Dict[str, asyncio.Task] = {}
         self.agent_instances: Dict[str, AgentLoop] = {}
         self.teams: Dict[str, AgentTeam] = {}  # Team management
+        self.model_metrics: Dict[str, ModelPerformanceMetrics] = {}  # Model performance tracking
 
         # Callbacks for web UI updates
         self.status_callbacks: List[Callable[[str, AgentInfo], None]] = []
@@ -1913,3 +1949,137 @@ class WebAgentManager:
             All agents sorted by priority
         """
         return self.get_priority_queue()
+
+    # Model Performance Tracking Methods
+    def record_model_request(
+        self,
+        model_name: str,
+        response_time: float,
+        success: bool,
+        tokens: int = 0,
+        error_message: Optional[str] = None,
+    ) -> None:
+        """Record a model request for performance tracking.
+
+        Args:
+            model_name: Name of the model used
+            response_time: Response time in seconds
+            success: Whether the request was successful
+            tokens: Number of tokens generated (if known)
+            error_message: Error message if request failed
+        """
+        if model_name not in self.model_metrics:
+            self.model_metrics[model_name] = ModelPerformanceMetrics(model_name=model_name)
+
+        metrics = self.model_metrics[model_name]
+        metrics.total_requests += 1
+        metrics.last_used = datetime.now()
+
+        if success:
+            metrics.successful_requests += 1
+            metrics.total_response_time += response_time
+            metrics.total_tokens += tokens
+        else:
+            metrics.failed_requests += 1
+            if error_message:
+                # Keep only last 10 error messages
+                metrics.error_messages.append(error_message)
+                if len(metrics.error_messages) > 10:
+                    metrics.error_messages = metrics.error_messages[-10:]
+
+    def get_model_metrics(self, model_name: str) -> Optional[ModelPerformanceMetrics]:
+        """Get performance metrics for a specific model.
+
+        Args:
+            model_name: Name of the model
+
+        Returns:
+            Model performance metrics if available, None otherwise
+        """
+        return self.model_metrics.get(model_name)
+
+    def get_all_model_metrics(self) -> List[ModelPerformanceMetrics]:
+        """Get performance metrics for all tracked models.
+
+        Returns:
+            List of model performance metrics
+        """
+        return list(self.model_metrics.values())
+
+    def get_model_leaderboard(
+        self, sort_by: str = "success_rate", limit: int = 10
+    ) -> List[ModelPerformanceMetrics]:
+        """Get model leaderboard sorted by a metric.
+
+        Args:
+            sort_by: Metric to sort by (success_rate, avg_response_time, total_requests)
+            limit: Maximum number of models to return
+
+        Returns:
+            List of model metrics sorted by the specified metric
+        """
+        metrics = list(self.model_metrics.values())
+
+        # Filter out models with no requests
+        metrics = [m for m in metrics if m.total_requests > 0]
+
+        if sort_by == "success_rate":
+            metrics.sort(key=lambda m: m.success_rate, reverse=True)
+        elif sort_by == "avg_response_time":
+            metrics.sort(key=lambda m: m.average_response_time)
+        elif sort_by == "total_requests":
+            metrics.sort(key=lambda m: m.total_requests, reverse=True)
+        elif sort_by == "avg_tokens":
+            metrics.sort(key=lambda m: m.average_tokens_per_request, reverse=True)
+
+        return metrics[:limit]
+
+    def get_model_comparison(self, model_names: List[str]) -> Dict[str, Any]:
+        """Compare performance metrics across multiple models.
+
+        Args:
+            model_names: List of model names to compare
+
+        Returns:
+            Dictionary with comparison data
+        """
+        comparison = {
+            "models": [],
+            "metrics": {
+                "success_rate": [],
+                "avg_response_time": [],
+                "avg_tokens": [],
+                "total_requests": [],
+            },
+        }
+
+        for model_name in model_names:
+            metrics = self.model_metrics.get(model_name)
+            if metrics:
+                comparison["models"].append(model_name)
+                comparison["metrics"]["success_rate"].append(metrics.success_rate)
+                comparison["metrics"]["avg_response_time"].append(
+                    metrics.average_response_time
+                )
+                comparison["metrics"]["avg_tokens"].append(
+                    metrics.average_tokens_per_request
+                )
+                comparison["metrics"]["total_requests"].append(metrics.total_requests)
+
+        return comparison
+
+    def reset_model_metrics(self, model_name: Optional[str] = None) -> None:
+        """Reset performance metrics for a model or all models.
+
+        Args:
+            model_name: Specific model to reset, or None to reset all
+        """
+        if model_name:
+            if model_name in self.model_metrics:
+                self.model_metrics[model_name] = ModelPerformanceMetrics(
+                    model_name=model_name
+                )
+        else:
+            # Reset all metrics
+            for model in self.model_metrics:
+                self.model_metrics[model] = ModelPerformanceMetrics(model_name=model)
