@@ -2036,6 +2036,267 @@ function switchToAgentsView() {
 }
 
 // Advanced Visualization Functions
+async function showPerformanceCharts() {
+    const listContainer = document.getElementById('agent-list');
+    const agents = Array.from(state.agents.values());
+
+    if (agents.length === 0) {
+        listContainer.innerHTML = '<div class="empty-state"><p>No performance data to display</p></div>';
+        return;
+    }
+
+    // Prepare data for charts
+    const now = Date.now();
+    const last24h = now - (24 * 60 * 60 * 1000);
+    const last7d = now - (7 * 24 * 60 * 60 * 1000);
+
+    // Group agents by creation time (hourly buckets for last 24h)
+    const hourlyBuckets = {};
+    for (let i = 0; i < 24; i++) {
+        const bucketTime = last24h + (i * 60 * 60 * 1000);
+        hourlyBuckets[bucketTime] = { created: 0, completed: 0, failed: 0, active: 0 };
+    }
+
+    agents.forEach(agent => {
+        const createdTime = new Date(agent.created_at).getTime();
+        if (createdTime >= last24h) {
+            const bucketKey = Math.floor((createdTime - last24h) / (60 * 60 * 1000)) * (60 * 60 * 1000) + last24h;
+            if (hourlyBuckets[bucketKey]) {
+                hourlyBuckets[bucketKey].created++;
+                if (agent.status === 'completed') hourlyBuckets[bucketKey].completed++;
+                if (agent.status === 'failed') hourlyBuckets[bucketKey].failed++;
+                if (agent.status === 'running') hourlyBuckets[bucketKey].active++;
+            }
+        }
+    });
+
+    // Calculate success rates
+    const successRates = Object.keys(hourlyBuckets).map(key => {
+        const bucket = hourlyBuckets[key];
+        const total = bucket.completed + bucket.failed;
+        return {
+            time: parseInt(key),
+            rate: total > 0 ? (bucket.completed / total) * 100 : 0,
+            total: total,
+        };
+    });
+
+    // Average response times (mock data based on model metrics)
+    const modelMetrics = await fetchAllModelMetrics();
+    const avgResponseTime = modelMetrics.length > 0
+        ? modelMetrics.reduce((sum, m) => sum + m.average_response_time, 0) / modelMetrics.length
+        : 0;
+
+    const chartsHTML = `
+        <div style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">Performance Charts</h2>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-secondary btn-small" onclick="switchToAgentsView()">Back to List</button>
+                </div>
+            </div>
+
+            <!-- Key Metrics Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 20px; border-radius: 8px; color: white;">
+                    <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Total Agents</div>
+                    <div style="font-size: 32px; font-weight: 700;">${agents.length}</div>
+                </div>
+                <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 20px; border-radius: 8px; color: white;">
+                    <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Completed</div>
+                    <div style="font-size: 32px; font-weight: 700;">${agents.filter(a => a.status === 'completed').length}</div>
+                </div>
+                <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 20px; border-radius: 8px; color: white;">
+                    <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Running/Stuck</div>
+                    <div style="font-size: 32px; font-weight: 700;">${agents.filter(a => a.status === 'running' || a.status === 'stuck').length}</div>
+                </div>
+                <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); padding: 20px; border-radius: 8px; color: white;">
+                    <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">Failed</div>
+                    <div style="font-size: 32px; font-weight: 700;">${agents.filter(a => a.status === 'failed').length}</div>
+                </div>
+            </div>
+
+            <!-- Agent Creation Rate Chart -->
+            <div style="background: white; border: 1px solid var(--sand-300); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="margin-top: 0; margin-bottom: 16px;">Agent Creation Rate (Last 24 Hours)</h3>
+                <div style="position: relative; height: 200px;">
+                    ${renderLineChart(
+                        Object.keys(hourlyBuckets).map(k => parseInt(k)),
+                        Object.values(hourlyBuckets).map(b => b.created),
+                        'chart-creation-rate',
+                        '#3b82f6'
+                    )}
+                </div>
+            </div>
+
+            <!-- Success Rate Chart -->
+            <div style="background: white; border: 1px solid var(--sand-300); border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+                <h3 style="margin-top: 0; margin-bottom: 16px;">Success Rate (Last 24 Hours)</h3>
+                <div style="position: relative; height: 200px;">
+                    ${renderLineChart(
+                        successRates.map(r => r.time),
+                        successRates.map(r => r.rate),
+                        'chart-success-rate',
+                        '#10b981',
+                        '%'
+                    )}
+                </div>
+            </div>
+
+            <!-- Status Distribution -->
+            <div style="background: white; border: 1px solid var(--sand-300); border-radius: 8px; padding: 20px;">
+                <h3 style="margin-top: 0; margin-bottom: 16px;">Status Distribution</h3>
+                <div style="position: relative; height: 200px;">
+                    ${renderPieChart([
+                        { label: 'Running', value: agents.filter(a => a.status === 'running').length, color: 'var(--brand-500)' },
+                        { label: 'Completed', value: agents.filter(a => a.status === 'completed').length, color: '#10b981' },
+                        { label: 'Stuck', value: agents.filter(a => a.status === 'stuck').length, color: '#f59e0b' },
+                        { label: 'Failed', value: agents.filter(a => a.status === 'failed').length, color: '#ef4444' },
+                        { label: 'Pending', value: agents.filter(a => a.status === 'pending').length, color: '#6b7280' },
+                    ], 'chart-status-distribution')}
+                </div>
+            </div>
+
+            ${modelMetrics.length > 0 ? `
+                <div style="background: white; border: 1px solid var(--sand-300); border-radius: 8px; padding: 20px; margin-top: 20px;">
+                    <h3 style="margin-top: 0; margin-bottom: 16px;">Model Performance Comparison</h3>
+                    <div style="max-height: 400px; overflow-y: auto;">
+                        ${modelMetrics.sort((a, b) => b.success_rate - a.success_rate).map(model => `
+                            <div style="margin-bottom: 16px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                    <span style="font-size: 13px; font-weight: 600;">${escapeHtml(model.model_name)}</span>
+                                    <span style="font-size: 13px; color: var(--sand-600);">${model.success_rate.toFixed(1)}%</span>
+                                </div>
+                                <div style="background: var(--sand-200); height: 8px; border-radius: 4px; overflow: hidden;">
+                                    <div style="background: linear-gradient(90deg, #10b981 0%, #059669 100%); height: 100%; width: ${model.success_rate}%; transition: width 0.3s;"></div>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-top: 4px; font-size: 11px; color: var(--sand-600);">
+                                    <span>${model.total_requests} requests</span>
+                                    <span>${model.average_response_time.toFixed(2)}s avg</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+        </div>
+    `;
+
+    listContainer.innerHTML = chartsHTML;
+}
+
+function renderLineChart(xValues, yValues, id, color, unit = '') {
+    if (xValues.length === 0 || yValues.length === 0) {
+        return '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--sand-600);">No data available</div>';
+    }
+
+    const width = 800;
+    const height = 200;
+    const padding = 40;
+    const chartWidth = width - 2 * padding;
+    const chartHeight = height - 2 * padding;
+
+    const maxY = Math.max(...yValues, 1);
+    const minY = Math.min(...yValues, 0);
+    const yRange = maxY - minY || 1;
+
+    // Generate path
+    const points = xValues.map((x, i) => {
+        const xPos = padding + (i / (xValues.length - 1)) * chartWidth;
+        const yPos = height - padding - ((yValues[i] - minY) / yRange) * chartHeight;
+        return `${xPos},${yPos}`;
+    });
+
+    const pathD = `M ${points.join(' L ')}`;
+
+    return `
+        <svg width="100%" height="200" viewBox="0 0 ${width} ${height}">
+            <!-- Grid lines -->
+            ${[0, 0.25, 0.5, 0.75, 1].map(ratio => {
+                const y = height - padding - (ratio * chartHeight);
+                const value = (minY + ratio * yRange).toFixed(1);
+                return `
+                    <line x1="${padding}" y1="${y}" x2="${width - padding}" y2="${y}" stroke="var(--sand-300)" stroke-width="1" stroke-dasharray="4,4" />
+                    <text x="${padding - 5}" y="${y + 4}" text-anchor="end" font-size="10" fill="var(--sand-600)">${value}${unit}</text>
+                `;
+            }).join('')}
+
+            <!-- Line -->
+            <path d="${pathD}" fill="none" stroke="${color}" stroke-width="2" />
+
+            <!-- Points -->
+            ${points.map((point, i) => {
+                const [x, y] = point.split(',');
+                return `<circle cx="${x}" cy="${y}" r="3" fill="${color}" />`;
+            }).join('')}
+
+            <!-- X-axis labels -->
+            ${xValues.map((x, i) => {
+                if (i % Math.ceil(xValues.length / 6) !== 0) return '';
+                const xPos = padding + (i / (xValues.length - 1)) * chartWidth;
+                const time = new Date(x);
+                return `<text x="${xPos}" y="${height - 10}" text-anchor="middle" font-size="10" fill="var(--sand-600)">${time.getHours()}:00</text>`;
+            }).join('')}
+        </svg>
+    `;
+}
+
+function renderPieChart(data, id) {
+    const total = data.reduce((sum, d) => sum + d.value, 0);
+    if (total === 0) {
+        return '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--sand-600);">No data available</div>';
+    }
+
+    const centerX = 150;
+    const centerY = 100;
+    const radius = 80;
+
+    let currentAngle = -90;
+    const slices = data.filter(d => d.value > 0).map(d => {
+        const percentage = (d.value / total) * 100;
+        const angle = (d.value / total) * 360;
+        const startAngle = currentAngle;
+        const endAngle = currentAngle + angle;
+
+        const startRad = (startAngle * Math.PI) / 180;
+        const endRad = (endAngle * Math.PI) / 180;
+
+        const x1 = centerX + radius * Math.cos(startRad);
+        const y1 = centerY + radius * Math.sin(startRad);
+        const x2 = centerX + radius * Math.cos(endRad);
+        const y2 = centerY + radius * Math.sin(endRad);
+
+        const largeArc = angle > 180 ? 1 : 0;
+
+        currentAngle = endAngle;
+
+        return {
+            ...d,
+            path: `M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2} Z`,
+            percentage: percentage.toFixed(1),
+        };
+    });
+
+    return `
+        <div style="display: flex; align-items: center; gap: 32px;">
+            <svg width="300" height="200" viewBox="0 0 300 200">
+                ${slices.map((slice, i) => `
+                    <path d="${slice.path}" fill="${slice.color}" stroke="white" stroke-width="2" />
+                `).join('')}
+            </svg>
+            <div style="flex: 1;">
+                ${slices.map(slice => `
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <div style="width: 16px; height: 16px; border-radius: 3px; background: ${slice.color};"></div>
+                        <span style="font-size: 13px; color: var(--sand-700);">${slice.label}</span>
+                        <span style="margin-left: auto; font-weight: 600; color: var(--sand-900);">${slice.value} (${slice.percentage}%)</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
 async function showActivityTimeline() {
     const listContainer = document.getElementById('agent-list');
     const agents = Array.from(state.agents.values());
