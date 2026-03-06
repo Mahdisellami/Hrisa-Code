@@ -1216,3 +1216,499 @@ body {
         opacity: 0.5;
     }
 }
+
+/* ============================================================================
+   Login Page Styles
+   ============================================================================ */
+
+.login-page {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 9999;
+}
+
+.login-container {
+    max-width: 450px;
+    width: 100%;
+}
+
+.login-header {
+    text-align: center;
+    margin-bottom: 32px;
+    color: white;
+    animation: fadeInDown 0.5s ease;
+}
+
+.login-header h1 {
+    font-size: 2.5em;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.login-header p {
+    font-size: 1.1em;
+    margin: 0;
+    opacity: 0.95;
+}
+
+.login-card {
+    background: white;
+    border-radius: 12px;
+    padding: 40px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    animation: fadeInUp 0.6s ease;
+}
+
+.login-card h2 {
+    margin: 0 0 8px 0;
+    font-size: 1.8em;
+    color: #1a202c;
+}
+
+.login-subtitle {
+    color: #718096;
+    margin: 0 0 24px 0;
+    font-size: 0.95em;
+    line-height: 1.5;
+}
+
+.login-form {
+    margin-bottom: 24px;
+}
+
+.login-form .form-group {
+    margin-bottom: 20px;
+}
+
+.login-form label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+    color: #4a5568;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.login-form label .material-icons {
+    font-size: 18px;
+    color: #667eea;
+}
+
+.login-form input[type="email"] {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 1em;
+    transition: all 0.3s ease;
+    background: #f7fafc;
+}
+
+.login-form input[type="email"]:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.login-form .btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 1em;
+    padding: 14px 24px;
+    margin-top: 8px;
+}
+
+.login-footer {
+    text-align: center;
+    color: #718096;
+    font-size: 0.85em;
+    margin: 0;
+    padding-top: 20px;
+    border-top: 1px solid #e2e8f0;
+}
+
+/* Success Card */
+.login-success {
+    text-align: center;
+}
+
+.success-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 24px;
+    animation: scaleIn 0.5s ease;
+}
+
+.success-icon .material-icons {
+    font-size: 48px;
+    color: white;
+}
+
+.login-success h2 {
+    color: #1a202c;
+    margin-bottom: 16px;
+}
+
+.email-display {
+    font-weight: 600;
+    color: #667eea;
+    font-size: 1.1em;
+    margin: 16px 0;
+}
+
+.login-instructions {
+    color: #4a5568;
+    line-height: 1.6;
+    margin: 20px 0 24px 0;
+}
+
+.login-instructions strong {
+    color: #667eea;
+}
+
+/* Animations */
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+    .login-header h1 {
+        font-size: 2em;
+    }
+
+    .login-card {
+        padding: 24px;
+    }
+
+    .login-card h2 {
+        font-size: 1.5em;
+    }
+}
+
+/* ============================================================================
+   User Profile Dropdown Styles
+   ============================================================================ */
+
+.user-profile-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.9em;
+}
+
+.user-profile-btn:hover {
+    background: #f7fafc;
+    border-color: #cbd5e0;
+}
+
+.user-profile-btn .material-icons {
+    font-size: 20px;
+    color: #667eea;
+}
+
+.user-profile-btn .dropdown-icon {
+    font-size: 18px;
+    color: #a0aec0;
+    transition: transform 0.2s ease;
+}
+
+.user-email {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #2d3748;
+    font-weight: 500;
+}
+
+.user-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    min-width: 250px;
+    z-index: 1000;
+    animation: fadeInDown 0.2s ease;
+}
+
+.user-dropdown-header {
+    padding: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px 8px 0 0;
+}
+
+.user-info {
+    color: white;
+}
+
+.user-name {
+    font-weight: 600;
+    margin-bottom: 4px;
+    font-size: 0.95em;
+}
+
+.user-role {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.role-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.role-badge.role-admin {
+    background: rgba(255, 255, 255, 0.3);
+    color: white;
+}
+
+.role-badge.role-user {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.role-badge.role-viewer {
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+}
+
+.user-dropdown-divider {
+    height: 1px;
+    background: #e2e8f0;
+}
+
+.user-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    background: white;
+    color: #2d3748;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    font-size: 0.9em;
+    text-align: left;
+}
+
+.user-dropdown-item:hover {
+    background: #f7fafc;
+}
+
+.user-dropdown-item .material-icons {
+    font-size: 20px;
+    color: #667eea;
+}
+
+.user-dropdown-item:last-child {
+    border-radius: 0 0 8px 8px;
+}
+
+/* ============================================================================
+   Admin Panel Styles
+   ============================================================================ */
+
+.large-modal .modal-content {
+    max-width: 1000px;
+}
+
+.admin-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px;
+    color: white;
+}
+
+.stat-card .material-icons {
+    font-size: 36px;
+    opacity: 0.9;
+}
+
+.stat-card .stat-value {
+    font-size: 1.8em;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.stat-card .stat-label {
+    font-size: 0.85em;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.data-table thead {
+    background: #f7fafc;
+}
+
+.data-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    color: #4a5568;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.data-table td {
+    padding: 14px 16px;
+    color: #2d3748;
+    font-size: 0.9em;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.data-table tr:last-child td {
+    border-bottom: none;
+}
+
+.data-table tr:hover {
+    background: #f7fafc;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge.status-active {
+    background: #c6f6d5;
+    color: #22543d;
+}
+
+.status-badge.status-inactive {
+    background: #fed7d7;
+    color: #742a2a;
+}
+
+.role-select {
+    padding: 6px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.85em;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.role-select:hover {
+    border-color: #cbd5e0;
+}
+
+.role-select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: 600;
+}
+
+.badge-primary {
+    background: #667eea;
+    color: white;
+}
