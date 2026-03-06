@@ -26,6 +26,7 @@ from hrisa_code.web.agent_manager import (
     AgentMemory,
     InterAgentMessage,
     AgentTeam,
+    ModelPerformanceMetrics,
 )
 from hrisa_code.web.roles import list_roles, AgentRole
 
@@ -205,6 +206,28 @@ class BulkSetPriorityRequest(BaseModel):
 
     agent_ids: List[str] = Field(..., description="List of agent IDs")
     priority: int = Field(..., ge=1, le=10, description="Priority level (1=highest, 10=lowest)")
+
+
+class ModelMetricsResponse(BaseModel):
+    """Response containing model performance metrics."""
+
+    model_name: str
+    total_requests: int
+    successful_requests: int
+    failed_requests: int
+    success_rate: float
+    average_response_time: float
+    average_tokens_per_request: float
+    total_tokens: int
+    last_used: Optional[str]
+    error_messages: List[str]
+
+
+class ModelComparisonResponse(BaseModel):
+    """Response containing model comparison data."""
+
+    models: List[str]
+    metrics: Dict
 
 
 class AgentMessageResponse(BaseModel):
@@ -1511,6 +1534,121 @@ async def bulk_set_priority(request: BulkSetPriorityRequest):
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# Model Performance Tracking Endpoints
+@app.get("/api/models/metrics")
+async def get_all_model_metrics():
+    """Get performance metrics for all tracked models."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    metrics = agent_manager.get_all_model_metrics()
+
+    return [
+        ModelMetricsResponse(
+            model_name=m.model_name,
+            total_requests=m.total_requests,
+            successful_requests=m.successful_requests,
+            failed_requests=m.failed_requests,
+            success_rate=m.success_rate,
+            average_response_time=m.average_response_time,
+            average_tokens_per_request=m.average_tokens_per_request,
+            total_tokens=m.total_tokens,
+            last_used=m.last_used.isoformat() if m.last_used else None,
+            error_messages=m.error_messages,
+        )
+        for m in metrics
+    ]
+
+
+@app.get("/api/models/{model_name}/metrics")
+async def get_model_metrics(model_name: str):
+    """Get performance metrics for a specific model."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    metrics = agent_manager.get_model_metrics(model_name)
+
+    if not metrics:
+        raise HTTPException(status_code=404, detail="Model metrics not found")
+
+    return ModelMetricsResponse(
+        model_name=metrics.model_name,
+        total_requests=metrics.total_requests,
+        successful_requests=metrics.successful_requests,
+        failed_requests=metrics.failed_requests,
+        success_rate=metrics.success_rate,
+        average_response_time=metrics.average_response_time,
+        average_tokens_per_request=metrics.average_tokens_per_request,
+        total_tokens=metrics.total_tokens,
+        last_used=metrics.last_used.isoformat() if metrics.last_used else None,
+        error_messages=metrics.error_messages,
+    )
+
+
+@app.get("/api/models/leaderboard")
+async def get_model_leaderboard(
+    sort_by: str = Query("success_rate", regex="^(success_rate|avg_response_time|total_requests|avg_tokens)$"),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Get model leaderboard sorted by a metric."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    metrics = agent_manager.get_model_leaderboard(sort_by=sort_by, limit=limit)
+
+    return [
+        ModelMetricsResponse(
+            model_name=m.model_name,
+            total_requests=m.total_requests,
+            successful_requests=m.successful_requests,
+            failed_requests=m.failed_requests,
+            success_rate=m.success_rate,
+            average_response_time=m.average_response_time,
+            average_tokens_per_request=m.average_tokens_per_request,
+            total_tokens=m.total_tokens,
+            last_used=m.last_used.isoformat() if m.last_used else None,
+            error_messages=m.error_messages,
+        )
+        for m in metrics
+    ]
+
+
+@app.post("/api/models/compare")
+async def compare_models(model_names: List[str]):
+    """Compare performance metrics across multiple models."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    comparison = agent_manager.get_model_comparison(model_names)
+
+    return ModelComparisonResponse(
+        models=comparison["models"],
+        metrics=comparison["metrics"],
+    )
+
+
+@app.post("/api/models/{model_name}/metrics/reset")
+async def reset_model_metrics(model_name: str):
+    """Reset performance metrics for a specific model."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent_manager.reset_model_metrics(model_name)
+
+    return {"status": "reset", "model_name": model_name}
+
+
+@app.post("/api/models/metrics/reset-all")
+async def reset_all_model_metrics():
+    """Reset performance metrics for all models."""
+    if not agent_manager:
+        raise HTTPException(status_code=503, detail="Agent manager not initialized")
+
+    agent_manager.reset_model_metrics()
+
+    return {"status": "reset", "message": "All model metrics reset"}
 
 
 # WebSocket endpoint
