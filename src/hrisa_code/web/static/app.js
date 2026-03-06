@@ -1,6 +1,6 @@
 // Hrisa Code Web UI Application
-const API_BASE = window.location.origin + '/api';
-const WS_URL = `ws://${window.location.host}/ws`;
+const API_BASE = 'https://hrisa-backend.onrender.com/api';
+const WS_URL = 'wss://hrisa-backend.onrender.com/ws';
 
 // Application State
 const state = {
