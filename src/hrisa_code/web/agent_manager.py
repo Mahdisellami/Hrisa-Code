@@ -14,6 +14,7 @@ from hrisa_code.core.config import Config
 from hrisa_code.core.planning.agent import AgentLoop
 from hrisa_code.core.conversation import ConversationManager, OllamaClient
 from hrisa_code.core.conversation.ollama_client import OllamaConfig
+from hrisa_code.core.model_catalog import ModelCatalog, ModelProfile
 from hrisa_code.web.roles import get_role_system_prompt
 
 
@@ -245,6 +246,8 @@ class WebAgentManager:
         self.agent_instances: Dict[str, AgentLoop] = {}
         self.teams: Dict[str, AgentTeam] = {}  # Team management
         self.model_metrics: Dict[str, ModelPerformanceMetrics] = {}  # Model performance tracking
+        self.model_catalog = ModelCatalog()  # Model catalog for capabilities and info
+        self._available_models_cache: Optional[List[str]] = None  # Cache for available models
 
         # Callbacks for web UI updates
         self.status_callbacks: List[Callable[[str, AgentInfo], None]] = []
@@ -2083,3 +2086,135 @@ class WebAgentManager:
             # Reset all metrics
             for model in self.model_metrics:
                 self.model_metrics[model] = ModelPerformanceMetrics(model_name=model)
+
+    # Model Selection and Discovery Methods
+    async def get_available_models(self, force_refresh: bool = False) -> List[str]:
+        """Get list of available models from Ollama.
+
+        Args:
+            force_refresh: Force refresh from Ollama instead of using cache
+
+        Returns:
+            List of available model names
+        """
+        if self._available_models_cache and not force_refresh:
+            return self._available_models_cache
+
+        try:
+            # Create a temporary Ollama client to list models
+            client = OllamaClient(OllamaConfig(host=self.config.ollama.host))
+            models = await client.list_models()
+            self._available_models_cache = models
+            return models
+        except Exception as e:
+            # If we can't get models, return empty list
+            return []
+
+    def get_model_info(self, model_name: str) -> Optional[Dict[str, Any]]:
+        """Get information about a model from the catalog.
+
+        Args:
+            model_name: Name of the model
+
+        Returns:
+            Dictionary with model information, or None if not in catalog
+        """
+        profile = self.model_catalog.get_profile(model_name)
+        if not profile:
+            return None
+
+        return {
+            "name": profile.name,
+            "capabilities": [cap.value for cap in profile.capabilities],
+            "quality_tier": profile.quality_tier.value,
+            "speed_tier": profile.speed_tier.value,
+            "strengths": profile.strengths,
+            "weaknesses": profile.weaknesses,
+            "parameter_count": profile.parameter_count,
+            "recommended_for": profile.recommended_for,
+        }
+
+    def get_all_catalog_models(self) -> List[Dict[str, Any]]:
+        """Get information about all models in the catalog.
+
+        Returns:
+            List of model information dictionaries
+        """
+        return [
+            {
+                "name": profile.name,
+                "capabilities": [cap.value for cap in profile.capabilities],
+                "quality_tier": profile.quality_tier.value,
+                "speed_tier": profile.speed_tier.value,
+                "strengths": profile.strengths,
+                "weaknesses": profile.weaknesses,
+                "parameter_count": profile.parameter_count,
+                "recommended_for": profile.recommended_for,
+            }
+            for profile in self.model_catalog.profiles.values()
+        ]
+
+    async def get_available_models_with_info(self) -> List[Dict[str, Any]]:
+        """Get available models with their catalog information.
+
+        Returns:
+            List of dictionaries with model name, availability, and info
+        """
+        available_models = await self.get_available_models()
+        catalog_models = self.get_all_catalog_models()
+
+        # Merge available and catalog info
+        result = []
+        for catalog_model in catalog_models:
+            model_info = catalog_model.copy()
+            model_info["available"] = catalog_model["name"] in available_models
+            result.append(model_info)
+
+        # Add available models not in catalog
+        catalog_names = {m["name"] for m in catalog_models}
+        for model_name in available_models:
+            if model_name not in catalog_names:
+                result.append({
+                    "name": model_name,
+                    "available": True,
+                    "capabilities": [],
+                    "quality_tier": "unknown",
+                    "speed_tier": "unknown",
+                    "strengths": "Model not in catalog",
+                    "weaknesses": None,
+                    "parameter_count": None,
+                    "recommended_for": [],
+                })
+
+        return result
+
+    def get_recommended_model_for_task(self, task_description: str) -> Optional[str]:
+        """Get recommended model for a task based on keywords.
+
+        Args:
+            task_description: Description of the task
+
+        Returns:
+            Recommended model name, or None
+        """
+        task_lower = task_description.lower()
+
+        # Simple keyword matching for recommendations
+        if any(word in task_lower for word in ["architecture", "design", "structure"]):
+            # Architecture analysis - need strong reasoning
+            return "qwen2.5:72b"
+        elif any(word in task_lower for word in ["documentation", "readme", "guide", "docs"]):
+            # Documentation writing - need good prose
+            return "llama3.1:70b"
+        elif any(word in task_lower for word in ["code", "function", "class", "implement"]):
+            # Code generation - use coding model
+            return "qwen2.5-coder:32b"
+        elif any(word in task_lower for word in ["analyze", "understand", "trace", "workflow"]):
+            # Code analysis - use deepseek-coder if available
+            return "deepseek-coder-v2:236b"
+        elif any(word in task_lower for word in ["simple", "quick", "fast", "list"]):
+            # Simple operations - use fast model
+            return "qwen2.5-coder:7b"
+        else:
+            # Default to balanced model
+            return "qwen2.5-coder:32b"
