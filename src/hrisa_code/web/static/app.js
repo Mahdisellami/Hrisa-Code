@@ -44,6 +44,38 @@ const elements = {
     clearCompletedBtn: document.getElementById('clear-completed-btn'),
 };
 
+// Loading State Management
+function showLoading(text = 'Loading...') {
+    const overlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+    if (overlay && loadingText) {
+        loadingText.textContent = text;
+        overlay.classList.remove('hidden');
+    }
+}
+
+function hideLoading() {
+    const overlay = document.getElementById('loading-overlay');
+    if (overlay) {
+        overlay.classList.add('hidden');
+    }
+}
+
+function renderSkeletonCards(count = 3) {
+    const skeletons = [];
+    for (let i = 0; i < count; i++) {
+        skeletons.push(`
+            <div class="skeleton-card fade-in" style="margin-bottom: 16px;">
+                <div class="skeleton skeleton-header"></div>
+                <div class="skeleton skeleton-text"></div>
+                <div class="skeleton skeleton-text medium"></div>
+                <div class="skeleton skeleton-text short"></div>
+            </div>
+        `);
+    }
+    return skeletons.join('');
+}
+
 // Toast Notification System
 const toastQueue = [];
 let toastIdCounter = 0;
@@ -283,6 +315,11 @@ async function loadRoles() {
 
 async function fetchAgents(page = null) {
     try {
+        // Show skeleton loading for initial load
+        if (state.agents.size === 0) {
+            elements.agentList.innerHTML = renderSkeletonCards(5);
+        }
+
         const currentPage = page || state.currentPage;
         const response = await fetch(`${API_BASE}/agents?page=${currentPage}&page_size=${state.pageSize}`);
         if (!response.ok) throw new Error('Failed to fetch agents');
@@ -303,7 +340,7 @@ async function fetchAgents(page = null) {
         updateStats();
     } catch (error) {
         console.error('Error fetching agents:', error);
-        showNotification('Failed to load agents', 'error');
+        toastError('Failed to load agents', 'Fetch Error');
     }
 }
 
