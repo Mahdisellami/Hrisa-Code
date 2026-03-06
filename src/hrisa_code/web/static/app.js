@@ -11,6 +11,11 @@ const state = {
     ws: null,
     wsReconnectAttempts: 0,
     wsMaxReconnectAttempts: 5,
+    // Pagination
+    currentPage: 1,
+    pageSize: 50,
+    totalPages: 1,
+    totalAgents: 0,
 };
 
 // DOM Elements
@@ -191,18 +196,25 @@ async function loadRoles() {
     }
 }
 
-async function fetchAgents() {
+async function fetchAgents(page = null) {
     try {
-        const response = await fetch(`${API_BASE}/agents`);
+        const currentPage = page || state.currentPage;
+        const response = await fetch(`${API_BASE}/agents?page=${currentPage}&page_size=${state.pageSize}`);
         if (!response.ok) throw new Error('Failed to fetch agents');
-        const agents = await response.json();
+        const data = await response.json();
+
+        // Update pagination state
+        state.currentPage = data.page;
+        state.totalPages = data.total_pages;
+        state.totalAgents = data.total;
 
         state.agents.clear();
-        agents.forEach(agent => {
+        data.agents.forEach(agent => {
             state.agents.set(agent.id, agent);
         });
 
         renderAgentList();
+        renderPagination();
         updateStats();
     } catch (error) {
         console.error('Error fetching agents:', error);
@@ -364,6 +376,90 @@ async function fetchAgentMemory(agentId) {
 function getRoleInfo(roleId) {
     const role = state.roles.find(r => r.id === roleId);
     return role || { id: 'general', name: 'General', icon: '⚙️', color: '#6b7280' };
+}
+
+function renderPagination() {
+    const paginationContainer = document.getElementById('pagination-controls');
+    if (!paginationContainer) return;
+
+    if (state.totalPages <= 1) {
+        paginationContainer.innerHTML = '';
+        return;
+    }
+
+    const maxButtons = 7; // Show max 7 page buttons
+    let startPage = Math.max(1, state.currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(state.totalPages, startPage + maxButtons - 1);
+
+    // Adjust start if we're near the end
+    if (endPage - startPage < maxButtons - 1) {
+        startPage = Math.max(1, endPage - maxButtons + 1);
+    }
+
+    let paginationHTML = `
+        <div style="display: flex; align-items: center; gap: 8px; justify-content: center; padding: 16px;">
+            <button
+                class="btn btn-secondary btn-small"
+                onclick="changePage(${state.currentPage - 1})"
+                ${state.currentPage === 1 ? 'disabled' : ''}
+                style="padding: 6px 12px;"
+            >
+                ← Prev
+            </button>
+            <div style="display: flex; gap: 4px;">
+    `;
+
+    if (startPage > 1) {
+        paginationHTML += `<button class="btn btn-secondary btn-small" onclick="changePage(1)" style="padding: 6px 10px;">1</button>`;
+        if (startPage > 2) {
+            paginationHTML += `<span style="padding: 6px; color: var(--sand-600);">...</span>`;
+        }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        const isActive = i === state.currentPage;
+        paginationHTML += `
+            <button
+                class="btn ${isActive ? 'btn-primary' : 'btn-secondary'} btn-small"
+                onclick="changePage(${i})"
+                ${isActive ? 'disabled' : ''}
+                style="padding: 6px 10px; min-width: 36px;"
+            >
+                ${i}
+            </button>
+        `;
+    }
+
+    if (endPage < state.totalPages) {
+        if (endPage < state.totalPages - 1) {
+            paginationHTML += `<span style="padding: 6px; color: var(--sand-600);">...</span>`;
+        }
+        paginationHTML += `<button class="btn btn-secondary btn-small" onclick="changePage(${state.totalPages})" style="padding: 6px 10px;">${state.totalPages}</button>`;
+    }
+
+    paginationHTML += `
+            </div>
+            <button
+                class="btn btn-secondary btn-small"
+                onclick="changePage(${state.currentPage + 1})"
+                ${state.currentPage === state.totalPages ? 'disabled' : ''}
+                style="padding: 6px 12px;"
+            >
+                Next →
+            </button>
+            <span style="color: var(--sand-600); font-size: 0.85em; margin-left: 12px;">
+                Page ${state.currentPage} of ${state.totalPages} (${state.totalAgents} total)
+            </span>
+        </div>
+    `;
+
+    paginationContainer.innerHTML = paginationHTML;
+}
+
+async function changePage(page) {
+    if (page < 1 || page > state.totalPages) return;
+    state.currentPage = page;
+    await fetchAgents(page);
 }
 
 function renderAgentList() {

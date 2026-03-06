@@ -87,6 +87,16 @@ class SessionResponse(BaseModel):
     total_artifacts: int
 
 
+class PaginatedAgentsResponse(BaseModel):
+    """Paginated response for agents list."""
+
+    agents: List[AgentResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
 class AgentResponse(BaseModel):
     """Response containing agent information."""
 
@@ -420,12 +430,14 @@ async def get_stats():
     )
 
 
-@app.get("/api/agents", response_model=List[AgentResponse])
+@app.get("/api/agents", response_model=PaginatedAgentsResponse)
 async def list_agents(
     status: Optional[str] = Query(None, description="Filter by status"),
     tags: Optional[str] = Query(None, description="Comma-separated tags"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(50, ge=1, le=100, description="Items per page (max 100)"),
 ):
-    """List all agents."""
+    """List all agents with pagination."""
     if not agent_manager:
         raise HTTPException(status_code=503, detail="Agent manager not initialized")
 
@@ -435,7 +447,26 @@ async def list_agents(
 
     agents = agent_manager.list_agents(status=status_filter, tags=tags_filter)
 
-    return [_agent_info_to_response(agent) for agent in agents]
+    # Calculate pagination
+    total = len(agents)
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 1
+
+    # Ensure page is within bounds
+    if page > total_pages:
+        page = total_pages
+
+    # Slice agents for current page
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_agents = agents[start_idx:end_idx]
+
+    return PaginatedAgentsResponse(
+        agents=[_agent_info_to_response(agent) for agent in paginated_agents],
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
 @app.get("/api/agents/{agent_id}", response_model=AgentResponse)
