@@ -102,6 +102,21 @@ class InterAgentMessage:
 
 
 @dataclass
+class AgentTeam:
+    """A team of agents working together on a task."""
+
+    id: str
+    name: str
+    description: str
+    created_at: datetime
+    lead_agent_id: Optional[str]  # Team lead agent
+    member_agent_ids: List[str] = field(default_factory=list)  # Team members
+    shared_goal: str = ""  # Team's shared objective
+    status: str = "active"  # active, completed, disbanded
+    metadata: Optional[Dict[str, Any]] = field(default_factory=dict)
+
+
+@dataclass
 class AgentStateTransition:
     """A state transition in the agent's execution."""
 
@@ -161,6 +176,7 @@ class AgentInfo:
     current_state: AgentState = AgentState.INITIALIZING  # State machine
     memory: AgentMemory = field(default_factory=AgentMemory)  # Agent memory
     inter_agent_messages: List[InterAgentMessage] = field(default_factory=list)  # Messages to/from other agents
+    team_id: Optional[str] = None  # Team this agent belongs to
 
 
 class WebAgentManager:
@@ -190,6 +206,7 @@ class WebAgentManager:
         self.agents: Dict[str, AgentInfo] = {}
         self.agent_tasks: Dict[str, asyncio.Task] = {}
         self.agent_instances: Dict[str, AgentLoop] = {}
+        self.teams: Dict[str, AgentTeam] = {}  # Team management
 
         # Callbacks for web UI updates
         self.status_callbacks: List[Callable[[str, AgentInfo], None]] = []
@@ -1595,3 +1612,167 @@ class WebAgentManager:
                     other_artifact.content = new_content
                     other_artifact.version = artifact.version
                     other_artifact.last_modified_by = agent_id
+
+    # Team Management Methods
+    def create_team(
+        self,
+        name: str,
+        description: str,
+        shared_goal: str,
+        lead_agent_id: Optional[str] = None,
+        member_agent_ids: Optional[List[str]] = None,
+    ) -> str:
+        """Create a new agent team.
+
+        Args:
+            name: Team name
+            description: Team description
+            shared_goal: Team's shared objective
+            lead_agent_id: Optional team lead agent ID
+            member_agent_ids: Optional initial member agent IDs
+
+        Returns:
+            Team ID
+        """
+        team_id = str(uuid.uuid4())[:8]
+
+        team = AgentTeam(
+            id=team_id,
+            name=name,
+            description=description,
+            created_at=datetime.now(),
+            lead_agent_id=lead_agent_id,
+            member_agent_ids=member_agent_ids or [],
+            shared_goal=shared_goal,
+            status="active",
+        )
+
+        self.teams[team_id] = team
+
+        # Update agents' team_id
+        if lead_agent_id:
+            lead_agent = self.get_agent(lead_agent_id)
+            if lead_agent:
+                lead_agent.team_id = team_id
+
+        for agent_id in (member_agent_ids or []):
+            agent = self.get_agent(agent_id)
+            if agent:
+                agent.team_id = team_id
+
+        return team_id
+
+    def add_agent_to_team(self, team_id: str, agent_id: str) -> None:
+        """Add an agent to a team.
+
+        Args:
+            team_id: Team ID
+            agent_id: Agent ID to add
+        """
+        team = self.teams.get(team_id)
+        if not team:
+            raise ValueError(f"Team {team_id} not found")
+
+        agent = self.get_agent(agent_id)
+        if not agent:
+            raise ValueError(f"Agent {agent_id} not found")
+
+        if agent_id not in team.member_agent_ids:
+            team.member_agent_ids.append(agent_id)
+
+        agent.team_id = team_id
+
+    def remove_agent_from_team(self, team_id: str, agent_id: str) -> None:
+        """Remove an agent from a team.
+
+        Args:
+            team_id: Team ID
+            agent_id: Agent ID to remove
+        """
+        team = self.teams.get(team_id)
+        if not team:
+            raise ValueError(f"Team {team_id} not found")
+
+        if agent_id in team.member_agent_ids:
+            team.member_agent_ids.remove(agent_id)
+
+        agent = self.get_agent(agent_id)
+        if agent:
+            agent.team_id = None
+
+    def get_team(self, team_id: str) -> Optional[AgentTeam]:
+        """Get team information.
+
+        Args:
+            team_id: Team ID
+
+        Returns:
+            AgentTeam or None
+        """
+        return self.teams.get(team_id)
+
+    def list_teams(self, status: Optional[str] = None) -> List[AgentTeam]:
+        """List all teams.
+
+        Args:
+            status: Optional status filter
+
+        Returns:
+            List of teams
+        """
+        teams = list(self.teams.values())
+
+        if status:
+            teams = [t for t in teams if t.status == status]
+
+        return teams
+
+    def get_team_members(self, team_id: str) -> List[AgentInfo]:
+        """Get all agents in a team.
+
+        Args:
+            team_id: Team ID
+
+        Returns:
+            List of agent info
+        """
+        team = self.teams.get(team_id)
+        if not team:
+            return []
+
+        members = []
+        if team.lead_agent_id:
+            lead = self.get_agent(team.lead_agent_id)
+            if lead:
+                members.append(lead)
+
+        for agent_id in team.member_agent_ids:
+            agent = self.get_agent(agent_id)
+            if agent and agent not in members:
+                members.append(agent)
+
+        return members
+
+    def disband_team(self, team_id: str) -> None:
+        """Disband a team.
+
+        Args:
+            team_id: Team ID
+        """
+        team = self.teams.get(team_id)
+        if not team:
+            raise ValueError(f"Team {team_id} not found")
+
+        # Update team status
+        team.status = "disbanded"
+
+        # Clear team_id from all members
+        for agent_id in team.member_agent_ids:
+            agent = self.get_agent(agent_id)
+            if agent:
+                agent.team_id = None
+
+        if team.lead_agent_id:
+            lead = self.get_agent(team.lead_agent_id)
+            if lead:
+                lead.team_id = None
