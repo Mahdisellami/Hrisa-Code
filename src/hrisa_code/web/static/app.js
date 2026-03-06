@@ -118,6 +118,38 @@ function handleWebSocketMessage(message) {
                 'warning'
             );
             break;
+
+        case 'agent_stream':
+            handleStreamChunk(message.data.agent_id, message.data.chunk);
+            break;
+    }
+}
+
+function handleStreamChunk(agentId, chunk) {
+    // If viewing this agent, append chunk to a streaming display
+    if (state.selectedAgentId === agentId) {
+        let streamContainer = document.getElementById(`stream-${agentId}`);
+        if (!streamContainer) {
+            // Create streaming container if it doesn't exist
+            const detailContent = document.getElementById('detail-content');
+            if (detailContent) {
+                const streamSection = document.createElement('div');
+                streamSection.innerHTML = `
+                    <div class="detail-section">
+                        <h3>Live Response Stream</h3>
+                        <div id="stream-${agentId}" style="background: var(--sand-100); border-radius: 6px; padding: 12px; font-family: monospace; font-size: 0.9em; max-height: 300px; overflow-y: auto; white-space: pre-wrap; color: var(--sand-900);"></div>
+                    </div>
+                `;
+                detailContent.insertBefore(streamSection, detailContent.firstChild);
+                streamContainer = document.getElementById(`stream-${agentId}`);
+            }
+        }
+
+        if (streamContainer) {
+            streamContainer.textContent += chunk;
+            // Auto-scroll to bottom
+            streamContainer.scrollTop = streamContainer.scrollHeight;
+        }
     }
 }
 

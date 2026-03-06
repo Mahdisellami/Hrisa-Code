@@ -340,9 +340,19 @@ async def startup_event():
             },
         )
 
+    async def on_stream(agent_id: str, chunk: str):
+        await broadcast_update(
+            "agent_stream",
+            {
+                "agent_id": agent_id,
+                "chunk": chunk,
+            },
+        )
+
     agent_manager.add_status_callback(on_status_change)
     agent_manager.add_message_callback(on_message)
     agent_manager.add_stuck_callback(on_stuck)
+    agent_manager.add_stream_callback(on_stream)
 
     # Start manager
     await agent_manager.start()

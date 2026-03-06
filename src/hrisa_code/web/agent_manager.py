@@ -172,6 +172,7 @@ class WebAgentManager:
         self.status_callbacks: List[Callable[[str, AgentInfo], None]] = []
         self.message_callbacks: List[Callable[[str, AgentMessage], None]] = []
         self.stuck_callbacks: List[Callable[[str, str], None]] = []
+        self.stream_callbacks: List[Callable[[str, str], None]] = []  # New: for streaming responses
 
         # Background task for monitoring
         self.monitor_task: Optional[asyncio.Task] = None
@@ -225,6 +226,14 @@ class WebAgentManager:
             callback: Function called with (agent_id, reason) when stuck
         """
         self.stuck_callbacks.append(callback)
+
+    def add_stream_callback(self, callback: Callable[[str, str], None]) -> None:
+        """Add a callback for streaming response chunks.
+
+        Args:
+            callback: Function called with (agent_id, chunk) for each response chunk
+        """
+        self.stream_callbacks.append(callback)
 
     async def create_agent(
         self,
@@ -1015,6 +1024,22 @@ class WebAgentManager:
                     callback(agent_id, reason)
             except Exception as e:
                 print(f"Error in stuck callback: {e}")
+
+    async def _notify_stream(self, agent_id: str, chunk: str) -> None:
+        """Notify stream callbacks with response chunk.
+
+        Args:
+            agent_id: The agent ID
+            chunk: Response chunk
+        """
+        for callback in self.stream_callbacks:
+            try:
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(agent_id, chunk)
+                else:
+                    callback(agent_id, chunk)
+            except Exception as e:
+                print(f"Error in stream callback: {e}")
 
     # Session Management Methods
     def save_session(
