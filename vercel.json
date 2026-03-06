@@ -25,11 +25,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "${BACKEND_URL}/api/:path*"
+      "destination": "https://hrisa-backend.onrender.com/api/:path*"
     },
     {
       "source": "/ws/:path*",
-      "destination": "${BACKEND_URL}/ws/:path*"
+      "destination": "https://hrisa-backend.onrender.com/ws/:path*"
     }
   ],
   "headers": [
