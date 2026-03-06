@@ -8,9 +8,9 @@ services:
     plan: standard
     envVars:
       - key: OLLAMA_HOST
-        value: 0.0.0.0
+        value: "0.0.0.0"
       - key: OLLAMA_MODELS
-        value: qwen2.5-coder:7b
+        value: "qwen2.5-coder:7b"
     disk:
       name: ollama-models
       mountPath: /root/.ollama
@@ -27,32 +27,32 @@ services:
     plan: starter
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11
+        value: "3.11"
       - key: OLLAMA_HOST
         fromService:
           name: hrisa-ollama
           type: pserv
           property: host
       - key: HOST
-        value: 0.0.0.0
+        value: "0.0.0.0"
       - key: PORT
-        value: 8000
+        value: "8000"
       - key: RELOAD
-        value: false
+        value: "false"
       - key: MAX_CONCURRENT_AGENTS
-        value: 5
+        value: "5"
       - key: STUCK_THRESHOLD_SECONDS
-        value: 120
+        value: "120"
       - key: WEBHOOK_TIMEOUT_SECONDS
-        value: 10
+        value: "10"
       - key: MAX_WEBHOOK_RETRIES
-        value: 0
+        value: "0"
       - key: ENABLE_WEBHOOK_SIGNATURES
-        value: true
+        value: "true"
       - key: LOG_LEVEL
-        value: INFO
+        value: "INFO"
       - key: DEBUG
-        value: false
+        value: "false"
       - key: SECRET_KEY
         generateValue: true
       - key: ALLOWED_ORIGINS
