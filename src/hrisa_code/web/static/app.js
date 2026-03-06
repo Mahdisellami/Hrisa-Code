@@ -2030,6 +2030,166 @@ function switchToAgentsView() {
     renderAgentList();
 }
 
+// Model Performance Functions
+async function fetchAllModelMetrics() {
+    try {
+        const response = await fetch(`${API_BASE}/models/metrics`);
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to fetch model metrics:', error);
+    }
+    return [];
+}
+
+async function fetchModelLeaderboard(sortBy = 'success_rate', limit = 10) {
+    try {
+        const response = await fetch(`${API_BASE}/models/leaderboard?sort_by=${sortBy}&limit=${limit}`);
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to fetch model leaderboard:', error);
+    }
+    return [];
+}
+
+async function compareModels(modelNames) {
+    try {
+        const response = await fetch(`${API_BASE}/models/compare`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(modelNames),
+        });
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to compare models:', error);
+    }
+    return null;
+}
+
+async function resetModelMetrics(modelName = null) {
+    try {
+        const url = modelName
+            ? `${API_BASE}/models/${modelName}/metrics/reset`
+            : `${API_BASE}/models/metrics/reset-all`;
+        const response = await fetch(url, { method: 'POST' });
+        if (response.ok) {
+            return true;
+        }
+    } catch (error) {
+        console.error('Failed to reset model metrics:', error);
+    }
+    return false;
+}
+
+async function showModelPerformanceDashboard() {
+    const listContainer = document.getElementById('agent-list');
+    const metrics = await fetchAllModelMetrics();
+
+    if (metrics.length === 0) {
+        listContainer.innerHTML = '<div class="empty-state"><p>No model performance data available yet</p></div>';
+        return;
+    }
+
+    let dashboardHTML = `
+        <div style="padding: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="margin: 0;">Model Performance Dashboard</h2>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-secondary btn-small" onclick="refreshModelDashboard()">Refresh</button>
+                    <button class="btn btn-danger btn-small" onclick="confirmResetAllMetrics()">Reset All</button>
+                </div>
+            </div>
+
+            <div class="model-metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px;">
+    `;
+
+    metrics.forEach(model => {
+        const successClass = model.success_rate >= 90 ? 'success' : model.success_rate >= 70 ? 'warning' : 'danger';
+        const responseTimeColor = model.average_response_time < 2 ? '#10b981' : model.average_response_time < 5 ? '#f59e0b' : '#ef4444';
+
+        dashboardHTML += `
+            <div class="model-metric-card" style="background: var(--sand-100); border: 1px solid var(--sand-300); border-radius: 8px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
+                    <h3 style="margin: 0; font-size: 16px; color: var(--sand-900);">${escapeHtml(model.model_name)}</h3>
+                    <span class="badge badge-${successClass}" style="font-size: 11px;">${model.success_rate.toFixed(1)}%</span>
+                </div>
+
+                <div class="metric-stat-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                    <div style="background: var(--sand-50); padding: 8px; border-radius: 4px;">
+                        <div style="font-size: 11px; color: var(--sand-600); margin-bottom: 4px;">Total Requests</div>
+                        <div style="font-size: 18px; font-weight: 600; color: var(--sand-900);">${model.total_requests}</div>
+                    </div>
+                    <div style="background: var(--sand-50); padding: 8px; border-radius: 4px;">
+                        <div style="font-size: 11px; color: var(--sand-600); margin-bottom: 4px;">Avg Response</div>
+                        <div style="font-size: 18px; font-weight: 600; color: ${responseTimeColor};">${model.average_response_time.toFixed(2)}s</div>
+                    </div>
+                </div>
+
+                <div style="background: var(--sand-50); padding: 8px; border-radius: 4px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="font-size: 11px; color: var(--sand-600);">Success / Failed</span>
+                        <span style="font-size: 11px; color: var(--sand-700);">${model.successful_requests} / ${model.failed_requests}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="font-size: 11px; color: var(--sand-600);">Avg Tokens</span>
+                        <span style="font-size: 11px; color: var(--sand-700);">${model.average_tokens_per_request.toFixed(0)}</span>
+                    </div>
+                </div>
+
+                ${model.last_used ? `
+                    <div style="font-size: 11px; color: var(--sand-600); margin-bottom: 8px;">
+                        Last used: ${formatTime(model.last_used)}
+                    </div>
+                ` : ''}
+
+                ${model.error_messages.length > 0 ? `
+                    <details style="margin-top: 8px; font-size: 12px;">
+                        <summary style="color: var(--danger-500); cursor: pointer;">Recent Errors (${model.error_messages.length})</summary>
+                        <div style="margin-top: 8px; max-height: 100px; overflow-y: auto; background: var(--danger-50); padding: 8px; border-radius: 4px;">
+                            ${model.error_messages.map(err => `<div style="margin-bottom: 4px; color: var(--danger-700);">${escapeHtml(err)}</div>`).join('')}
+                        </div>
+                    </details>
+                ` : ''}
+
+                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                    <button class="btn btn-secondary btn-small" onclick="showModelDetails('${escapeHtml(model.model_name)}')" style="flex: 1;">Details</button>
+                    <button class="btn btn-danger btn-small" onclick="resetModelMetrics('${escapeHtml(model.model_name)}').then(refreshModelDashboard)">Reset</button>
+                </div>
+            </div>
+        `;
+    });
+
+    dashboardHTML += `
+            </div>
+        </div>
+    `;
+
+    listContainer.innerHTML = dashboardHTML;
+}
+
+async function refreshModelDashboard() {
+    await showModelPerformanceDashboard();
+}
+
+async function confirmResetAllMetrics() {
+    if (confirm('Are you sure you want to reset all model performance metrics? This action cannot be undone.')) {
+        const success = await resetModelMetrics();
+        if (success) {
+            await refreshModelDashboard();
+        }
+    }
+}
+
+async function showModelDetails(modelName) {
+    // Switch to detail panel and show model-specific metrics
+    alert(`Model details for ${modelName} - Full detail view coming soon!`);
+}
+
 // Priority and Scheduling Functions
 async function setAgentPriority(agentId, priority) {
     try {
