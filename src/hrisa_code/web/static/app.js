@@ -635,6 +635,11 @@ async function renderAgentDetail(agentId) {
         </div>
 
         <div class="detail-section">
+            <h3>Progress & Metrics</h3>
+            ${renderProgressMetrics(agent, agentState, logs)}
+        </div>
+
+        <div class="detail-section">
             <h3>Agent Memory</h3>
             <div style="background: var(--sand-100); border-radius: 8px; padding: 12px;">
                 <div style="margin-bottom: 16px;">
@@ -862,6 +867,103 @@ function renderWorkflowTree(agent) {
                 <span style="color: var(--sand-700); font-weight: 600; font-size: 0.9em;">Workflow Execution Tree</span>
             </div>
             ${renderWorkflowTreeNode(rootAgent, agent.id, 0)}
+        </div>
+    `;
+}
+
+function renderProgressMetrics(agent, agentState, logs) {
+    const stateDistribution = {};
+    agentState.transitions.forEach(t => {
+        stateDistribution[t.to_state] = (stateDistribution[t.to_state] || 0) + 1;
+    });
+
+    const totalTransitions = agentState.transitions.length;
+    const stateColors = {
+        'initializing': 'var(--sand-400)',
+        'planning': 'var(--brand-400)',
+        'executing': 'var(--brand-500)',
+        'thinking': 'var(--purple-400)',
+        'tool_use': 'var(--terracotta-500)',
+        'reflecting': 'var(--purple-500)',
+        'paused': 'var(--warning-500)',
+        'waiting_approval': 'var(--warning-400)',
+        'finalizing': 'var(--success-500)',
+    };
+
+    // Count tool calls from logs
+    const toolCalls = logs.filter(log => log.event_type === 'tool_call').length;
+    const toolResults = logs.filter(log => log.event_type === 'tool_result').length;
+    const errors = logs.filter(log => log.event_type === 'error').length;
+    const warnings = logs.filter(log => log.event_type === 'warning').length;
+
+    // Calculate execution time
+    const createdAt = new Date(agent.created_at);
+    const now = new Date();
+    const elapsedSeconds = Math.floor((now - createdAt) / 1000);
+    const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+    const elapsedHours = Math.floor(elapsedMinutes / 60);
+
+    return `
+        <div style="background: var(--sand-50); border-radius: 8px; padding: 16px;">
+            <div style="margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--sand-200);">
+                <span style="color: var(--sand-700); font-weight: 600; font-size: 0.9em;">Progress Metrics</span>
+            </div>
+
+            <!-- State Distribution Bar Chart -->
+            <div style="margin-bottom: 20px;">
+                <div style="color: var(--sand-600); font-size: 0.85em; margin-bottom: 8px; font-weight: 500;">State Distribution</div>
+                <div style="display: flex; height: 24px; border-radius: 6px; overflow: hidden; background: var(--sand-200);">
+                    ${Object.entries(stateDistribution).map(([state, count]) => {
+                        const percentage = (count / totalTransitions) * 100;
+                        return `<div style="background: ${stateColors[state] || 'var(--sand-400)'}; width: ${percentage}%; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.7em; font-weight: 600;" title="${state}: ${count} times (${percentage.toFixed(1)}%)">${percentage >= 15 ? count : ''}</div>`;
+                    }).join('')}
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px;">
+                    ${Object.entries(stateDistribution).map(([state, count]) => {
+                        return `<div style="display: flex; align-items: center; gap: 4px; font-size: 0.75em;">
+                            <div style="width: 12px; height: 12px; border-radius: 2px; background: ${stateColors[state] || 'var(--sand-400)'}"></div>
+                            <span style="color: var(--sand-700);">${state.replace('_', ' ')}: ${count}</span>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>
+
+            <!-- Activity Metrics Grid -->
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px;">
+                <div style="background: var(--sand-100); border-radius: 6px; padding: 12px; border-left: 3px solid var(--terracotta-500);">
+                    <div style="color: var(--sand-600); font-size: 0.75em; margin-bottom: 4px;">Tool Calls</div>
+                    <div style="color: var(--sand-800); font-size: 1.5em; font-weight: 600;">${toolCalls}</div>
+                </div>
+                <div style="background: var(--sand-100); border-radius: 6px; padding: 12px; border-left: 3px solid var(--success-500);">
+                    <div style="color: var(--sand-600); font-size: 0.75em; margin-bottom: 4px;">Tool Results</div>
+                    <div style="color: var(--sand-800); font-size: 1.5em; font-weight: 600;">${toolResults}</div>
+                </div>
+                <div style="background: var(--sand-100); border-radius: 6px; padding: 12px; border-left: 3px solid var(--danger-500);">
+                    <div style="color: var(--sand-600); font-size: 0.75em; margin-bottom: 4px;">Errors</div>
+                    <div style="color: var(--sand-800); font-size: 1.5em; font-weight: 600;">${errors}</div>
+                </div>
+                <div style="background: var(--sand-100); border-radius: 6px; padding: 12px; border-left: 3px solid var(--warning-500);">
+                    <div style="color: var(--sand-600); font-size: 0.75em; margin-bottom: 4px;">Warnings</div>
+                    <div style="color: var(--sand-800); font-size: 1.5em; font-weight: 600;">${warnings}</div>
+                </div>
+            </div>
+
+            <!-- Execution Time -->
+            <div style="background: var(--brand-50); border-radius: 6px; padding: 12px;">
+                <div style="color: var(--brand-700); font-size: 0.75em; margin-bottom: 4px;">Total Execution Time</div>
+                <div style="color: var(--brand-900); font-size: 1.3em; font-weight: 600;">
+                    ${elapsedHours > 0 ? `${elapsedHours}h ` : ''}${elapsedMinutes % 60}m ${elapsedSeconds % 60}s
+                </div>
+                <div style="color: var(--brand-600); font-size: 0.7em; margin-top: 4px;">
+                    Started: ${formatDate(agent.created_at)}
+                </div>
+            </div>
+
+            <!-- State Transitions Count -->
+            <div style="margin-top: 12px; padding: 10px; background: var(--sand-100); border-radius: 6px; display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: var(--sand-700); font-size: 0.85em;">Total State Transitions:</span>
+                <span style="color: var(--sand-900); font-weight: 600; font-size: 1.1em;">${totalTransitions}</span>
+            </div>
         </div>
     `;
 }
