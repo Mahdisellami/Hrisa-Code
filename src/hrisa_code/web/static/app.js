@@ -1466,12 +1466,17 @@ elements.createAgentBtn.addEventListener('click', () => {
     openModal('create-agent-modal');
 });
 
+// Auto-recommend model when task description changes
+document.getElementById('task-input')?.addEventListener('blur', async () => {
+    autoRecommendModel();
+});
+
 elements.createAgentForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
     const task = document.getElementById('task-input').value;
     const workingDir = document.getElementById('working-dir-input').value;
-    const model = document.getElementById('model-input').value;
+    const model = document.getElementById('model-input-select')?.value || document.getElementById('model-input')?.value;
     const role = document.getElementById('role-input').value;
     const tagsInput = document.getElementById('tags-input').value;
     const tags = tagsInput ? tagsInput.split(',').map(t => t.trim()) : [];
@@ -2030,6 +2035,149 @@ function switchToAgentsView() {
     renderAgentList();
 }
 
+// Model Selection Functions
+let availableModelsWithInfo = [];
+
+async function fetchAvailableModelsWithInfo() {
+    try {
+        const response = await fetch(`${API_BASE}/models/available-with-info`);
+        if (response.ok) {
+            availableModelsWithInfo = await response.json();
+            return availableModelsWithInfo;
+        }
+    } catch (error) {
+        console.error('Failed to fetch models with info:', error);
+    }
+    return [];
+}
+
+async function getModelRecommendation(taskDescription) {
+    try {
+        const response = await fetch(`${API_BASE}/models/recommend?task_description=${encodeURIComponent(taskDescription)}`, {
+            method: 'POST',
+        });
+        if (response.ok) {
+            return await response.json();
+        }
+    } catch (error) {
+        console.error('Failed to get model recommendation:', error);
+    }
+    return null;
+}
+
+function renderModelSelector(containerId, selectedModel = null) {
+    const container = document.getElementById(containerId);
+    if (!container || availableModelsWithInfo.length === 0) return;
+
+    // Group models by availability
+    const available = availableModelsWithInfo.filter(m => m.available);
+    const unavailable = availableModelsWithInfo.filter(m => !m.available);
+
+    let html = '<option value="">Default (from config)</option>';
+
+    if (available.length > 0) {
+        html += '<optgroup label="Available Models">';
+        available.forEach(model => {
+            const selected = model.name === selectedModel ? 'selected' : '';
+            const qualityBadge = model.quality_tier === 'excellent' ? '⭐' :
+                                model.quality_tier === 'good' ? '✓' : '';
+            const speedBadge = model.speed_tier === 'fast' ? '⚡' :
+                              model.speed_tier === 'medium' ? '◆' : '◇';
+            html += `<option value="${model.name}" ${selected} data-info='${JSON.stringify(model)}'>${qualityBadge} ${speedBadge} ${model.name}${model.parameter_count ? ` (${model.parameter_count})` : ''}</option>`;
+        });
+        html += '</optgroup>';
+    }
+
+    if (unavailable.length > 0) {
+        html += '<optgroup label="Not Downloaded (pull required)">';
+        unavailable.forEach(model => {
+            html += `<option value="${model.name}" disabled data-info='${JSON.stringify(model)}'>${model.name}${model.parameter_count ? ` (${model.parameter_count})` : ''} - Not Available</option>`;
+        });
+        html += '</optgroup>';
+    }
+
+    container.innerHTML = html;
+}
+
+function showModelInfo(modelName) {
+    if (!modelName) {
+        hideModelInfo();
+        return;
+    }
+
+    const model = availableModelsWithInfo.find(m => m.name === modelName);
+    if (!model) return;
+
+    const infoContainer = document.getElementById('model-info-display');
+    if (!infoContainer) return;
+
+    const qualityColor = model.quality_tier === 'excellent' ? '#10b981' :
+                        model.quality_tier === 'good' ? '#3b82f6' : '#6b7280';
+    const speedColor = model.speed_tier === 'fast' ? '#10b981' :
+                      model.speed_tier === 'medium' ? '#f59e0b' : '#ef4444';
+
+    infoContainer.innerHTML = `
+        <div style="background: var(--sand-50); border: 1px solid var(--sand-300); border-radius: 6px; padding: 12px; margin-top: 8px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <span style="background: ${qualityColor}20; color: ${qualityColor}; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                    Quality: ${model.quality_tier}
+                </span>
+                <span style="background: ${speedColor}20; color: ${speedColor}; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">
+                    Speed: ${model.speed_tier}
+                </span>
+                ${model.parameter_count ? `<span style="background: var(--sand-200); color: var(--sand-700); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600;">${model.parameter_count}</span>` : ''}
+            </div>
+            <div style="font-size: 13px; color: var(--sand-800); margin-bottom: 6px;">
+                <strong>Strengths:</strong> ${escapeHtml(model.strengths)}
+            </div>
+            ${model.weaknesses ? `
+                <div style="font-size: 13px; color: var(--sand-700); margin-bottom: 6px;">
+                    <strong>Weaknesses:</strong> ${escapeHtml(model.weaknesses)}
+                </div>
+            ` : ''}
+            ${model.recommended_for.length > 0 ? `
+                <div style="font-size: 12px; color: var(--sand-600);">
+                    <strong>Best for:</strong> ${model.recommended_for.join(', ')}
+                </div>
+            ` : ''}
+        </div>
+    `;
+    infoContainer.style.display = 'block';
+}
+
+function hideModelInfo() {
+    const infoContainer = document.getElementById('model-info-display');
+    if (infoContainer) {
+        infoContainer.style.display = 'none';
+    }
+}
+
+async function autoRecommendModel() {
+    const taskInput = document.getElementById('task-input');
+    const modelSelect = document.getElementById('model-input-select');
+
+    if (!taskInput || !modelSelect || !taskInput.value) return;
+
+    const recommendation = await getModelRecommendation(taskInput.value);
+    if (recommendation && recommendation.recommended_model) {
+        modelSelect.value = recommendation.recommended_model;
+        showModelInfo(recommendation.recommended_model);
+
+        // Show recommendation banner
+        const banner = document.getElementById('model-recommendation-banner');
+        if (banner) {
+            banner.textContent = `💡 Recommended: ${recommendation.recommended_model} - ${recommendation.reason}`;
+            banner.style.display = 'block';
+            banner.style.background = 'var(--brand-50)';
+            banner.style.color = 'var(--brand-700)';
+            banner.style.padding = '8px 12px';
+            banner.style.borderRadius = '4px';
+            banner.style.fontSize = '12px';
+            banner.style.marginTop = '8px';
+        }
+    }
+}
+
 // Model Performance Functions
 async function fetchAllModelMetrics() {
     try {
@@ -2382,11 +2530,17 @@ function populateTeamAgentSelections() {
     }
 }
 
-// Override openModal to populate team form when opening create-team-modal
+// Override openModal to populate forms when opening modals
 const originalOpenModal = window.openModal || openModal;
 window.openModal = function(modalId) {
     if (modalId === 'create-team-modal') {
         populateTeamAgentSelections();
+    } else if (modalId === 'create-agent-modal') {
+        renderModelSelector('model-input-select');
+        hideModelInfo();
+        // Clear previous recommendation
+        const banner = document.getElementById('model-recommendation-banner');
+        if (banner) banner.style.display = 'none';
     }
     if (typeof originalOpenModal === 'function') {
         originalOpenModal(modalId);
@@ -2418,11 +2572,12 @@ document.getElementById('create-team-form')?.addEventListener('submit', async (e
 });
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     loadRoles();
     connectWebSocket();
     fetchAgents();
     fetchTeams();
+    await fetchAvailableModelsWithInfo();
 
     // Refresh agents and teams every 10 seconds
     setInterval(() => {

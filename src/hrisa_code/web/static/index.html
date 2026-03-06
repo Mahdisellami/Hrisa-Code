@@ -155,13 +155,13 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="model-input">Model</label>
-                        <input
-                            type="text"
-                            id="model-input"
-                            placeholder="Leave empty for default model"
-                        >
-                        <small>e.g., qwen2.5-coder:32b, codellama</small>
+                        <label for="model-input-select">Model</label>
+                        <select id="model-input-select" onchange="showModelInfo(this.value)">
+                            <option value="">Loading models...</option>
+                        </select>
+                        <div id="model-recommendation-banner" style="display: none;"></div>
+                        <div id="model-info-display" style="display: none;"></div>
+                        <small>⭐ = Excellent, ✓ = Good | ⚡ = Fast, ◆ = Medium, ◇ = Slow</small>
                     </div>
 
                     <div class="form-group">
