@@ -2,7 +2,7 @@
 
 ## ✅ Deployment Complete!
 
-**New Frontend URL:** https://hrisa-frontend.vercel.app
+**Frontend URL:** https://hrisa-code.vercel.app
 
 The frontend is deployed with fixed asset paths. Now you just need to update CORS in Render.
 
@@ -24,14 +24,14 @@ Click: **https://dashboard.render.com/web/srv-d6l94ia4d50c73b542lg**
 2. Click the **pencil/edit icon**
 3. Change value to:
    ```
-   https://hrisa-backend.onrender.com,https://hrisa-frontend.vercel.app
+   https://hrisa-backend.onrender.com,https://hrisa-code.vercel.app
    ```
 4. Click **"Save Changes"**
 
 **If it doesn't exist:**
 1. Click **"Add Environment Variable"**
 2. **Key**: `ALLOWED_ORIGINS`
-3. **Value**: `https://hrisa-backend.onrender.com,https://hrisa-frontend.vercel.app`
+3. **Value**: `https://hrisa-backend.onrender.com,https://hrisa-code.vercel.app`
 4. Click **"Save"**
 
 ### Step 4: Wait 30 Seconds
@@ -41,7 +41,7 @@ Render will automatically redeploy with the new CORS setting.
 
 ## ✅ Test (After 30 Seconds)
 
-1. Visit: **https://hrisa-frontend.vercel.app**
+1. Visit: **https://hrisa-code.vercel.app**
 2. Should see login page (purple gradient)
 3. Try entering an email
 4. CORS error should be **GONE**
