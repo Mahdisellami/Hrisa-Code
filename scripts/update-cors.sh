@@ -1,11 +1,11 @@
 #!/bin/bash
 # Quick CORS Fix Script - Update ALLOWED_ORIGINS in Render
-# Usage: RENDER_API_KEY=rnd_xxx ./scripts/update-cors.sh
+# Usage: RENDER_API_KEY=rnd_xxx NEW_FRONTEND_URL=https://your-app.vercel.app ./scripts/update-cors.sh
 
 set -e
 
 SERVICE_ID="${RENDER_SERVICE_ID:-srv-d6l94ia4d50c73b542lg}"
-NEW_FRONTEND="https://hrisa-code-new.vercel.app"
+NEW_FRONTEND="${NEW_FRONTEND_URL:-https://hrisa-code-new.vercel.app}"
 BACKEND="https://hrisa-backend.onrender.com"
 
 echo "=========================================="
