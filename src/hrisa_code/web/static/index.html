@@ -9,65 +9,7 @@
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-    <!-- Login Page (shown when not authenticated) -->
-    <div id="login-page" class="login-page" style="display: none;">
-        <div class="login-container">
-            <div class="login-header">
-                <h1>Hrisa Code</h1>
-                <p>Agent Management Platform</p>
-            </div>
-
-            <div class="login-card" id="login-form-card">
-                <h2>Welcome Back</h2>
-                <p class="login-subtitle">Enter your email to receive a secure login link</p>
-
-                <form id="login-form" class="login-form">
-                    <div class="form-group">
-                        <label for="login-email">
-                            <span class="material-icons">email</span>
-                            Email Address
-                        </label>
-                        <input
-                            type="email"
-                            id="login-email"
-                            name="email"
-                            placeholder="you@example.com"
-                            required
-                            autocomplete="email"
-                        />
-                    </div>
-
-                    <button type="submit" class="btn btn-primary btn-block" id="login-submit-btn">
-                        <span class="material-icons">send</span>
-                        Send Magic Link
-                    </button>
-                </form>
-
-                <p class="login-footer">
-                    First time here? No worries! We'll create an account for you automatically.
-                </p>
-            </div>
-
-            <div class="login-card login-success" id="login-success-card" style="display: none;">
-                <div class="success-icon">
-                    <span class="material-icons">mark_email_read</span>
-                </div>
-                <h2>Check Your Email</h2>
-                <p class="login-subtitle">We've sent a secure login link to:</p>
-                <p class="email-display" id="sent-email"></p>
-                <p class="login-instructions">
-                    Click the link in your email to log in. The link will expire in <strong>15 minutes</strong>.
-                </p>
-                <button type="button" class="btn btn-secondary btn-block" onclick="showLoginForm()">
-                    <span class="material-icons">arrow_back</span>
-                    Back to Login
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Main Application (shown when authenticated) -->
-    <div id="app" class="container">
+    <div class="container">
         <!-- Header -->
         <header class="header">
             <h1>Agents Dashboard</h1>
@@ -96,38 +38,6 @@
                 >
                     <span class="material-icons" style="font-size: 18px;">keyboard</span>
                 </button>
-
-                <!-- User Profile Dropdown -->
-                <div class="user-profile-container" style="margin-left: 12px; position: relative;">
-                    <button class="user-profile-btn" id="user-profile-btn" onclick="toggleUserMenu()">
-                        <span class="material-icons">account_circle</span>
-                        <span class="user-email" id="header-user-email">Loading...</span>
-                        <span class="material-icons dropdown-icon">expand_more</span>
-                    </button>
-
-                    <div class="user-dropdown" id="user-dropdown" style="display: none;">
-                        <div class="user-dropdown-header">
-                            <div class="user-info">
-                                <div class="user-name" id="dropdown-user-email">user@example.com</div>
-                                <div class="user-role" id="dropdown-user-role">
-                                    <span class="role-badge" id="user-role-badge">user</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="user-dropdown-divider"></div>
-
-                        <button class="user-dropdown-item" id="admin-panel-btn" onclick="showAdminPanel()" style="display: none;">
-                            <span class="material-icons">admin_panel_settings</span>
-                            <span>Admin Panel</span>
-                        </button>
-
-                        <button class="user-dropdown-item" onclick="logout()">
-                            <span class="material-icons">logout</span>
-                            <span>Logout</span>
-                        </button>
-                    </div>
-                </div>
             </div>
         </header>
 
@@ -522,63 +432,6 @@
                         <button type="button" class="btn btn-secondary" id="create-team-modal-cancel-btn">Cancel</button>
                     </div>
                 </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Admin Panel Modal -->
-    <div class="modal" id="admin-panel-modal">
-        <div class="modal-content large-modal">
-            <div class="modal-header">
-                <h2>Admin Panel - User Management</h2>
-                <button class="btn-close" onclick="closeModal('admin-panel-modal')">✕</button>
-            </div>
-            <div class="modal-body">
-                <div class="admin-stats" style="display: flex; gap: 16px; margin-bottom: 24px;">
-                    <div class="stat-card">
-                        <span class="material-icons">people</span>
-                        <div>
-                            <div class="stat-value" id="admin-total-users">0</div>
-                            <div class="stat-label">Total Users</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <span class="material-icons">admin_panel_settings</span>
-                        <div>
-                            <div class="stat-value" id="admin-total-admins">0</div>
-                            <div class="stat-label">Admins</div>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <span class="material-icons">person</span>
-                        <div>
-                            <div class="stat-value" id="admin-total-regular-users">0</div>
-                            <div class="stat-label">Regular Users</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="admin-users-table">
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Email</th>
-                                <th>Role</th>
-                                <th>Status</th>
-                                <th>Created</th>
-                                <th>Last Login</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="admin-users-list">
-                            <tr>
-                                <td colspan="6" style="text-align: center; padding: 24px;">
-                                    Loading users...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
             </div>
         </div>
     </div>

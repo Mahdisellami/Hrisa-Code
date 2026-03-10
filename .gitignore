@@ -57,3 +57,4 @@ workspace/
 # Docker
 .docker/
 docker-compose.override.yml
+.vercel

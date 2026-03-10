@@ -23,13 +23,6 @@ const state = {
     // Search & Filter
     searchQuery: '',
     searchField: 'all', // 'all', 'id', 'task', 'model', 'tags'
-    // Authentication
-    auth: {
-        user: null,          // { id, email, role, is_active }
-        token: null,         // Session token
-        isAuthenticated: false,
-        isLoading: true,
-    }
 };
 
 // DOM Elements
@@ -159,412 +152,6 @@ function toastWarning(message, title = null) {
 
 function toastInfo(message, title = null) {
     return showToast(message, 'info', title);
-}
-
-// ============================================================================
-// Authentication Functions
-// ============================================================================
-
-// Get token from localStorage
-function getAuthToken() {
-    return localStorage.getItem('hrisa_auth_token');
-}
-
-// Set token in localStorage
-function setAuthToken(token) {
-    localStorage.setItem('hrisa_auth_token', token);
-}
-
-// Clear token from localStorage
-function clearAuthToken() {
-    localStorage.removeItem('hrisa_auth_token');
-}
-
-// Fetch with authentication header
-async function fetchWithAuth(url, options = {}) {
-    const token = getAuthToken();
-    const headers = {
-        'Content-Type': 'application/json',
-        ...options.headers
-    };
-
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(url, {
-        ...options,
-        headers
-    });
-
-    // Handle 401 Unauthorized - token expired or invalid
-    if (response.status === 401) {
-        await logout();
-        throw new Error('Authentication required');
-    }
-
-    return response;
-}
-
-// Check authentication status
-async function checkAuth() {
-    const token = getAuthToken();
-
-    // Check for token in URL fragment (from magic link redirect)
-    const hash = window.location.hash;
-    if (hash.startsWith('#token=')) {
-        const urlToken = hash.substring(7);
-        setAuthToken(urlToken);
-        window.location.hash = ''; // Clear hash
-        return await checkAuth(); // Recursive call with stored token
-    }
-
-    if (!token) {
-        state.auth.isAuthenticated = false;
-        state.auth.user = null;
-        state.auth.token = null;
-        state.auth.isLoading = false;
-        return false;
-    }
-
-    try {
-        const response = await fetchWithAuth(`${API_BASE}/auth/me`);
-
-        if (response.ok) {
-            const user = await response.json();
-            state.auth.user = user;
-            state.auth.token = token;
-            state.auth.isAuthenticated = true;
-            state.auth.isLoading = false;
-            return true;
-        } else {
-            // Token invalid
-            clearAuthToken();
-            state.auth.isAuthenticated = false;
-            state.auth.user = null;
-            state.auth.token = null;
-            state.auth.isLoading = false;
-            return false;
-        }
-    } catch (error) {
-        console.error('Auth check failed:', error);
-        clearAuthToken();
-        state.auth.isAuthenticated = false;
-        state.auth.user = null;
-        state.auth.token = null;
-        state.auth.isLoading = false;
-        return false;
-    }
-}
-
-// Send magic link to email
-async function sendMagicLink(email) {
-    try {
-        const response = await fetch(`${API_BASE}/auth/send-magic-link`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-        });
-
-        if (response.ok) {
-            const data = await response.json();
-            return { success: true, isNewUser: data.is_new_user };
-        } else {
-            const error = await response.json();
-            return { success: false, error: error.detail || 'Failed to send magic link' };
-        }
-    } catch (error) {
-        console.error('Send magic link error:', error);
-        return { success: false, error: 'Network error' };
-    }
-}
-
-// Logout user
-async function logout() {
-    const token = getAuthToken();
-
-    if (token) {
-        try {
-            await fetchWithAuth(`${API_BASE}/auth/logout`, {
-                method: 'POST'
-            });
-        } catch (error) {
-            console.error('Logout request failed:', error);
-        }
-    }
-
-    // Clear state
-    clearAuthToken();
-    state.auth.isAuthenticated = false;
-    state.auth.user = null;
-    state.auth.token = null;
-
-    // Show login page
-    showLoginPage();
-}
-
-// Show login page
-function showLoginPage() {
-    const mainContent = document.getElementById('app');
-    const loginPage = document.getElementById('login-page');
-
-    if (mainContent) mainContent.style.display = 'none';
-    if (loginPage) loginPage.style.display = 'flex';
-}
-
-// Hide login page
-function hideLoginPage() {
-    const mainContent = document.getElementById('app');
-    const loginPage = document.getElementById('login-page');
-
-    if (mainContent) mainContent.style.display = 'block';
-    if (loginPage) loginPage.style.display = 'none';
-}
-
-// Show login form (back from success screen)
-function showLoginForm() {
-    const formCard = document.getElementById('login-form-card');
-    const successCard = document.getElementById('login-success-card');
-
-    if (formCard) formCard.style.display = 'block';
-    if (successCard) successCard.style.display = 'none';
-}
-
-// Handle login form submission
-async function handleLoginSubmit(event) {
-    event.preventDefault();
-
-    const emailInput = document.getElementById('login-email');
-    const submitBtn = document.getElementById('login-submit-btn');
-    const formCard = document.getElementById('login-form-card');
-    const successCard = document.getElementById('login-success-card');
-    const sentEmailDisplay = document.getElementById('sent-email');
-
-    const email = emailInput.value.trim();
-
-    // Disable button and show loading
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<span class="material-icons spinning">sync</span> Sending...';
-
-    try {
-        const result = await sendMagicLink(email);
-
-        if (result.success) {
-            // Show success screen
-            if (sentEmailDisplay) sentEmailDisplay.textContent = email;
-            if (formCard) formCard.style.display = 'none';
-            if (successCard) successCard.style.display = 'block';
-        } else {
-            toastError(result.error || 'Failed to send magic link');
-            // Re-enable button
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<span class="material-icons">send</span> Send Magic Link';
-        }
-    } catch (error) {
-        toastError('Network error. Please try again.');
-        // Re-enable button
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<span class="material-icons">send</span> Send Magic Link';
-    }
-}
-
-// Update user profile display in header
-function updateUserProfile() {
-    if (!state.auth.isAuthenticated || !state.auth.user) return;
-
-    const user = state.auth.user;
-
-    // Update header display
-    const headerEmail = document.getElementById('header-user-email');
-    if (headerEmail) {
-        headerEmail.textContent = user.email;
-    }
-
-    // Update dropdown
-    const dropdownEmail = document.getElementById('dropdown-user-email');
-    if (dropdownEmail) {
-        dropdownEmail.textContent = user.email;
-    }
-
-    const roleBadge = document.getElementById('user-role-badge');
-    if (roleBadge) {
-        roleBadge.textContent = user.role;
-        roleBadge.className = `role-badge role-${user.role}`;
-    }
-
-    // Show admin panel button if user is admin
-    const adminPanelBtn = document.getElementById('admin-panel-btn');
-    if (adminPanelBtn) {
-        adminPanelBtn.style.display = user.role === 'admin' ? 'flex' : 'none';
-    }
-}
-
-// Toggle user dropdown menu
-function toggleUserMenu() {
-    const dropdown = document.getElementById('user-dropdown');
-    if (dropdown) {
-        const isVisible = dropdown.style.display === 'block';
-        dropdown.style.display = isVisible ? 'none' : 'block';
-    }
-}
-
-// Close user menu when clicking outside
-document.addEventListener('click', (e) => {
-    const profileContainer = document.querySelector('.user-profile-container');
-    const dropdown = document.getElementById('user-dropdown');
-
-    if (profileContainer && dropdown && !profileContainer.contains(e.target)) {
-        dropdown.style.display = 'none';
-    }
-});
-
-// Show admin panel
-async function showAdminPanel() {
-    if (state.auth.user.role !== 'admin') {
-        toastError('Admin access required');
-        return;
-    }
-
-    // Close user dropdown
-    const dropdown = document.getElementById('user-dropdown');
-    if (dropdown) dropdown.style.display = 'none';
-
-    // Open modal
-    const modal = document.getElementById('admin-panel-modal');
-    if (modal) modal.classList.add('active');
-
-    // Load users
-    await loadAdminUsers();
-}
-
-// Load users for admin panel
-async function loadAdminUsers() {
-    try {
-        const response = await fetchWithAuth(`${API_BASE}/auth/users`);
-
-        if (response.ok) {
-            const data = await response.json();
-            renderAdminUsers(data.users, data.total);
-        } else {
-            toastError('Failed to load users');
-        }
-    } catch (error) {
-        console.error('Load users error:', error);
-        toastError('Failed to load users');
-    }
-}
-
-// Render users in admin panel
-function renderAdminUsers(users, total) {
-    // Update stats
-    const admins = users.filter(u => u.role === 'admin').length;
-    const regularUsers = users.filter(u => u.role === 'user').length;
-
-    const totalUsersEl = document.getElementById('admin-total-users');
-    const totalAdminsEl = document.getElementById('admin-total-admins');
-    const totalRegularUsersEl = document.getElementById('admin-total-regular-users');
-
-    if (totalUsersEl) totalUsersEl.textContent = total;
-    if (totalAdminsEl) totalAdminsEl.textContent = admins;
-    if (totalRegularUsersEl) totalRegularUsersEl.textContent = regularUsers;
-
-    // Render table
-    const tbody = document.getElementById('admin-users-list');
-    if (!tbody) return;
-
-    if (users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 24px;">No users found</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = users.map(user => {
-        const isCurrentUser = user.id === state.auth.user.id;
-        const statusBadge = user.is_active
-            ? '<span class="status-badge status-active">Active</span>'
-            : '<span class="status-badge status-inactive">Inactive</span>';
-
-        const createdDate = new Date(user.created_at).toLocaleDateString();
-        const lastLogin = user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never';
-
-        return `
-            <tr>
-                <td>
-                    ${user.email}
-                    ${isCurrentUser ? '<span class="badge badge-primary" style="margin-left: 8px;">You</span>' : ''}
-                </td>
-                <td>
-                    <span class="role-badge role-${user.role}">${user.role}</span>
-                </td>
-                <td>${statusBadge}</td>
-                <td>${createdDate}</td>
-                <td>${lastLogin}</td>
-                <td>
-                    <div style="display: flex; gap: 8px;">
-                        ${!isCurrentUser ? `
-                            <select
-                                class="role-select"
-                                onchange="changeUserRole('${user.id}', this.value)"
-                                ${!user.is_active ? 'disabled' : ''}
-                            >
-                                <option value="admin" ${user.role === 'admin' ? 'selected' : ''}>Admin</option>
-                                <option value="user" ${user.role === 'user' ? 'selected' : ''}>User</option>
-                                <option value="viewer" ${user.role === 'viewer' ? 'selected' : ''}>Viewer</option>
-                            </select>
-                            <button
-                                class="btn btn-small ${user.is_active ? 'btn-danger' : 'btn-success'}"
-                                onclick="toggleUserStatus('${user.id}', ${user.is_active})"
-                            >
-                                ${user.is_active ? 'Deactivate' : 'Activate'}
-                            </button>
-                        ` : '<span style="color: #a0aec0; font-size: 0.85em;">—</span>'}
-                    </div>
-                </td>
-            </tr>
-        `;
-    }).join('');
-}
-
-// Change user role
-async function changeUserRole(userId, newRole) {
-    try {
-        const response = await fetchWithAuth(`${API_BASE}/auth/users/${userId}/role`, {
-            method: 'PATCH',
-            body: JSON.stringify({ role: newRole })
-        });
-
-        if (response.ok) {
-            toastSuccess(`User role updated to ${newRole}`);
-            await loadAdminUsers();
-        } else {
-            const error = await response.json();
-            toastError(error.detail || 'Failed to update role');
-        }
-    } catch (error) {
-        console.error('Change role error:', error);
-        toastError('Failed to update role');
-    }
-}
-
-// Toggle user active status
-async function toggleUserStatus(userId, isCurrentlyActive) {
-    const action = isCurrentlyActive ? 'deactivate' : 'activate';
-
-    try {
-        const response = await fetchWithAuth(`${API_BASE}/auth/users/${userId}/${action}`, {
-            method: 'POST'
-        });
-
-        if (response.ok) {
-            toastSuccess(`User ${action}d successfully`);
-            await loadAdminUsers();
-        } else {
-            const error = await response.json();
-            toastError(error.detail || `Failed to ${action} user`);
-        }
-    } catch (error) {
-        console.error(`Toggle status error:`, error);
-        toastError(`Failed to ${action} user`);
-    }
 }
 
 // WebSocket Connection
@@ -710,7 +297,7 @@ function updateConnectionStatus(status) {
 // API Functions
 async function loadRoles() {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/roles`);
+        const response = await fetch(`${API_BASE}/roles`);
         if (!response.ok) throw new Error('Failed to fetch roles');
         state.roles = await response.json();
 
@@ -734,7 +321,7 @@ async function fetchAgents(page = null) {
         }
 
         const currentPage = page || state.currentPage;
-        const response = await fetchWithAuth(`${API_BASE}/agents?page=${currentPage}&page_size=${state.pageSize}`);
+        const response = await fetch(`${API_BASE}/agents?page=${currentPage}&page_size=${state.pageSize}`);
         if (!response.ok) throw new Error('Failed to fetch agents');
         const data = await response.json();
 
@@ -759,7 +346,7 @@ async function fetchAgents(page = null) {
 
 async function createAgent(task, workingDir, model, role, tags) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents`, {
+        const response = await fetch(`${API_BASE}/agents`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -788,7 +375,7 @@ async function createAgent(task, workingDir, model, role, tags) {
 
 async function startAgent(agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/start`, {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/start`, {
             method: 'POST',
         });
 
@@ -801,7 +388,7 @@ async function startAgent(agentId) {
 
 async function sendInstruction(agentId, instruction) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/instruction`, {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/instruction`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ instruction }),
@@ -817,7 +404,7 @@ async function sendInstruction(agentId, instruction) {
 
 async function cancelAgent(agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/cancel`, {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/cancel`, {
             method: 'POST',
         });
 
@@ -831,7 +418,7 @@ async function cancelAgent(agentId) {
 
 async function deleteAgent(agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}`, {
+        const response = await fetch(`${API_BASE}/agents/${agentId}`, {
             method: 'DELETE',
         });
 
@@ -854,7 +441,7 @@ async function deleteAgent(agentId) {
 
 async function fetchAgentMessages(agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/messages`);
+        const response = await fetch(`${API_BASE}/agents/${agentId}/messages`);
         if (!response.ok) throw new Error('Failed to fetch messages');
         return await response.json();
     } catch (error) {
@@ -865,7 +452,7 @@ async function fetchAgentMessages(agentId) {
 
 async function fetchAgentLogs(agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/logs`);
+        const response = await fetch(`${API_BASE}/agents/${agentId}/logs`);
         if (!response.ok) throw new Error('Failed to fetch logs');
         return await response.json();
     } catch (error) {
@@ -876,7 +463,7 @@ async function fetchAgentLogs(agentId) {
 
 async function fetchAgentArtifacts(agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/artifacts`);
+        const response = await fetch(`${API_BASE}/agents/${agentId}/artifacts`);
         if (!response.ok) throw new Error('Failed to fetch artifacts');
         return await response.json();
     } catch (error) {
@@ -887,7 +474,7 @@ async function fetchAgentArtifacts(agentId) {
 
 async function fetchAgentState(agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/state`);
+        const response = await fetch(`${API_BASE}/agents/${agentId}/state`);
         if (!response.ok) throw new Error('Failed to fetch state');
         return await response.json();
     } catch (error) {
@@ -898,7 +485,7 @@ async function fetchAgentState(agentId) {
 
 async function fetchAgentMemory(agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/memory`);
+        const response = await fetch(`${API_BASE}/agents/${agentId}/memory`);
         if (!response.ok) throw new Error('Failed to fetch memory');
         return await response.json();
     } catch (error) {
@@ -909,7 +496,7 @@ async function fetchAgentMemory(agentId) {
 
 async function fetchAgentMessages(agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/messages`);
+        const response = await fetch(`${API_BASE}/agents/${agentId}/messages`);
         if (!response.ok) throw new Error('Failed to fetch messages');
         return await response.json();
     } catch (error) {
@@ -2080,7 +1667,7 @@ document.getElementById('chain-agent-form').addEventListener('submit', async (e)
     const autoStart = document.getElementById('chain-auto-start-input').checked;
 
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${parentAgentId}/chain`, {
+        const response = await fetch(`${API_BASE}/agents/${parentAgentId}/chain`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2126,7 +1713,7 @@ document.getElementById('save-session-form').addEventListener('submit', async (e
     const description = document.getElementById('session-description-input').value || null;
 
     try {
-        const response = await fetchWithAuth(`${API_BASE}/sessions/save`, {
+        const response = await fetch(`${API_BASE}/sessions/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, description }),
@@ -2164,7 +1751,7 @@ async function loadSessionsList() {
     sessionsListDiv.innerHTML = '<p style="color: var(--sand-600); text-align: center;">Loading sessions...</p>';
 
     try {
-        const response = await fetchWithAuth(`${API_BASE}/sessions`);
+        const response = await fetch(`${API_BASE}/sessions`);
         if (!response.ok) throw new Error('Failed to load sessions');
 
         const sessions = await response.json();
@@ -2215,7 +1802,7 @@ async function loadSession(sessionId) {
     if (!confirm('Loading this session will replace all current agents. Continue?')) return;
 
     try {
-        const response = await fetchWithAuth(`${API_BASE}/sessions/${sessionId}/load`, {
+        const response = await fetch(`${API_BASE}/sessions/${sessionId}/load`, {
             method: 'POST',
         });
 
@@ -2236,7 +1823,7 @@ async function deleteSession(sessionId) {
     if (!confirm('Are you sure you want to delete this session?')) return;
 
     try {
-        const response = await fetchWithAuth(`${API_BASE}/sessions/${sessionId}`, {
+        const response = await fetch(`${API_BASE}/sessions/${sessionId}`, {
             method: 'DELETE',
         });
 
@@ -2256,7 +1843,7 @@ async function replayAgent(agentId) {
     if (!confirm('This will create a new agent with the same task and start it. Continue?')) return;
 
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/replay`, {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/replay`, {
             method: 'POST',
         });
 
@@ -2358,7 +1945,7 @@ function downloadAllArtifacts(agentId) {
 // Team Management Functions
 async function fetchTeams() {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/teams`);
+        const response = await fetch(`${API_BASE}/teams`);
         if (response.ok) {
             state.teams = await response.json();
             if (state.viewMode === 'teams') {
@@ -2372,7 +1959,7 @@ async function fetchTeams() {
 
 async function createTeam(name, description, sharedGoal, leadAgentId, memberAgentIds) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/teams`, {
+        const response = await fetch(`${API_BASE}/teams`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2400,7 +1987,7 @@ async function createTeam(name, description, sharedGoal, leadAgentId, memberAgen
 
 async function getTeamMembers(teamId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/teams/${teamId}/members`);
+        const response = await fetch(`${API_BASE}/teams/${teamId}/members`);
         if (response.ok) {
             return await response.json();
         }
@@ -2412,7 +1999,7 @@ async function getTeamMembers(teamId) {
 
 async function addAgentToTeam(teamId, agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/teams/${teamId}/members`, {
+        const response = await fetch(`${API_BASE}/teams/${teamId}/members`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ agent_id: agentId }),
@@ -2431,7 +2018,7 @@ async function addAgentToTeam(teamId, agentId) {
 
 async function removeAgentFromTeam(teamId, agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/teams/${teamId}/members/${agentId}`, {
+        const response = await fetch(`${API_BASE}/teams/${teamId}/members/${agentId}`, {
             method: 'DELETE',
         });
 
@@ -2448,7 +2035,7 @@ async function removeAgentFromTeam(teamId, agentId) {
 
 async function disbandTeam(teamId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/teams/${teamId}/disband`, {
+        const response = await fetch(`${API_BASE}/teams/${teamId}/disband`, {
             method: 'POST',
         });
 
@@ -3349,7 +2936,7 @@ function renderNetworkGraph(agents, teams) {
 // Model Fallback Functions
 async function fetchFallbackConfig() {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/models/fallback/config`);
+        const response = await fetch(`${API_BASE}/models/fallback/config`);
         if (response.ok) {
             return await response.json();
         }
@@ -3361,7 +2948,7 @@ async function fetchFallbackConfig() {
 
 async function updateFallbackConfig(config) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/models/fallback/config`, {
+        const response = await fetch(`${API_BASE}/models/fallback/config`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(config),
@@ -3392,7 +2979,7 @@ async function fetchFallbackEvents(agentId = null, limit = 50) {
 
 async function fetchFallbackStatistics() {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/models/fallback/statistics`);
+        const response = await fetch(`${API_BASE}/models/fallback/statistics`);
         if (response.ok) {
             return await response.json();
         }
@@ -3584,7 +3171,7 @@ let availableModelsWithInfo = [];
 
 async function fetchAvailableModelsWithInfo() {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/models/available-with-info`);
+        const response = await fetch(`${API_BASE}/models/available-with-info`);
         if (response.ok) {
             availableModelsWithInfo = await response.json();
             return availableModelsWithInfo;
@@ -3597,7 +3184,7 @@ async function fetchAvailableModelsWithInfo() {
 
 async function getModelRecommendation(taskDescription) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/models/recommend?task_description=${encodeURIComponent(taskDescription)}`, {
+        const response = await fetch(`${API_BASE}/models/recommend?task_description=${encodeURIComponent(taskDescription)}`, {
             method: 'POST',
         });
         if (response.ok) {
@@ -3725,7 +3312,7 @@ async function autoRecommendModel() {
 // Model Performance Functions
 async function fetchAllModelMetrics() {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/models/metrics`);
+        const response = await fetch(`${API_BASE}/models/metrics`);
         if (response.ok) {
             return await response.json();
         }
@@ -3737,7 +3324,7 @@ async function fetchAllModelMetrics() {
 
 async function fetchModelLeaderboard(sortBy = 'success_rate', limit = 10) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/models/leaderboard?sort_by=${sortBy}&limit=${limit}`);
+        const response = await fetch(`${API_BASE}/models/leaderboard?sort_by=${sortBy}&limit=${limit}`);
         if (response.ok) {
             return await response.json();
         }
@@ -3749,7 +3336,7 @@ async function fetchModelLeaderboard(sortBy = 'success_rate', limit = 10) {
 
 async function compareModels(modelNames) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/models/compare`, {
+        const response = await fetch(`${API_BASE}/models/compare`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(modelNames),
@@ -3885,7 +3472,7 @@ async function showModelDetails(modelName) {
 // Priority and Scheduling Functions
 async function setAgentPriority(agentId, priority) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/priority`, {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/priority`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ priority }),
@@ -3906,7 +3493,7 @@ async function setAgentPriority(agentId, priority) {
 
 async function scheduleAgent(agentId, startTime) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/${agentId}/schedule`, {
+        const response = await fetch(`${API_BASE}/agents/${agentId}/schedule`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ start_time: startTime }),
@@ -3927,7 +3514,7 @@ async function scheduleAgent(agentId, startTime) {
 
 async function fetchPriorityQueue() {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/priority-queue`);
+        const response = await fetch(`${API_BASE}/agents/priority-queue`);
         if (response.ok) {
             return await response.json();
         }
@@ -3939,7 +3526,7 @@ async function fetchPriorityQueue() {
 
 async function bulkSetPriority(agentIds, priority) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/agents/bulk-priority`, {
+        const response = await fetch(`${API_BASE}/agents/bulk-priority`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ agent_ids: agentIds, priority }),
@@ -4350,7 +3937,7 @@ async function showSystemMetricsDashboard() {
     // Fetch model metrics
     let modelMetrics = [];
     try {
-        const response = await fetchWithAuth(`${API_BASE}/models/metrics`);
+        const response = await fetch(`${API_BASE}/models/metrics`);
         modelMetrics = await response.json();
     } catch (error) {
         console.error('Failed to fetch model metrics:', error);
@@ -4737,7 +4324,7 @@ function generateSystemRecommendations(agentStats, successRate, errorRate, loopD
 
 async function exportSession() {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/export/session?include_artifacts=true&include_logs=true`);
+        const response = await fetch(`${API_BASE}/export/session?include_artifacts=true&include_logs=true`);
         if (!response.ok) throw new Error('Export failed');
 
         const blob = await response.blob();
@@ -4760,7 +4347,7 @@ async function exportSession() {
 
 async function exportAnalytics() {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/export/analytics`);
+        const response = await fetch(`${API_BASE}/export/analytics`);
         if (!response.ok) throw new Error('Export failed');
 
         const blob = await response.blob();
@@ -4783,7 +4370,7 @@ async function exportAnalytics() {
 
 async function exportAgentData(agentId, format = 'json') {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/export/agent/${agentId}?format=${format}`);
+        const response = await fetch(`${API_BASE}/export/agent/${agentId}?format=${format}`);
         if (!response.ok) throw new Error('Export failed');
 
         const blob = await response.blob();
@@ -4807,7 +4394,7 @@ async function exportAgentData(agentId, format = 'json') {
 
 async function exportAgentLogs(agentId) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/export/logs/${agentId}`);
+        const response = await fetch(`${API_BASE}/export/logs/${agentId}`);
         if (!response.ok) throw new Error('Export failed');
 
         const blob = await response.blob();
@@ -5034,10 +4621,10 @@ async function showIntegrationsView() {
     let channels = [];
 
     try {
-        const webhooksResponse = await fetchWithAuth(`${API_BASE}/webhooks`);
+        const webhooksResponse = await fetch(`${API_BASE}/webhooks`);
         webhooks = await webhooksResponse.json();
 
-        const channelsResponse = await fetchWithAuth(`${API_BASE}/notifications/channels`);
+        const channelsResponse = await fetch(`${API_BASE}/notifications/channels`);
         channels = await channelsResponse.json();
     } catch (error) {
         console.error('Failed to fetch integrations:', error);
@@ -5203,7 +4790,7 @@ async function openCreateWebhookModal() {
         }
 
         try {
-            const response = await fetchWithAuth(`${API_BASE}/webhooks`, {
+            const response = await fetch(`${API_BASE}/webhooks`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, url, events, secret })
@@ -5283,7 +4870,7 @@ async function openCreateNotificationModal() {
         }
 
         try {
-            const response = await fetchWithAuth(`${API_BASE}/notifications/channels`, {
+            const response = await fetch(`${API_BASE}/notifications/channels`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name, type, config, events })
@@ -5323,7 +4910,7 @@ function updateChannelConfigFields() {
 
 async function toggleWebhook(webhookId, enabled) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/webhooks/${webhookId}`, {
+        const response = await fetch(`${API_BASE}/webhooks/${webhookId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enabled })
@@ -5342,7 +4929,7 @@ async function deleteWebhook(webhookId) {
     if (!confirm('Are you sure you want to delete this webhook?')) return;
 
     try {
-        const response = await fetchWithAuth(`${API_BASE}/webhooks/${webhookId}`, { method: 'DELETE' });
+        const response = await fetch(`${API_BASE}/webhooks/${webhookId}`, { method: 'DELETE' });
         if (!response.ok) throw new Error('Failed to delete webhook');
 
         toastSuccess('Webhook deleted', 'Webhook Deleted');
@@ -5354,7 +4941,7 @@ async function deleteWebhook(webhookId) {
 
 async function toggleNotificationChannel(channelId, enabled) {
     try {
-        const response = await fetchWithAuth(`${API_BASE}/notifications/channels/${channelId}`, {
+        const response = await fetch(`${API_BASE}/notifications/channels/${channelId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ enabled })
@@ -5373,7 +4960,7 @@ async function deleteNotificationChannel(channelId) {
     if (!confirm('Are you sure you want to delete this notification channel?')) return;
 
     try {
-        const response = await fetchWithAuth(`${API_BASE}/notifications/channels/${channelId}`, { method: 'DELETE' });
+        const response = await fetch(`${API_BASE}/notifications/channels/${channelId}`, { method: 'DELETE' });
         if (!response.ok) throw new Error('Failed to delete channel');
 
         toastSuccess('Channel deleted', 'Channel Deleted');
@@ -5420,28 +5007,6 @@ document.addEventListener('keydown', handleKeyboardShortcut);
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
-    // Setup login form handler
-    const loginForm = document.getElementById('login-form');
-    if (loginForm) {
-        loginForm.addEventListener('submit', handleLoginSubmit);
-    }
-
-    // Check authentication first
-    const isAuthenticated = await checkAuth();
-
-    if (!isAuthenticated) {
-        // Show login page
-        showLoginPage();
-        return;
-    }
-
-    // User is authenticated - show main app
-    hideLoginPage();
-
-    // Update user profile display
-    updateUserProfile();
-
-    // Initialize app
     loadRoles();
     connectWebSocket();
     fetchAgents();

@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -32,10 +31,6 @@ from hrisa_code.web.agent_manager import (
     ModelFallbackEvent,
 )
 from hrisa_code.web.roles import list_roles, AgentRole
-
-# Auth imports
-from hrisa_code.web.auth.routes import router as auth_router
-from hrisa_code.web.db.database import init_database, close_database
 
 
 # Request/Response Models
@@ -382,18 +377,13 @@ app = FastAPI(
 )
 
 # CORS middleware
-allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "*")
-allowed_origins = allowed_origins_str.split(",") if allowed_origins_str != "*" else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=["*"],  # In production, specify your frontend URL
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Mount auth router
-app.include_router(auth_router)
 
 # Global agent manager
 agent_manager: Optional[WebAgentManager] = None
@@ -489,20 +479,9 @@ async def broadcast_update(event_type: str, data: Dict) -> None:
 # Startup event
 @app.on_event("startup")
 async def startup_event():
-    """Initialize agent manager and database on startup."""
+    """Initialize agent manager on startup."""
     global agent_manager
-
-    # Initialize database if DATABASE_URL is set
-    database_url = os.getenv("DATABASE_URL")
-    if database_url:
-        try:
-            await init_database(database_url)
-            print(f"Database initialized successfully")
-        except Exception as e:
-            print(f"Warning: Failed to initialize database: {e}")
-            print("Running without authentication. Set DATABASE_URL to enable auth.")
-    else:
-        print("DATABASE_URL not set - running without authentication")
+    import os
 
     # Load config
     config = Config.load_with_fallback(Path.cwd())
@@ -578,9 +557,6 @@ async def shutdown_event():
     if agent_manager:
         await agent_manager.stop()
 
-    # Close database connection
-    await close_database()
-
 
 # API Endpoints
 @app.get("/", response_class=HTMLResponse)
@@ -590,18 +566,6 @@ async def root():
     if index_path.exists():
         return HTMLResponse(content=index_path.read_text(), status_code=200)
     return HTMLResponse(content="<h1>Hrisa Code Web UI</h1><p>Static files not found</p>", status_code=404)
-
-
-@app.get("/favicon.ico")
-async def favicon():
-    """Serve favicon to avoid 404 errors."""
-    # Return a simple 1x1 transparent PNG
-    import base64
-    favicon_data = base64.b64decode(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-    )
-    from fastapi.responses import Response
-    return Response(content=favicon_data, media_type="image/png")
 
 
 @app.get("/health")
